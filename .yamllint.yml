@@ -1,0 +1,26 @@
+# yamllint configuration.
+#
+# History
+#   2026-08-05  A. Sigdel  Created.
+#
+# Workflow YAML is wide by nature — expression syntax does not wrap — so the line
+# limit is relaxed rather than fought. Everything else is left strict.
+
+extends: default
+
+rules:
+  line-length:
+    max: 140
+    level: error
+  # `on:` in a workflow is the trigger block, not the boolean true. Without this,
+  # every workflow in the repository is a warning.
+  truthy:
+    allowed-values: ["true", "false"]
+    check-keys: false
+  comments:
+    min-spaces-from-content: 1
+  document-start: disable
+
+ignore: |
+  .venv/
+  router/target/

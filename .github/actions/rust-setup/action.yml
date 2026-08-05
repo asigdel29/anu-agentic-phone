@@ -1,0 +1,56 @@
+# rust-setup — install the Rust toolchain and restore the build cache.
+#
+# History
+#   2026-08-05  A. Sigdel  Created.
+#
+# Every Rust job composes this so the toolchain version lives in one place.
+# Changing it here changes it everywhere, which is the point: a job that pins its
+# own version is a job that silently drifts.
+
+name: Rust setup
+description: Install the pinned Rust toolchain, optional extra components and target, and restore the cargo cache.
+
+inputs:
+  components:
+    description: Space-separated rustup components, e.g. "clippy rustfmt".
+    required: false
+    default: ""
+  target:
+    description: Additional compilation target, e.g. aarch64-unknown-linux-gnu.
+    required: false
+    default: ""
+  cache-key:
+    description: Suffix distinguishing this job's cache from other jobs'.
+    required: false
+    default: default
+
+runs:
+  using: composite
+  steps:
+    - name: Install toolchain
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Pinned rather than `stable`: a toolchain that moves under CI turns an
+        # unrelated pull request red, and the router is not chasing new features.
+        rustup toolchain install 1.86.0 --profile minimal --no-self-update
+        rustup default 1.86.0
+        if [ -n "${{ inputs.components }}" ]; then
+          rustup component add ${{ inputs.components }}
+        fi
+        if [ -n "${{ inputs.target }}" ]; then
+          rustup target add "${{ inputs.target }}"
+        fi
+        rustc --version
+
+    - name: Restore cargo cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          ~/.cargo/git/db
+          router/target
+        key: cargo-${{ runner.os }}-${{ inputs.cache-key }}-${{ hashFiles('router/Cargo.lock') }}
+        restore-keys: |
+          cargo-${{ runner.os }}-${{ inputs.cache-key }}-
