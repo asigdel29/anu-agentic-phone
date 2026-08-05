@@ -22,12 +22,13 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde_json::{Value, json};
 
+use wattrouter::cache::DecisionCache;
 use wattrouter::chain::chain_for;
 use wattrouter::classify::classify;
 use wattrouter::config::{Config, ConfigError};
 use wattrouter::embed::{Embedder, HashEmbedder};
 use wattrouter::head::Head;
-use wattrouter::policy::{Thresholds, decide};
+use wattrouter::policy::{Decision, Reason, Thresholds, decide};
 use wattrouter::tier::Tier;
 use wattrouter::upstream::Upstream;
 
@@ -43,6 +44,7 @@ struct AppState {
     upstream: Upstream,
     thresholds: Thresholds,
     embedder: HashEmbedder,
+    cache: DecisionCache,
     /// Absent when no weights were found, which is a supported state: the policy
     /// has a defined unscored path, and every rule not depending on difficulty
     /// still applies.
@@ -102,14 +104,13 @@ async fn list_models(State(state): State<Arc<AppState>>) -> (StatusCode, Json<Va
 
 /// Route a chat completion and stream the answer back.
 ///
-/// Classify, decide, map the tier to a model chain, forward. The decision is
+/// Classify, score, decide, apply session stickiness, map to a chain, forward. The decision is
 /// reported on the response so an operator can see what happened without reading
 /// logs, and so the verification script has something to assert against.
 ///
-/// No score is supplied yet, so the policy takes its unscored path. That is a
-/// defined behaviour rather than a gap: pinning, background detection and the
-/// capability rule all still apply, and a scorer can be added without touching
-/// this function.
+/// With no head loaded the policy takes its unscored path — a defined behaviour
+/// rather than a gap, since pinning, background detection and the capability rule
+/// all still apply.
 ///
 /// # Returns
 /// The upstream response, body still streaming, with `x-wattrouter-tier` added.
@@ -131,6 +132,12 @@ async fn chat_completions(
     let pin = headers
         .get("x-wattrouter-tier")
         .and_then(|v| v.to_str().ok());
+    // Both clients send a session id; without one every request is independent,
+    // which is correct rather than merely tolerated.
+    let session = headers
+        .get("x-session-id")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default();
     let classified = classify(&body, pin);
 
     // Only when a head is loaded and there is something to score. Embedding an
@@ -140,8 +147,15 @@ async fn chat_completions(
         if classified.text.is_empty() {
             return None;
         }
+        if let Some(cached) = state.cache.score_for(&classified.text) {
+            return Some(cached);
+        }
         match state.embedder.embed(&classified.text) {
-            Ok(vector) => Some(head.score(&vector)),
+            Ok(vector) => {
+                let score = head.score(&vector);
+                state.cache.remember_score(&classified.text, score);
+                Some(score)
+            }
             Err(e) => {
                 tracing::warn!(error = %e, "cannot embed; routing unscored");
                 None
@@ -149,7 +163,18 @@ async fn chat_completions(
         }
     });
 
-    let decision = decide(&classified.signals, score, &state.thresholds);
+    let mut decision = decide(&classified.signals, score, &state.thresholds);
+
+    // Stickiness applies to what the router chose, never to what the caller
+    // asked for. A pin is an instruction, not an observation about the session,
+    // and letting one raise the floor for every later turn would make the escape
+    // hatch permanent.
+    if decision.reason != Reason::Pinned {
+        let effective = state.cache.escalate(session, decision.tier);
+        if effective > decision.tier {
+            decision = Decision::new(effective, Reason::Sticky);
+        }
+    }
     let chain = chain_for(&state.config, decision.tier);
 
     tracing::info!(
@@ -193,6 +218,7 @@ fn app(config: Config, upstream: Upstream, head: Option<Head>) -> Router {
         upstream,
         thresholds: Thresholds::default(),
         embedder: HashEmbedder::new(),
+        cache: DecisionCache::new(),
         head,
     });
 
