@@ -1,0 +1,47 @@
+# python-setup — install Python and the training environment.
+#
+# History
+#   2026-08-05  A. Sigdel  Created.
+#
+# The training scripts run on a workstation, never on the target board, so this
+# is only ever exercised by CI and by hand. It exists so that the Python version
+# is pinned in one place alongside the Rust one.
+
+name: Python setup
+description: Install the pinned Python via uv and sync the training environment.
+
+inputs:
+  cache-key:
+    description: Suffix distinguishing this job's cache from other jobs'.
+    required: false
+    default: default
+
+runs:
+  using: composite
+  steps:
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+        cache-suffix: ${{ inputs.cache-key }}
+
+    - name: Install Python
+      shell: bash
+      run: |
+        set -euo pipefail
+        # 3.12 rather than the newest: the training scripts pull scientific
+        # wheels, and the newest release routinely lacks them for weeks.
+        uv python install 3.12
+        uv python pin 3.12
+
+    - name: Sync the training environment
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Tolerated while train/ is still empty; the guard in the calling job
+        # means this step is only reached once the directory exists.
+        if [ -f train/pyproject.toml ]; then
+          uv sync --project train --all-extras
+        else
+          echo "train/pyproject.toml absent — nothing to sync"
+        fi
