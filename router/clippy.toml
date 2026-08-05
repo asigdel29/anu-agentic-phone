@@ -1,0 +1,20 @@
+# clippy configuration.
+#
+# History
+#   2026-08-05  A. Sigdel  Created.
+
+# clippy::doc_markdown wants backticks around anything that looks like an
+# identifier, which catches proper nouns appearing in prose. Backticking a
+# product name is wrong — it is not a code item, and the standard asks for
+# documentation that reads as prose. Naming them here keeps the lint doing its
+# real job, which is catching genuine items written bare.
+#
+# `..` extends clippy's default list rather than replacing it.
+doc-valid-idents = [
+    "..",
+    "NeuralWatt",
+    "OpenAI",
+    "OpenCode",
+    "RouteLLM",
+    "ZeroMem",
+]

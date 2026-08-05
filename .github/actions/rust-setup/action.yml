@@ -33,8 +33,8 @@ runs:
         set -euo pipefail
         # Pinned rather than `stable`: a toolchain that moves under CI turns an
         # unrelated pull request red, and the router is not chasing new features.
-        rustup toolchain install 1.86.0 --profile minimal --no-self-update
-        rustup default 1.86.0
+        rustup toolchain install 1.95.0 --profile minimal --no-self-update
+        rustup default 1.95.0
         if [ -n "${{ inputs.components }}" ]; then
           rustup component add ${{ inputs.components }}
         fi
