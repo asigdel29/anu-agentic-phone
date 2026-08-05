@@ -1,0 +1,25 @@
+{
+    "comment": [
+        "Guards run against every pull request. Severity lives here rather than in",
+        "the workflow so that promoting a guard from advisory to hard — or demoting",
+        "one that turns out to be noisy — is a one-line edit reviewed like any other",
+        "change, not a rewrite of CI.",
+        "",
+        "mode: hard      failing this guard fails the job.",
+        "mode: advisory  failing is reported and the job still passes."
+    ],
+    "guards": [
+        {
+            "id": "issue-link",
+            "script": "issue-link.sh",
+            "mode": "hard",
+            "description": "The pull request references an issue."
+        },
+        {
+            "id": "pr-size",
+            "script": "pr-size.sh",
+            "mode": "hard",
+            "description": "The diff is at most 300 lines, excluding lockfiles and vendored data."
+        }
+    ]
+}

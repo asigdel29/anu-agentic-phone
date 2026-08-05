@@ -1,0 +1,47 @@
+# pr-governance.yml — enforce the rules about pull requests themselves.
+#
+# History
+#   2026-08-05  A. Sigdel  Created.
+#
+# Separate from ci.yml because this checks the pull request rather than the code:
+# it has nothing to say on a merge_group ref, where there is no pull request to
+# inspect, and it should not be re-run by the merge queue.
+#
+# The guards are ordinary scripts under scripts/guards/, runnable by hand with the
+# same inputs given here. A gate that can only be exercised by opening a pull
+# request is a gate that gets debugged by opening pull requests.
+
+name: PR governance
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: pr-governance-${{ github.head_ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  guards:
+    name: Guards
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Full history: the size guard diffs against the merge base, and a shallow
+      # clone has no merge base to find.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run guards
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash scripts/guards/run-all.sh
