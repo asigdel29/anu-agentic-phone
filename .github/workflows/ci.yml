@@ -1,0 +1,165 @@
+# ci.yml — formatting, lints and tests for every pull request.
+#
+# History
+#   2026-08-05  A. Sigdel  Created with the static checks: formatting and lints.
+#                          Tests and the cross-build follow immediately; the
+#                          documentation and complexity gates follow later, as
+#                          they depend on lint scripts that do not exist yet.
+#
+# Runs on merge_group as well as pull_request: the merge queue builds each
+# candidate on its own ref and waits for these checks, so a change is re-validated
+# against the latest main before it lands rather than against whatever main was
+# when the branch opened.
+
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  merge_group:
+
+# github.ref is the pull request ref on pull_request and a unique per-candidate
+# ref on merge_group, so queued candidates never cancel one another.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Which languages are actually present. The router and training code arrive in
+  # later changes, and a gate that fails because a directory does not exist yet
+  # teaches people to ignore it. Each job below guards on these outputs, so every
+  # gate goes live on its own the moment its first file lands.
+  detect:
+    name: Detect languages
+    if: ${{ github.event_name == 'merge_group' || !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.probe.outputs.rust }}
+      python: ${{ steps.probe.outputs.python }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: probe
+        run: |
+          set -euo pipefail
+          test -f router/Cargo.toml && echo "rust=true" >> "$GITHUB_OUTPUT" || echo "rust=false" >> "$GITHUB_OUTPUT"
+          test -f train/pyproject.toml && echo "python=true" >> "$GITHUB_OUTPUT" || echo "python=false" >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+
+  format:
+    name: Format
+    needs: detect
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Shell and YAML exist from the first commit, so these two always run.
+      - name: shfmt
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/shfmt https://github.com/mvdan/sh/releases/download/v3.10.0/shfmt_v3.10.0_linux_amd64
+          chmod +x /tmp/shfmt
+          # -z and -0 so a filename containing whitespace cannot split into two
+          # arguments; -r so an empty file list is not an invocation with none.
+          git ls-files -z '*.sh' | xargs -0 -r /tmp/shfmt -d -i 4 -ci
+
+      - name: yamllint
+        run: |
+          set -euo pipefail
+          pipx install yamllint==1.35.1
+          yamllint -c .yamllint.yml .
+
+      - uses: ./.github/actions/rust-setup
+        if: needs.detect.outputs.rust == 'true'
+        with:
+          components: rustfmt
+          cache-key: format
+      - name: cargo fmt
+        if: needs.detect.outputs.rust == 'true'
+        run: cargo fmt --manifest-path router/Cargo.toml --check
+
+      - uses: ./.github/actions/python-setup
+        if: needs.detect.outputs.python == 'true'
+        with:
+          cache-key: format
+      - name: ruff format
+        if: needs.detect.outputs.python == 'true'
+        run: uvx ruff format --check train/
+
+  lint:
+    name: Lint
+    needs: detect
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: shellcheck
+        run: |
+          set -euo pipefail
+          # -r so an empty file list is a no-op rather than a bare invocation:
+          # shell scripts arrive in later changes.
+          git ls-files -z '*.sh' | xargs -0 -r shellcheck --severity=style
+
+      # Workflows are the one kind of source here that cannot be exercised
+      # locally, so they get a linter of their own. actionlint also runs
+      # shellcheck over every `run:` block, which is how the two quoting bugs in
+      # this file's first draft were caught.
+      - name: actionlint
+        run: |
+          set -euo pipefail
+          curl -fsSL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz \
+            | tar xz -C /tmp actionlint
+          /tmp/actionlint
+
+      - uses: ./.github/actions/rust-setup
+        if: needs.detect.outputs.rust == 'true'
+        with:
+          components: clippy
+          cache-key: lint
+      # -D warnings makes every lint fatal. The pedantic set is opted into
+      # per-crate in router/src/main.rs rather than here, so a developer running
+      # clippy locally sees exactly what CI sees.
+      - name: clippy
+        if: needs.detect.outputs.rust == 'true'
+        run: cargo clippy --manifest-path router/Cargo.toml --all-targets -- -D warnings
+
+      - uses: ./.github/actions/python-setup
+        if: needs.detect.outputs.python == 'true'
+        with:
+          cache-key: lint
+      - name: ruff
+        if: needs.detect.outputs.python == 'true'
+        run: uvx ruff check train/
+      - name: mypy
+        if: needs.detect.outputs.python == 'true'
+        run: uv run --project train mypy --strict train/
+
+  # One check for branch protection to require, so adding a job does not mean
+  # editing the ruleset. Skipped is a pass: a job guarded off by `detect` has
+  # nothing to say.
+  required:
+    name: Required
+    needs: [detect, format, lint]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify every job succeeded or was skipped
+        env:
+          RESULTS: >-
+            detect:${{ needs.detect.result }}
+            format:${{ needs.format.result }}
+            lint:${{ needs.lint.result }}
+        run: |
+          set -euo pipefail
+          fail=0
+          for entry in $RESULTS; do
+            name="${entry%%:*}"
+            result="${entry##*:}"
+            case "$result" in
+              success | skipped) printf '  %-12s %s\n' "$name" "$result" ;;
+              *) printf '  %-12s %s  FAIL\n' "$name" "$result"; fail=1 ;;
+            esac
+          done
+          exit "$fail"
