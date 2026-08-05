@@ -5,6 +5,7 @@
 //!                          the server follow.
 //!
 //! Contents
+//!   classify  Reading routing signals off a request.
 //!   config  What the router reads from the environment.
 //!   embed   Turning a prompt into a vector.
 //!   policy  Choosing a tier from a score and the request's signals.
@@ -23,6 +24,7 @@
 // `cargo clippy` reports exactly what CI reports.
 #![warn(clippy::pedantic)]
 
+pub mod classify;
 pub mod config;
 pub mod embed;
 pub mod policy;
