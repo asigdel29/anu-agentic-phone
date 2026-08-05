@@ -5,6 +5,7 @@
 //!                          the server follow.
 //!
 //! Contents
+//!   cache     Remembering routing decisions.
 //!   chain     The models a tier may use, in order.
 //!   classify  Reading routing signals off a request.
 //!   config  What the router reads from the environment.
@@ -27,6 +28,7 @@
 // `cargo clippy` reports exactly what CI reports.
 #![warn(clippy::pedantic)]
 
+pub mod cache;
 pub mod chain;
 pub mod classify;
 pub mod config;
