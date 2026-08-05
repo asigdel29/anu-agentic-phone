@@ -1,0 +1,5 @@
+name: neuralwatt-profile
+kind: model-provider
+version: 1.0.0
+description: Routes every Hermes call through the local router to NeuralWatt.
+author: A. Sigdel

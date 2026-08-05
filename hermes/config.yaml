@@ -1,0 +1,41 @@
+# Hermes configuration for this stack.
+#
+# History
+#   2026-08-05  A. Sigdel  Created.
+#
+# Copy to ~/.hermes/config.yaml, or merge these keys into an existing one.
+# Everything here is deliberate; see docs/architecture.md for the reasoning.
+
+model:
+  # The router decides. Pin a tier by name — heavy, code, long, mid, cheap,
+  # aux — only to override a decision that came out wrong.
+  default: "auto"
+  provider: "neuralwatt"
+  base_url: "http://127.0.0.1:8080/v1"
+
+  # Left unset on purpose. Hermes auto-detects the window from the provider, and
+  # the router advertises whichever tier serves a request; a fixed value here
+  # would be wrong for five tiers out of six.
+  # context_length:
+
+providers:
+  neuralwatt:
+    # A heavy-tier answer legitimately takes minutes, and the router may spend a
+    # round trip on a failed model before falling back. Below the router's own
+    # 30-minute ceiling so the router is what gives up first, with a reason.
+    request_timeout_seconds: 1500
+    # The router is on loopback and never idles mid-request; the stale detector
+    # would only produce false positives.
+    stale_timeout_seconds: 0
+
+memory:
+  memory_enabled: true
+  # Retrieval and indexing make no LLM calls, so remembering costs no tokens.
+  # Swap this line for a bundled provider if zeromem misbehaves — nothing else
+  # in the stack depends on it.
+  provider: zeromem
+  write_approval: false
+
+plugins:
+  zeromem:
+    enabled: true
