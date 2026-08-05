@@ -73,6 +73,28 @@ impl Tier {
         }
     }
 
+    /// The context window of this tier's default model, in tokens.
+    ///
+    /// Verified against the upstream catalogue. Used to keep a fallback from
+    /// substituting a model that cannot hold the request the original could —
+    /// which would turn a degraded answer into a rejected one. Nominal: an
+    /// operator who overrides a tier's model to a smaller one takes that on.
+    #[must_use]
+    // Several tiers share a limit today, which clippy reads as duplication.
+    // Merging the arms would couple facts about different models: when one
+    // provider changes a window, only that tier should move. Kept separate.
+    #[allow(clippy::match_same_arms)]
+    pub const fn context_limit(self) -> usize {
+        match self {
+            Self::Aux => 262_128,
+            Self::Cheap => 1_048_560,
+            Self::Mid => 131_056,
+            Self::Code => 262_128,
+            Self::Long => 1_048_560,
+            Self::Heavy => 1_048_560,
+        }
+    }
+
     /// The environment variable overriding this tier's model.
     #[must_use]
     pub const fn env_var(self) -> &'static str {
