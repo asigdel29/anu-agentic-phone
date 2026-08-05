@@ -28,6 +28,7 @@ use wattrouter::classify::classify;
 use wattrouter::config::{Config, ConfigError};
 use wattrouter::embed::{Embedder, HashEmbedder};
 use wattrouter::head::Head;
+use wattrouter::metrics::Metrics;
 use wattrouter::policy::{Decision, Reason, Thresholds, decide};
 use wattrouter::tier::Tier;
 use wattrouter::upstream::Upstream;
@@ -45,6 +46,7 @@ struct AppState {
     thresholds: Thresholds,
     embedder: HashEmbedder,
     cache: DecisionCache,
+    metrics: Metrics,
     /// Absent when no weights were found, which is a supported state: the policy
     /// has a defined unscored path, and every rule not depending on difficulty
     /// still applies.
@@ -148,8 +150,10 @@ async fn chat_completions(
             return None;
         }
         if let Some(cached) = state.cache.score_for(&classified.text) {
+            state.metrics.record_cache_hit();
             return Some(cached);
         }
+        state.metrics.record_embedding();
         match state.embedder.embed(&classified.text) {
             Ok(vector) => {
                 let score = head.score(&vector);
@@ -176,6 +180,7 @@ async fn chat_completions(
         }
     }
     let chain = chain_for(&state.config, decision.tier);
+    state.metrics.record(decision.tier, decision.reason);
 
     tracing::info!(
         tier = decision.tier.name(),
@@ -188,6 +193,16 @@ async fn chat_completions(
 
     match state.upstream.forward(&chain, &body).await {
         Ok(mut response) => {
+            // The chain reports which model answered, so a fallback is countable
+            // rather than only visible in a warning nobody aggregates.
+            if response
+                .headers()
+                .get("x-wattrouter-model")
+                .and_then(|v| v.to_str().ok())
+                .is_some_and(|served| served != chain[0])
+            {
+                state.metrics.record_fallback();
+            }
             // Both parts, because the tier alone does not say whether it was
             // chosen or imposed, and that is the first thing anyone asks.
             if let Ok(value) =
@@ -198,6 +213,7 @@ async fn chat_completions(
             response
         }
         Err(e) => {
+            state.metrics.record_upstream_failure();
             tracing::error!(error = %e, tier = decision.tier.name(), "every model failed");
             (
                 StatusCode::BAD_GATEWAY,
@@ -206,6 +222,21 @@ async fn chat_completions(
                 .into_response()
         }
     }
+}
+
+/// Expose the counters, in the Prometheus text format.
+///
+/// # Returns
+/// `200` and a complete exposition, including series that have never fired.
+///
+/// # Rely
+/// Called by a scraper or by hand. Reads atomics; does no I/O and never blocks.
+///
+/// # Atomic
+/// Each counter is read independently, so the snapshot may straddle a request in
+/// flight. These are rates over time, not an invariant, so that is correct.
+async fn metrics(State(state): State<Arc<AppState>>) -> (StatusCode, String) {
+    (StatusCode::OK, state.metrics.render())
 }
 
 /// Build the HTTP router.
@@ -219,6 +250,7 @@ fn app(config: Config, upstream: Upstream, head: Option<Head>) -> Router {
         thresholds: Thresholds::default(),
         embedder: HashEmbedder::new(),
         cache: DecisionCache::new(),
+        metrics: Metrics::new(),
         head,
     });
 
@@ -226,6 +258,7 @@ fn app(config: Config, upstream: Upstream, head: Option<Head>) -> Router {
         .route("/healthz", get(healthz))
         .route("/v1/models", get(list_models))
         .route("/v1/chat/completions", post(chat_completions))
+        .route("/metrics", get(metrics))
         .with_state(state)
 }
 

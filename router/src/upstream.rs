@@ -138,7 +138,7 @@ impl Upstream {
                     last = format!("{} returned {}", model, response.status());
                     tracing::warn!(model, status = %response.status(), "upstream error; trying next");
                 }
-                Ok(response) => return Ok(Self::stream_back(response)),
+                Ok(response) => return Ok(Self::stream_back(response, model)),
                 Err(e) => {
                     last = format!("{model}: {e}");
                     tracing::warn!(model, error = %e, "upstream unreachable; trying next");
@@ -156,7 +156,11 @@ impl Upstream {
     ///
     /// `bytes_stream` yields chunks as they arrive. Losing that is the one change
     /// here that breaks the latency guarantee without breaking a functional test.
-    fn stream_back(response: reqwest::Response) -> axum::response::Response {
+    ///
+    /// The serving model is reported on the response. Without it a fallback is
+    /// visible only in a warning nobody aggregates, and an operator holding a
+    /// slow answer cannot tell which model produced it.
+    fn stream_back(response: reqwest::Response, model: &str) -> axum::response::Response {
         let status = response.status();
         let headers = response.headers().clone();
 
@@ -168,6 +172,9 @@ impl Upstream {
         // stale length would truncate it.
         for (name, value) in headers.iter().filter(|(n, _)| *n != "content-length") {
             out.headers_mut().insert(name, value.clone());
+        }
+        if let Ok(value) = model.parse() {
+            out.headers_mut().insert("x-wattrouter-model", value);
         }
         out
     }
@@ -244,6 +251,12 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), axum::http::StatusCode::OK);
+        // The response names the model that actually served it, so a fallback is
+        // countable rather than only visible in a log line.
+        assert_eq!(
+            response.headers().get("x-wattrouter-model").unwrap(),
+            "glm-5.2"
+        );
     }
 
     #[tokio::test]
