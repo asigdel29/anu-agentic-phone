@@ -1,0 +1,63 @@
+{
+  // OpenCode configuration for this stack.
+  //
+  // History
+  //   2026-08-05  A. Sigdel  Created.
+  //
+  // Copy to ~/.config/opencode/opencode.jsonc on the board.
+  //
+  // IMPORTANT: this does not replace the working direct-to-NeuralWatt config on
+  // the workstation. That one stays as it is — it is the fallback, and a
+  // fallback that has been edited is not one.
+
+  "$schema": "https://opencode.ai/config.json",
+
+  // A NEW provider, not an override of OpenCode's built-in `neuralwatt`.
+  // Overriding the built-in would leave a working direct path that quietly
+  // bypasses the router, which is the one thing this configuration exists to
+  // prevent. No apiKey: the router holds the only credential on the board.
+  "provider": {
+    "wattrouter": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "NeuralWatt (routed)",
+      "options": {
+        "baseURL": "http://127.0.0.1:8080/v1"
+      },
+      // Every name the router serves must be declared, or OpenCode cannot
+      // resolve it — running `opencode models` against an earlier draft listed
+      // only `auto`, which would have broken the two pins below.
+      //
+      // Context limits are each tier's real window, so OpenCode compresses at
+      // the right point. `auto` takes the widest: the tier is only known per
+      // request, and a value too small would have OpenCode compress context it
+      // did not need to.
+      "models": {
+        "auto": { "name": "Auto (routed)", "limit": { "context": 1048560, "output": 65536 } },
+        "heavy": { "name": "Heavy — kimi-k3", "limit": { "context": 1048560, "output": 65536 } },
+        "code": { "name": "Code — kimi-k2.7-code", "limit": { "context": 262128, "output": 65536 } },
+        "long": { "name": "Long — glm-5.2", "limit": { "context": 1048560, "output": 65536 } },
+        "mid": { "name": "Mid — qwen3.6-35b-fast", "limit": { "context": 131056, "output": 32768 } },
+        "cheap": { "name": "Cheap — deepseek-v4-flash", "limit": { "context": 1048560, "output": 65536 } },
+        "aux": { "name": "Aux — gemma-4-31b", "limit": { "context": 262128, "output": 16384 } }
+      }
+    }
+  },
+
+  // Every agent asks for `auto`. Routing decisions belong in one place, and
+  // pinning models per agent here would be a second, silently competing policy.
+  "model": "wattrouter/auto",
+
+  // Background work — session titles, summaries, compaction — is the
+  // highest-volume traffic in a session. The router recognises it, but naming
+  // the tier is cheaper and exact.
+  "small_model": "wattrouter/aux",
+
+  "agent": {
+    "build": { "model": "wattrouter/auto" },
+    "plan": { "model": "wattrouter/auto" },
+    "general": { "model": "wattrouter/auto" },
+    // Search reads a lot and reasons little; the cheap tier is the right floor
+    // and the router cannot infer that from the prompt alone.
+    "explore": { "model": "wattrouter/cheap" }
+  }
+}
