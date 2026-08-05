@@ -5,6 +5,7 @@
 //!                          the server follow.
 //!
 //! Contents
+//!   config  What the router reads from the environment.
 //!   tier    The routing tiers: the vocabulary the rest of the router speaks.
 //!
 //! Split from the binary so that each piece can be tested without binding a port
@@ -20,4 +21,5 @@
 // `cargo clippy` reports exactly what CI reports.
 #![warn(clippy::pedantic)]
 
+pub mod config;
 pub mod tier;
