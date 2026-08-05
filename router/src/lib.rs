@@ -6,6 +6,7 @@
 //!
 //! Contents
 //!   config  What the router reads from the environment.
+//!   embed   Turning a prompt into a vector.
 //!   tier    The routing tiers: the vocabulary the rest of the router speaks.
 //!
 //! Split from the binary so that each piece can be tested without binding a port
@@ -22,4 +23,5 @@
 #![warn(clippy::pedantic)]
 
 pub mod config;
+pub mod embed;
 pub mod tier;
