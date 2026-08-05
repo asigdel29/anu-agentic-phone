@@ -40,3 +40,7 @@ venv/
 .idea/
 .vscode/
 *.swp
+
+# The training set, downloaded by train/fetch_dataset.py. ~50MB, and
+# reproducible from a one-line command, so it is fetched rather than tracked.
+/train/prompts.jsonl
