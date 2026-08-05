@@ -1,0 +1,23 @@
+[package]
+name = "wattrouter"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+description = "Routes OpenAI-compatible requests to the cheapest upstream model that can serve them."
+license = "MIT"
+
+# Library only for now. The binary is declared alongside the server that follows,
+# so that this crate never names a target it cannot build.
+[lib]
+name = "wattrouter"
+path = "src/lib.rs"
+
+[dependencies]
+
+[profile.release]
+# The target board is small and the binary is long-lived, so favour resident size
+# and the optimiser over build time. lto with a single codegen unit cuts both the
+# binary and the steady-state footprint measurably.
+lto = true
+codegen-units = 1
+strip = true
