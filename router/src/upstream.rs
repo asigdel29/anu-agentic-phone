@@ -71,6 +71,26 @@ impl Upstream {
         })
     }
 
+    /// Open a connection ahead of the first real request, which would otherwise
+    /// pay for DNS, TCP and TLS — a visible fraction of a second on a small board.
+    ///
+    /// # Rely
+    /// Called at startup, after binding. Failure is logged and ignored: an
+    /// upstream unreachable at boot may well be reachable by the first request.
+    pub async fn prewarm(&self) {
+        let url = format!("{}/models", self.base_url);
+        match self
+            .client
+            .get(&url)
+            .bearer_auth(&self.api_key)
+            .send()
+            .await
+        {
+            Ok(response) => tracing::debug!(status = %response.status(), "upstream prewarmed"),
+            Err(e) => tracing::warn!(error = %e, "upstream prewarm failed; continuing"),
+        }
+    }
+
     /// Forward `body` to the first model in `chain` that answers, substituting
     /// the chosen model since the client asked for `auto`.
     ///
