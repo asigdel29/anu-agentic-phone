@@ -5,9 +5,10 @@
 //!                          client needs before it will talk to us at all.
 //!
 //! Contents
-//!   `AppState`  Shared, read-only application state.
-//!   `app`       Builds the router. Separate from `main` so tests exercise it.
-//!   `main`      Reads configuration, binds, serves.
+//!   `AppState`         Shared, read-only application state.
+//!   `chat_completions` The endpoint the whole stack uses.
+//!   `app`              Builds the router. Separate from `main` so tests reach it.
+//!   `main`             Reads configuration, binds, serves.
 //!
 //! The lint posture and the crate documentation live in `lib.rs`; this file is
 //! only the entry point and the handlers.
@@ -15,13 +16,18 @@
 use std::sync::Arc;
 
 use axum::extract::State;
-use axum::http::StatusCode;
-use axum::routing::get;
+use axum::http::{HeaderMap, StatusCode};
+use axum::response::{IntoResponse as _, Response};
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde_json::{Value, json};
 
+use wattrouter::chain::chain_for;
+use wattrouter::classify::classify;
 use wattrouter::config::{Config, ConfigError};
+use wattrouter::policy::{Thresholds, decide};
 use wattrouter::tier::Tier;
+use wattrouter::upstream::Upstream;
 
 /// Shared application state.
 ///
@@ -30,8 +36,10 @@ use wattrouter::tier::Tier;
 /// embedder, the decision cache, the connection pool — carry their own
 /// synchronisation and document it where they are defined.
 #[derive(Debug)]
-struct State_ {
+struct AppState {
     config: Config,
+    upstream: Upstream,
+    thresholds: Thresholds,
 }
 
 /// Report liveness.
@@ -62,7 +70,7 @@ async fn healthz() -> (StatusCode, Json<Value>) {
 ///
 /// # Rely
 /// Called on the request path. Reads only immutable state; does no I/O.
-async fn list_models(State(state): State<Arc<State_>>) -> (StatusCode, Json<Value>) {
+async fn list_models(State(state): State<Arc<AppState>>) -> (StatusCode, Json<Value>) {
     let mut data = vec![json!({
         "id": "auto",
         "object": "model",
@@ -85,16 +93,86 @@ async fn list_models(State(state): State<Arc<State_>>) -> (StatusCode, Json<Valu
     )
 }
 
+/// Route a chat completion and stream the answer back.
+///
+/// Classify, decide, map the tier to a model chain, forward. The decision is
+/// reported on the response so an operator can see what happened without reading
+/// logs, and so the verification script has something to assert against.
+///
+/// No score is supplied yet, so the policy takes its unscored path. That is a
+/// defined behaviour rather than a gap: pinning, background detection and the
+/// capability rule all still apply, and a scorer can be added without touching
+/// this function.
+///
+/// # Returns
+/// The upstream response, body still streaming, with `x-wattrouter-tier` added.
+/// `502` IF every model in the chain failed — the request was well-formed and
+/// the failure is upstream, which is what that status means.
+///
+/// # Rely
+/// Called on the request path. Awaits the upstream response head; the body is
+/// passed on unread.
+///
+/// # Atomic
+/// Reads only immutable state. Concurrent calls share the connection pool, which
+/// is internally synchronised.
+async fn chat_completions(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    let pin = headers
+        .get("x-wattrouter-tier")
+        .and_then(|v| v.to_str().ok());
+    let classified = classify(&body, pin);
+    let decision = decide(&classified.signals, None, &state.thresholds);
+    let chain = chain_for(&state.config, decision.tier);
+
+    tracing::info!(
+        tier = decision.tier.name(),
+        reason = decision.reason.label(),
+        model = chain[0],
+        tokens = classified.signals.estimated_tokens,
+        "routing"
+    );
+
+    match state.upstream.forward(&chain, &body).await {
+        Ok(mut response) => {
+            // Both parts, because the tier alone does not say whether it was
+            // chosen or imposed, and that is the first thing anyone asks.
+            if let Ok(value) =
+                format!("{}; {}", decision.tier.name(), decision.reason.label()).parse()
+            {
+                response.headers_mut().insert("x-wattrouter-tier", value);
+            }
+            response
+        }
+        Err(e) => {
+            tracing::error!(error = %e, tier = decision.tier.name(), "every model failed");
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({"error": {"message": e.to_string(), "type": "upstream_error"}})),
+            )
+                .into_response()
+        }
+    }
+}
+
 /// Build the HTTP router.
 ///
 /// Separate from [`main`] so tests can drive it through `tower::ServiceExt`
 /// without binding a port, which keeps them fast and free of port collisions.
-fn app(config: Config) -> Router {
-    let state = Arc::new(State_ { config });
+fn app(config: Config, upstream: Upstream) -> Router {
+    let state = Arc::new(AppState {
+        config,
+        upstream,
+        thresholds: Thresholds::default(),
+    });
 
     Router::new()
         .route("/healthz", get(healthz))
         .route("/v1/models", get(list_models))
+        .route("/v1/chat/completions", post(chat_completions))
         .with_state(state)
 }
 
@@ -130,11 +208,18 @@ async fn main() -> Result<(), ConfigError> {
         tracing::info!(tier = tier.name(), model = config.model_for(tier), "tier");
     }
 
+    let upstream = Upstream::new(config.upstream_base_url(), config.api_key())
+        .unwrap_or_else(|e| panic!("cannot build upstream client: {e}"));
+
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .unwrap_or_else(|e| panic!("cannot bind {addr}: {e}"));
 
-    axum::serve(listener, app(config))
+    // After binding, so the port is accepting while this runs. The first request
+    // then finds a live connection instead of paying for DNS, TCP and TLS.
+    upstream.prewarm().await;
+
+    axum::serve(listener, app(config, upstream))
         .with_graceful_shutdown(shutdown())
         .await
         .unwrap_or_else(|e| panic!("server failed: {e}"));
@@ -178,6 +263,11 @@ mod tests {
     ///
     /// `from_env` is the only constructor, so the one required variable is set
     /// here. Tests in this module never remove it, so ordering does not matter.
+    /// An upstream pointed nowhere; these tests do not forward.
+    fn test_upstream() -> Upstream {
+        Upstream::new("http://127.0.0.1:1", "test-key").expect("client builds")
+    }
+
     fn test_config() -> Config {
         unsafe { std::env::set_var("NEURALWATT_API_KEY", "test-key") };
         Config::from_env().expect("test configuration is valid")
@@ -190,7 +280,7 @@ mod tests {
 
     #[tokio::test]
     async fn healthz_reports_ok() {
-        let response = app(test_config())
+        let response = app(test_config(), test_upstream())
             .oneshot(
                 Request::builder()
                     .uri("/healthz")
@@ -206,7 +296,7 @@ mod tests {
 
     #[tokio::test]
     async fn models_lists_auto_and_every_tier() {
-        let response = app(test_config())
+        let response = app(test_config(), test_upstream())
             .oneshot(
                 Request::builder()
                     .uri("/v1/models")
