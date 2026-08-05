@@ -13,6 +13,7 @@ name = "wattrouter"
 path = "src/lib.rs"
 
 [dependencies]
+thiserror = "2"
 
 [profile.release]
 # The target board is small and the binary is long-lived, so favour resident size
