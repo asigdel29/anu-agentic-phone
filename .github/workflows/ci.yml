@@ -136,12 +136,64 @@ jobs:
         if: needs.detect.outputs.python == 'true'
         run: uv run --project train mypy --strict train/
 
+  test:
+    name: Test
+    needs: detect
+    if: ${{ needs.detect.outputs.rust == 'true' || needs.detect.outputs.python == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/rust-setup
+        if: needs.detect.outputs.rust == 'true'
+        with:
+          cache-key: test
+      # --all-targets so the test build covers benches and examples too; a bench
+      # that stops compiling is a break, and finding it at release time is worse.
+      - name: cargo test
+        if: needs.detect.outputs.rust == 'true'
+        run: cargo test --manifest-path router/Cargo.toml --all-targets
+
+      - uses: ./.github/actions/python-setup
+        if: needs.detect.outputs.python == 'true'
+        with:
+          cache-key: test
+      - name: pytest
+        if: needs.detect.outputs.python == 'true'
+        run: uv run --project train pytest train/ -q
+
+  # CI runs on x86-64; the router runs on an aarch64 board. Without this, a
+  # target-specific break — most likely in the ONNX runtime the embedder links
+  # against — would not surface until deployment, where it is expensive to
+  # diagnose. Building release here also keeps the optimised path honest, since
+  # that is what actually ships.
+  cross-build:
+    name: Cross-build (aarch64)
+    needs: detect
+    if: ${{ needs.detect.outputs.rust == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/rust-setup
+        with:
+          target: aarch64-unknown-linux-gnu
+          cache-key: cross
+      - name: Install cross-linker
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+      - name: Build
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: cargo build --manifest-path router/Cargo.toml --target aarch64-unknown-linux-gnu --release
+
   # One check for branch protection to require, so adding a job does not mean
   # editing the ruleset. Skipped is a pass: a job guarded off by `detect` has
   # nothing to say.
   required:
     name: Required
-    needs: [detect, format, lint]
+    needs: [detect, format, lint, test, cross-build]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -151,6 +203,8 @@ jobs:
             detect:${{ needs.detect.result }}
             format:${{ needs.format.result }}
             lint:${{ needs.lint.result }}
+            test:${{ needs.test.result }}
+            cross-build:${{ needs.cross-build.result }}
         run: |
           set -euo pipefail
           fail=0
