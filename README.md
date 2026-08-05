@@ -89,17 +89,6 @@ just toolchain   # report whether the required tools are present
 just --list      # everything else
 ```
 
-## Standards
-
-All code, commits, pull requests and documentation follow Doug Lea's [Java Coding
-Standard](https://gee.cs.oswego.edu/dl/html/javaCodingStd.html). It is Java-targeted and this
-repository is Rust, Python and shell, so `docs/coding-standard.md` records the adaptation —
-which rules carry over, how each is machine-checked, and which are deliberately dropped.
-
-Every pull request references an issue and changes at most 300 lines. Work that runs over
-splits into a follow-up on the same branch under a new issue linked to the parent. Both are
-enforced in CI.
-
 ## Credits
 
 The routing approach follows [RouteLLM](https://github.com/lm-sys/RouteLLM) (Ong et al.,
@@ -112,4 +101,4 @@ et al., arXiv:2607.29377).
 
 ## License
 
-MIT. See `LICENSE`.
+MIT.
