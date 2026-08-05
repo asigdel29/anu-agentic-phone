@@ -1,0 +1,42 @@
+# Rust
+/router/target/
+**/*.rs.bk
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+
+# Model caches and training artifacts.
+#
+# The bge-small ONNX model is ~130MB and is fetched on first run into the cache
+# directory shared with zeromem; it is never committed. `weights.json` IS
+# committed — it is 384 floats plus a bias, and the router cannot route without
+# it — but the intermediate embedding matrices used to fit it are not.
+/train/.cache/
+/train/embeddings-*.npy
+*.onnx
+
+# Runtime state
+*.db
+*.db-wal
+*.db-shm
+/deploy/.state/
+
+# Secrets. The stack needs exactly one credential (NEURALWATT_API_KEY); it is
+# supplied by the environment or a systemd EnvironmentFile, never by a tracked
+# file. `.env.example` is tracked and documents the variable names.
+.env
+.env.*
+!.env.example
+
+# Editor and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
