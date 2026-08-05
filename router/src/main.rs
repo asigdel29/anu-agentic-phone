@@ -25,6 +25,8 @@ use serde_json::{Value, json};
 use wattrouter::chain::chain_for;
 use wattrouter::classify::classify;
 use wattrouter::config::{Config, ConfigError};
+use wattrouter::embed::{Embedder, HashEmbedder};
+use wattrouter::head::Head;
 use wattrouter::policy::{Thresholds, decide};
 use wattrouter::tier::Tier;
 use wattrouter::upstream::Upstream;
@@ -40,6 +42,11 @@ struct AppState {
     config: Config,
     upstream: Upstream,
     thresholds: Thresholds,
+    embedder: HashEmbedder,
+    /// Absent when no weights were found, which is a supported state: the policy
+    /// has a defined unscored path, and every rule not depending on difficulty
+    /// still applies.
+    head: Option<Head>,
 }
 
 /// Report liveness.
@@ -125,7 +132,24 @@ async fn chat_completions(
         .get("x-wattrouter-tier")
         .and_then(|v| v.to_str().ok());
     let classified = classify(&body, pin);
-    let decision = decide(&classified.signals, None, &state.thresholds);
+
+    // Only when a head is loaded and there is something to score. Embedding an
+    // empty string is an error, and the policy discards a score for a pinned or
+    // background request anyway.
+    let score = state.head.as_ref().and_then(|head| {
+        if classified.text.is_empty() {
+            return None;
+        }
+        match state.embedder.embed(&classified.text) {
+            Ok(vector) => Some(head.score(&vector)),
+            Err(e) => {
+                tracing::warn!(error = %e, "cannot embed; routing unscored");
+                None
+            }
+        }
+    });
+
+    let decision = decide(&classified.signals, score, &state.thresholds);
     let chain = chain_for(&state.config, decision.tier);
 
     tracing::info!(
@@ -133,6 +157,7 @@ async fn chat_completions(
         reason = decision.reason.label(),
         model = chain[0],
         tokens = classified.signals.estimated_tokens,
+        score = score.map(|s| format!("{s:.3}")),
         "routing"
     );
 
@@ -162,11 +187,13 @@ async fn chat_completions(
 ///
 /// Separate from [`main`] so tests can drive it through `tower::ServiceExt`
 /// without binding a port, which keeps them fast and free of port collisions.
-fn app(config: Config, upstream: Upstream) -> Router {
+fn app(config: Config, upstream: Upstream, head: Option<Head>) -> Router {
     let state = Arc::new(AppState {
         config,
         upstream,
         thresholds: Thresholds::default(),
+        embedder: HashEmbedder::new(),
+        head,
     });
 
     Router::new()
@@ -211,6 +238,21 @@ async fn main() -> Result<(), ConfigError> {
     let upstream = Upstream::new(config.upstream_base_url(), config.api_key())
         .unwrap_or_else(|e| panic!("cannot build upstream client: {e}"));
 
+    // A missing or mismatched head is reported and then tolerated. Routing gets
+    // worse; serving does not stop. Refusing to start over an optional model
+    // would make the stack less available than running it without one.
+    let embedder = HashEmbedder::new();
+    let head = match Head::load(config.head_path(), &embedder.id()) {
+        Ok(head) => {
+            tracing::info!(fitted_on = head.fitted_on(), "scoring head loaded");
+            Some(head)
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "no scoring head; routing unscored");
+            None
+        }
+    };
+
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .unwrap_or_else(|e| panic!("cannot bind {addr}: {e}"));
@@ -219,7 +261,7 @@ async fn main() -> Result<(), ConfigError> {
     // then finds a live connection instead of paying for DNS, TCP and TLS.
     upstream.prewarm().await;
 
-    axum::serve(listener, app(config, upstream))
+    axum::serve(listener, app(config, upstream, head))
         .with_graceful_shutdown(shutdown())
         .await
         .unwrap_or_else(|e| panic!("server failed: {e}"));
@@ -280,7 +322,7 @@ mod tests {
 
     #[tokio::test]
     async fn healthz_reports_ok() {
-        let response = app(test_config(), test_upstream())
+        let response = app(test_config(), test_upstream(), None)
             .oneshot(
                 Request::builder()
                     .uri("/healthz")
@@ -296,7 +338,7 @@ mod tests {
 
     #[tokio::test]
     async fn models_lists_auto_and_every_tier() {
-        let response = app(test_config(), test_upstream())
+        let response = app(test_config(), test_upstream(), None)
             .oneshot(
                 Request::builder()
                     .uri("/v1/models")

@@ -57,6 +57,7 @@ pub struct Config {
     upstream_base_url: String,
     api_key: String,
     model_cache_dir: PathBuf,
+    head_path: PathBuf,
     models: [String; 6],
 }
 
@@ -94,6 +95,9 @@ impl Config {
             PathBuf::from,
         );
 
+        let head_path = optional("WATTROUTER_HEAD")
+            .map_or_else(|| model_cache_dir.join("head.json"), PathBuf::from);
+
         let models = Tier::ALL.map(|tier| {
             optional(tier.env_var()).unwrap_or_else(|| tier.default_model().to_owned())
         });
@@ -103,6 +107,7 @@ impl Config {
             upstream_base_url,
             api_key,
             model_cache_dir,
+            head_path,
             models,
         })
     }
@@ -132,6 +137,15 @@ impl Config {
         &self.model_cache_dir
     }
 
+    /// Where the scoring head's weights live.
+    ///
+    /// Beside the model cache, because the two belong together: a head is only
+    /// meaningful paired with the embedder that produced its training vectors.
+    #[must_use]
+    pub fn head_path(&self) -> &Path {
+        &self.head_path
+    }
+
     /// The upstream model serving `tier`.
     ///
     /// # Returns
@@ -152,6 +166,7 @@ impl std::fmt::Debug for Config {
             .field("upstream_base_url", &self.upstream_base_url)
             .field("api_key", &format_args!("<{} chars>", self.api_key.len()))
             .field("model_cache_dir", &self.model_cache_dir)
+            .field("head_path", &self.head_path)
             .field("models", &self.models)
             .finish()
     }
