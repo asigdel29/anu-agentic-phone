@@ -1,0 +1,71 @@
+# justfile — single entry point for building, training, deploying and verifying
+# the stack.
+#
+# History
+#   2026-08-05  A. Sigdel  Created. Toolchain check only; later work adds the
+#                          build, train, deploy and verify recipes alongside the
+#                          scripts they invoke.
+#
+# Contents
+#   default    List available recipes.
+#   toolchain  Report whether each required tool is present and new enough.
+#
+# Recipes are added in the same change that adds the script they call, so
+# `just --list` never advertises a recipe that cannot run.
+
+# Directory holding the bge-small ONNX model, shared with zeromem so the ~130MB
+# download happens once rather than once per process.
+model_cache_dir := env_var_or_default("WATTROUTER_MODEL_CACHE", home_directory() / ".hermes/memory/zeromem-models")
+
+# Address the router binds. Both Hermes and OpenCode point at this.
+router_addr := env_var_or_default("WATTROUTER_ADDR", "127.0.0.1:8080")
+
+# List available recipes.
+default:
+    @just --list
+
+# Report the toolchain; exit non-zero if anything is missing or too old.
+toolchain:
+    #!/usr/bin/env bash
+    # Doubles as the precondition check for the recipes added later, which is why
+    # it fails rather than warns: a missing toolchain should stop the caller here
+    # and not midway through a build.
+    set -uo pipefail
+    missing=0
+
+    # Each entry is "binary|purpose". Version floors are checked below only where
+    # a specific floor actually matters; otherwise presence is enough.
+    for entry in \
+        "cargo|build the router" \
+        "rustc|build the router" \
+        "uv|manage the training environment" \
+        "python3|run the training scripts" \
+        "git|version control" \
+        "gh|issues and pull requests" \
+        "curl|verification scripts"
+    do
+        bin="${entry%%|*}"; purpose="${entry##*|}"
+        if command -v "$bin" >/dev/null 2>&1; then
+            printf '  present  %-10s %s\n' "$bin" "$purpose"
+        else
+            printf '  MISSING  %-10s %s\n' "$bin" "$purpose"
+            missing=1
+        fi
+    done
+
+    # Python 3.11+ is Hermes's floor. Checked explicitly because an older
+    # interpreter fails deep inside an install rather than here.
+    if command -v python3 >/dev/null 2>&1; then
+        if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)'; then
+            echo "  TOO OLD  python3    need 3.11+ (Hermes floor)"
+            missing=1
+        fi
+    fi
+
+    echo
+    if [ "$missing" -eq 0 ]; then
+        echo "toolchain OK"
+    else
+        echo "toolchain incomplete — install the entries marked MISSING or TOO OLD" >&2
+    fi
+    exit "$missing"
