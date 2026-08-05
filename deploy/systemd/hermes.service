@@ -1,0 +1,39 @@
+# hermes.service — the agent, as a system service.
+#
+# History
+#   2026-08-05  A. Sigdel  Created.
+#
+# Ordered after the router: Hermes holds no provider credential and can reach
+# nothing without it, so starting first would only produce failed calls until the
+# router came up.
+
+[Unit]
+Description=Hermes Agent
+Documentation=https://github.com/asigdel29/anu-agentic-stack
+After=network-online.target wattrouter.service
+Wants=network-online.target
+# Wants, not Requires: a router restart should not take Hermes down with it. The
+# router comes back in seconds and Hermes retries.
+Wants=wattrouter.service
+
+[Service]
+Type=exec
+User=hermes
+Group=hermes
+Environment=HERMES_HOME=/var/lib/hermes
+WorkingDirectory=/var/lib/hermes
+ExecStart=/usr/local/bin/hermes serve
+
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/hermes
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
