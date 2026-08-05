@@ -19,6 +19,15 @@ path = "src/main.rs"
 # needs body streaming both ways, and axum's Body is hyper's, so the routing
 # convenience costs nothing.
 axum = "0.8"
+futures-util = { version = "0.3", default-features = false }
+# rustls rather than the system OpenSSL: the router cross-compiles to aarch64,
+# and vendoring the TLS stack keeps that a pure Rust build.
+reqwest = { version = "0.12", default-features = false, features = [
+    "json",
+    "stream",
+    "rustls-tls",
+    "http2",
+] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
 serde_json = "1"
 thiserror = "2"
@@ -29,6 +38,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Drives the router directly, so endpoint tests neither bind a port nor race for
 # one in CI.
 tower = { version = "0.5", features = ["util"] }
+async-stream = "0.3"
 http-body-util = "0.1"
 
 [profile.release]
