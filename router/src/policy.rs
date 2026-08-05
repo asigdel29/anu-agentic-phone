@@ -94,6 +94,8 @@ pub enum Reason {
     CodeShaped,
     /// No score was available.
     Unscored,
+    /// The session had already settled on a higher tier.
+    Sticky,
 }
 
 impl Reason {
@@ -107,6 +109,7 @@ impl Reason {
             Self::Scored => "scored",
             Self::CodeShaped => "code-shaped",
             Self::Unscored => "unscored",
+            Self::Sticky => "sticky",
         }
     }
 }
@@ -289,6 +292,7 @@ mod tests {
             Reason::Scored,
             Reason::CodeShaped,
             Reason::Unscored,
+            Reason::Sticky,
         ];
         let mut seen = std::collections::HashSet::new();
         for reason in reasons {
