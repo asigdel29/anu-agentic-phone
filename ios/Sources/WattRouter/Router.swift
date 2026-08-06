@@ -68,6 +68,26 @@ public enum Reason: UInt8, CaseIterable, Sendable {
     }
 }
 
+/// Where a model runs.
+public enum Backend: UInt8, CaseIterable, Sendable {
+    /// In this process: a model file loaded into the app's own address space.
+    case local
+    /// Over the network, behind the upstream API.
+    case remote
+}
+
+/// One attempt: a model, and where to run it.
+///
+/// The two travel together because a name does not say how to reach what it
+/// names. `bonsai-27b-mlx-1bit` is a file to load; `kimi-k2.7-code` is an HTTP
+/// request. A caller holding only the name has to guess, or keep its own table.
+public struct Step: Equatable, Sendable {
+    /// Where to run this attempt.
+    public let backend: Backend
+    /// The model to ask.
+    public let model: String
+}
+
 /// A tier, why it was chosen, and the score behind it.
 public struct Decision: Equatable, Sendable {
     /// The tier that will serve the request.
@@ -125,6 +145,22 @@ public final class Router: @unchecked Sendable {
         guard let tier = Tier(rawValue: raw.tier), let reason = Reason(rawValue: raw.reason)
         else { return nil }
         return Decision(tier: tier, reason: reason, score: raw.score < 0 ? nil : raw.score)
+    }
+
+    /// The models backing `tier`, in the order they will be tried.
+    ///
+    /// A decision names a tier, which is a role. This is what answers it, and
+    /// what says whether each attempt runs in this process or over the network.
+    ///
+    /// - Returns: at least one step, and at most three. Each name is copied out
+    ///   of the core rather than borrowed, so it outlives this router.
+    public func chain(for tier: Tier) -> [Step] {
+        (0..<wattrouter_chain_length(handle, tier.rawValue)).compactMap { index in
+            guard let name = wattrouter_chain_model(handle, tier.rawValue, index),
+                let backend = Backend(rawValue: wattrouter_chain_backend(handle, tier.rawValue, index))
+            else { return nil }
+            return Step(backend: backend, model: String(cString: name))
+        }
     }
 }
 
