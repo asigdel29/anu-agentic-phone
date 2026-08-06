@@ -175,51 +175,104 @@ fn fit(examples: &[Example]) -> (Vec<f32>, f32) {
     (weights, bias)
 }
 
-/// Report how well the head separates the two classes.
+/// Report how well the head ranks, and where the thresholds should sit.
 ///
-/// Accuracy alone misleads on an unbalanced set, so the per-class mean score is
-/// reported too: a head that separates shows a gap, one that has not shows none.
-/// That number is what revealed this configuration does not work.
+/// Separation of the class means is reported but is not the deciding number.
+/// Only ~9% of prompts need the strong model, so a head can rank usefully while
+/// the two means sit almost on top of each other. What matters for routing is
+/// whether a harder prompt scores above an easier one — AUC — because the policy
+/// thresholds a distribution rather than testing an absolute value.
+///
+/// The percentiles are the output to act on. Absolute thresholds are wrong when
+/// scores cluster: they must be set from the distribution so that a chosen share
+/// of traffic reaches each tier, which is what RouteLLM's threshold calibration
+/// does and what this prints.
+///
+/// # Returns
+/// The calibrated `(cheap_max, mid_max)` thresholds, at p50 and p85 of the score
+/// distribution.
 #[allow(clippy::cast_precision_loss)] // counts are far below f32's limit
-fn report(examples: &[Example], weights: &[f32], bias: f32) {
-    let (mut hard_sum, mut hard_n, mut easy_sum, mut easy_n) = (0.0f32, 0usize, 0.0f32, 0usize);
-    let mut correct = 0usize;
-
-    for example in examples {
-        let score = sigmoid(
+fn report(examples: &[Example], weights: &[f32], bias: f32) -> (f32, f32) {
+    let score_of = |e: &Example| {
+        sigmoid(
             weights
                 .iter()
-                .zip(&example.embedding)
+                .zip(&e.embedding)
                 .map(|(w, x)| w * x)
                 .sum::<f32>()
                 + bias,
-        );
+        )
+    };
+
+    let mut hard: Vec<f32> = Vec::new();
+    let mut easy: Vec<f32> = Vec::new();
+    let mut all: Vec<f32> = Vec::with_capacity(examples.len());
+    for example in examples {
+        let score = score_of(example);
+        all.push(score);
         if example.label > 0.5 {
-            hard_sum += score;
-            hard_n += 1;
-            if score > 0.5 {
-                correct += 1;
-            }
+            hard.push(score);
         } else if example.label < 0.5 {
-            easy_sum += score;
-            easy_n += 1;
-            if score <= 0.5 {
-                correct += 1;
-            }
+            easy.push(score);
         }
     }
 
-    let hard_mean = hard_sum / hard_n.max(1) as f32;
-    let easy_mean = easy_sum / easy_n.max(1) as f32;
-    let decided = (hard_n + easy_n).max(1) as f32;
+    let mean = |v: &[f32]| v.iter().sum::<f32>() / v.len().max(1) as f32;
     eprintln!(
-        "mean score: strong-wins {hard_mean:.3} over {hard_n}, weak-wins {easy_mean:.3} over {easy_n}"
+        "mean score: strong-wins {:.3} over {}, weak-wins {:.3} over {}",
+        mean(&hard),
+        hard.len(),
+        mean(&easy),
+        easy.len()
     );
-    eprintln!("separation: {:.3}", hard_mean - easy_mean);
+    eprintln!("separation: {:.3}", mean(&hard) - mean(&easy));
+    eprintln!("AUC: {:.3}  (0.5 is a coin flip)", auc(&hard, &easy));
+
+    all.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let at = |q: f64| all[((all.len() as f64 - 1.0) * q) as usize];
     eprintln!(
-        "accuracy on decided examples: {:.1}%",
-        100.0 * correct as f32 / decided
+        "score percentiles: p50 {:.4}  p65 {:.4}  p85 {:.4}  p95 {:.4}",
+        at(0.50),
+        at(0.65),
+        at(0.85),
+        at(0.95)
     );
+    eprintln!(
+        "calibrated thresholds: cheap_max {:.4} (p50), mid_max {:.4} (p85)",
+        at(0.50),
+        at(0.85)
+    );
+    (at(0.50), at(0.85))
+}
+
+/// Probability that a randomly chosen hard prompt outscores an easy one.
+///
+/// Computed by rank rather than by comparing every pair, which would be
+/// quadratic over a hundred thousand examples.
+#[allow(clippy::cast_precision_loss)] // counts are far below f64's limit
+fn auc(hard: &[f32], easy: &[f32]) -> f64 {
+    if hard.is_empty() || easy.is_empty() {
+        return 0.5;
+    }
+    let mut all: Vec<(f32, bool)> = hard
+        .iter()
+        .map(|s| (*s, true))
+        .chain(easy.iter().map(|s| (*s, false)))
+        .collect();
+    all.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+
+    // Sum of ranks of the positive class, one-based, ties left un-averaged: the
+    // scores are continuous, so exact ties are vanishingly rare.
+    let rank_sum: f64 = all
+        .iter()
+        .enumerate()
+        .filter(|(_, (_, is_hard))| *is_hard)
+        .map(|(i, _)| (i + 1) as f64)
+        .sum();
+
+    let n_hard = hard.len() as f64;
+    let n_easy = easy.len() as f64;
+    (rank_sum - n_hard * (n_hard + 1.0) / 2.0) / (n_hard * n_easy)
 }
 
 fn main() -> std::io::Result<()> {
@@ -260,12 +313,17 @@ fn main() -> std::io::Result<()> {
         balance(&mut examples);
     }
     let (weights, bias) = fit(&examples);
-    report(&examples, &weights, bias);
+    let (cheap_max, mid_max) = report(&examples, &weights, bias);
 
+    // The thresholds travel with the head. They are a property of this fit —
+    // scores from a different embedder or a different run land elsewhere — so
+    // shipping them separately would let the two drift apart silently.
     let head = serde_json::json!({
         "embedder": embedder.id(),
         "weights": weights,
         "bias": bias,
+        "cheap_max": cheap_max,
+        "mid_max": mid_max,
     });
     println!("{head}");
     Ok(())

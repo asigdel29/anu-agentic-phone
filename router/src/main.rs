@@ -244,10 +244,20 @@ async fn metrics(State(state): State<Arc<AppState>>) -> (StatusCode, String) {
 /// Separate from [`main`] so tests can drive it through `tower::ServiceExt`
 /// without binding a port, which keeps them fast and free of port collisions.
 fn app(config: Config, upstream: Upstream, head: Option<Head>) -> Router {
+    // A head's scores occupy a narrow band around 0.5, so the absolute defaults
+    // would strand whole tiers. When the head carries thresholds calibrated
+    // against its own distribution, those win — they are the only ones that can
+    // be right for it.
+    let thresholds = head
+        .as_ref()
+        .and_then(Head::thresholds)
+        .and_then(|(cheap, mid)| Thresholds::new(cheap, mid))
+        .unwrap_or_default();
+
     let state = Arc::new(AppState {
         config,
         upstream,
-        thresholds: Thresholds::default(),
+        thresholds,
         embedder: HashEmbedder::new(),
         cache: DecisionCache::new(),
         metrics: Metrics::new(),
@@ -311,6 +321,12 @@ async fn main() -> Result<(), ConfigError> {
             None
         }
     };
+
+    if let Some((cheap, mid)) = head.as_ref().and_then(Head::thresholds) {
+        tracing::info!(cheap_max = cheap, mid_max = mid, "calibrated thresholds");
+    } else {
+        tracing::warn!("no calibrated thresholds; using defaults, which suit no head");
+    }
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await
