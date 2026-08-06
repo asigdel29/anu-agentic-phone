@@ -109,10 +109,37 @@ pub fn fnv1a(kind: u8, bytes: &[u8]) -> u64 {
 /// panic on the request path, and the callers that care check length themselves.
 #[must_use]
 pub fn dot(a: &[f32], b: &[f32]) -> f32 {
+    /// Independent accumulators. Eight fits a 256-bit vector of `f32` and is a
+    /// multiple of [`DIM`], so the tail below is empty in the only case that runs
+    /// on the request path.
+    const LANES: usize = 8;
+
     if a.len() != b.len() {
         return 0.0;
     }
-    a.iter().zip(b).map(|(x, y)| x * y).sum()
+
+    // Eight independent accumulators rather than one running sum. Floating-point
+    // addition is not associative, so a single `sum()` obliges the compiler to
+    // add strictly in order: one add per element, no vectorisation. Summing
+    // lanes separately states that the order is ours to choose, which is what
+    // lets this become SIMD.
+    //
+    // The result can differ from the sequential form in the last bits. That is
+    // acceptable here and checked rather than assumed: the score feeds a
+    // threshold comparison, and routing over a held-out corpus is unchanged.
+    let mut acc = [0.0f32; LANES];
+    let mut chunks = a.chunks_exact(LANES).zip(b.chunks_exact(LANES));
+    for (x, y) in &mut chunks {
+        for (lane, slot) in acc.iter_mut().enumerate() {
+            *slot = x[lane].mul_add(y[lane], *slot);
+        }
+    }
+
+    // Whatever the lane width did not divide.
+    let done = a.len() - a.len() % LANES;
+    let tail: f32 = a[done..].iter().zip(&b[done..]).map(|(x, y)| x * y).sum();
+
+    acc.iter().sum::<f32>() + tail
 }
 
 /// Cosine similarity between two vectors.
@@ -212,10 +239,29 @@ impl Embedder for HashEmbedder {
 
             // Trigrams over characters, not bytes, so multi-byte text is not
             // split mid-character into features that mean nothing.
-            let chars: Vec<char> = token.chars().collect();
-            for window in chars.windows(3) {
-                let trigram: String = window.iter().collect();
-                Self::accumulate(&mut out, 1, &trigram);
+            //
+            // A rolling window of three character offsets, hashing the slice
+            // between them. The obvious form — collect the characters, then
+            // collect each window into a `String` — allocates roughly fourteen
+            // hundred times for a full-length prompt, and that was most of what
+            // embedding cost. The bytes hashed are identical either way, so no
+            // fitted head is invalidated; `trigrams_match_the_collected_form`
+            // holds that.
+            let mut ring = [0usize; 3];
+            let mut filled = 0usize;
+            for (start, _) in token.char_indices() {
+                if filled == 3 {
+                    Self::accumulate(&mut out, 1, &token[ring[0]..start]);
+                    ring[0] = ring[1];
+                    ring[1] = ring[2];
+                    ring[2] = start;
+                } else {
+                    ring[filled] = start;
+                    filled += 1;
+                }
+            }
+            if filled == 3 {
+                Self::accumulate(&mut out, 1, &token[ring[0]..]);
             }
         }
 
@@ -327,6 +373,61 @@ mod tests {
 
     fn embed(text: &str) -> Vec<f32> {
         HashEmbedder::new().embed(text).expect("non-empty text")
+    }
+
+    /// The trigrams the previous implementation produced: collect the token's
+    /// characters, then collect each three-character window into a `String`.
+    /// Kept as the reference the rolling window is checked against.
+    fn trigrams_by_collecting(token: &str) -> Vec<String> {
+        let chars: Vec<char> = token.chars().collect();
+        chars.windows(3).map(|w| w.iter().collect()).collect()
+    }
+
+    /// The trigrams the rolling window produces, owned so the two can be compared.
+    fn trigrams_by_window(token: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut ring = [0usize; 3];
+        let mut filled = 0usize;
+        for (start, _) in token.char_indices() {
+            if filled == 3 {
+                out.push(token[ring[0]..start].to_owned());
+                ring[0] = ring[1];
+                ring[1] = ring[2];
+                ring[2] = start;
+            } else {
+                ring[filled] = start;
+                filled += 1;
+            }
+        }
+        if filled == 3 {
+            out.push(token[ring[0]..].to_owned());
+        }
+        out
+    }
+
+    #[test]
+    fn trigrams_match_the_collected_form() {
+        // The rolling window replaced a form that allocated per trigram. The
+        // hashed bytes must be identical or every fitted head silently means
+        // something else, so the two are compared directly — including the
+        // boundary lengths and multi-byte text, where a byte-wise window would
+        // diverge from a character-wise one.
+        for token in [
+            "",
+            "a",
+            "ab",
+            "abc",
+            "abcd",
+            "refactoring",
+            "日本語のテキスト",
+            "aé日x",
+        ] {
+            assert_eq!(
+                trigrams_by_window(token),
+                trigrams_by_collecting(token),
+                "for {token:?}"
+            );
+        }
     }
 
     #[test]

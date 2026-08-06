@@ -50,6 +50,10 @@ thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+[[bench]]
+name = "decide"
+harness = false
+
 [dev-dependencies]
 # Drives the router directly, so endpoint tests neither bind a port nor race for
 # one in CI.

@@ -35,15 +35,15 @@ pub const CAPACITY: usize = 512;
 /// Written rather than pulled in: the router needs one eviction rule over a few
 /// hundred entries, and the dependency would be larger than the code.
 #[derive(Debug)]
-struct Bounded<V> {
-    entries: HashMap<String, (u64, V)>,
+struct Bounded<K, V> {
+    entries: HashMap<K, (u64, V)>,
     /// Monotonic counter standing in for a clock. A clock would be the obvious
     /// choice and the wrong one — it makes tests wait, and ordering is all that
     /// eviction needs.
     tick: u64,
 }
 
-impl<V> Bounded<V> {
+impl<K: std::hash::Hash + Eq + Clone, V> Bounded<K, V> {
     fn new() -> Self {
         Self {
             entries: HashMap::new(),
@@ -51,11 +51,15 @@ impl<V> Bounded<V> {
         }
     }
 
-    fn get(&self, key: &str) -> Option<&V> {
+    fn get<Q>(&self, key: &Q) -> Option<&V>
+    where
+        K: std::borrow::Borrow<Q>,
+        Q: std::hash::Hash + Eq + ?Sized,
+    {
         self.entries.get(key).map(|(_, value)| value)
     }
 
-    fn put(&mut self, key: String, value: V) {
+    fn put(&mut self, key: K, value: V) {
         self.tick += 1;
         let tick = self.tick;
         self.entries.insert(key, (tick, value));
@@ -89,8 +93,8 @@ pub struct DecisionCache {
 
 #[derive(Debug)]
 struct Inner {
-    by_prompt: Bounded<f32>,
-    by_session: Bounded<Tier>,
+    by_prompt: Bounded<u64, f32>,
+    by_session: Bounded<String, Tier>,
 }
 
 impl DecisionCache {
@@ -199,12 +203,16 @@ impl Default for DecisionCache {
 
 /// A stable key for a prompt.
 ///
+/// The hash itself, not a rendering of it: formatting it as hex allocated a
+/// `String` per lookup and then made the map hash that string again, to convey
+/// exactly the information the `u64` already held.
+///
 /// Salted apart from the embedder's feature spaces so the two cannot interact.
 /// Not cryptographic and does not need to be: a collision costs one request the
 /// wrong cached score, which the escalation rule can still correct, and prompts
 /// here are already truncated to a bounded length.
-fn key_of(prompt: &str) -> String {
-    format!("{:016x}", fnv1a(2, prompt.as_bytes()))
+fn key_of(prompt: &str) -> u64 {
+    fnv1a(2, prompt.as_bytes())
 }
 
 #[cfg(test)]
