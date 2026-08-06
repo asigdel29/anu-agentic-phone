@@ -201,12 +201,70 @@ pub unsafe extern "C" fn wattrouter_decide(
     .unwrap_or(Decision::FAILED)
 }
 
+/// The `index`th name, or null IF there is none.
+///
+/// Total: no lookup built on it can panic, so no entry point that is only a
+/// lookup needs a `catch_unwind` to make one safe to cross the boundary.
+fn name_at(names: &[&'static CStr], index: u8) -> *const c_char {
+    names
+        .get(index as usize)
+        .map_or(std::ptr::null(), |name| name.as_ptr())
+}
+
+/// The name of a tier code, as configuration and metrics spell it.
+///
+/// A decision crosses as two numbers, which is all the caller needs to act but
+/// nothing it can display or log. These return the words without the caller
+/// keeping a second copy of the vocabulary that can fall behind this one.
+///
+/// # Arguments
+/// * `tier` — a code from [`Decision`]'s `tier`.
+///
+/// # Returns
+/// A static NUL-terminated name, borrowed for the program's lifetime and never
+/// freed by the caller, or null IF `tier` names no tier — which includes the
+/// failure sentinel.
+#[unsafe(no_mangle)]
+pub extern "C" fn wattrouter_tier_name(tier: u8) -> *const c_char {
+    // Written out rather than indexed off `Tier::ALL`, for the reason
+    // `reason_code` is: the caller is compiled against these codes, and
+    // reordering the enum must not change what a number means to it.
+    // `tier_names_match_the_tier` holds the spellings to the tier's own.
+    const NAMES: [&CStr; 6] = [c"aux", c"cheap", c"mid", c"code", c"long", c"heavy"];
+    name_at(&NAMES, tier)
+}
+
+/// The name of a reason code, as metrics spell it.
+///
+/// # Arguments
+/// * `reason` — a code from [`Decision`]'s `reason`.
+///
+/// # Returns
+/// A static NUL-terminated name, borrowed for the program's lifetime and never
+/// freed by the caller, or null IF `reason` names no reason.
+#[unsafe(no_mangle)]
+pub extern "C" fn wattrouter_reason_name(reason: u8) -> *const c_char {
+    const NAMES: [&CStr; 7] = [
+        c"pinned",
+        c"background",
+        c"context-too-large",
+        c"scored",
+        c"code-shaped",
+        c"unscored",
+        c"sticky",
+    ];
+    name_at(&NAMES, reason)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Decision, Router, reason_code};
     use crate::policy::Reason;
     use crate::tier::Tier;
-    use std::ffi::CString;
+    use std::ffi::{CStr, CString};
+
+    /// The header, as the app's compiler will read it.
+    const HEADER: &str = include_str!("../include/wattrouter.h");
 
     /// Build a router as the app would, and free it as the app must.
     fn with_router<T>(body: impl FnOnce(*mut Router) -> T) -> T {
@@ -291,5 +349,78 @@ mod tests {
         for reason in Reason::ALL {
             assert!(seen.insert(reason_code(reason)), "duplicate for {reason:?}");
         }
+    }
+
+    #[test]
+    fn tier_names_match_the_tier() {
+        // The codes are written out in `wattrouter_tier_name` so that they stay
+        // put; this is what keeps writing them out from drifting.
+        for tier in Tier::ALL {
+            let name = unsafe { CStr::from_ptr(super::wattrouter_tier_name(tier as u8)) };
+            assert_eq!(name.to_str().unwrap(), tier.name());
+        }
+        assert!(super::wattrouter_tier_name(Decision::FAILED.tier).is_null());
+    }
+
+    #[test]
+    fn reason_names_match_the_reason() {
+        for reason in Reason::ALL {
+            let code = reason_code(reason);
+            let name = unsafe { CStr::from_ptr(super::wattrouter_reason_name(code)) };
+            assert_eq!(name.to_str().unwrap(), reason.label());
+        }
+        assert!(super::wattrouter_reason_name(Decision::FAILED.reason).is_null());
+    }
+
+    /// Every `wattrouter_*` name `text` uses as a function — the identifier
+    /// immediately followed by an opening parenthesis, which is what separates a
+    /// declaration or a call from a type name or a mention in prose.
+    fn entry_points(text: &str) -> std::collections::BTreeSet<&str> {
+        let mut found = std::collections::BTreeSet::new();
+        for (start, _) in text.match_indices("wattrouter_") {
+            let rest = &text[start..];
+            let end = rest
+                .find(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+                .unwrap_or(rest.len());
+            if rest[end..].starts_with('(') {
+                found.insert(&rest[..end]);
+            }
+        }
+        found
+    }
+
+    #[test]
+    fn the_header_declares_exactly_the_entry_points() {
+        // The header is written by hand, so nothing else stops it describing a
+        // library that no longer exists. A caller compiled against a stale
+        // declaration does not fail to link; it reads the wrong answer.
+        let declared = entry_points(HEADER);
+        assert!(
+            declared.contains("wattrouter_decide"),
+            "the scan found nothing, which would make agreement vacuous"
+        );
+        assert_eq!(
+            declared,
+            entry_points(include_str!("ffi.rs")),
+            "the header and ffi.rs disagree about the entry points"
+        );
+    }
+
+    #[test]
+    fn the_decision_struct_matches_the_header() {
+        // C reads these offsets from its own declaration of the struct. A
+        // mismatch misreads every field rather than failing to link, so the two
+        // layouts are asserted rather than assumed to agree.
+        assert_eq!(size_of::<Decision>(), 8);
+        assert_eq!(align_of::<Decision>(), 4);
+        assert_eq!(std::mem::offset_of!(Decision, tier), 0);
+        assert_eq!(std::mem::offset_of!(Decision, reason), 1);
+        assert_eq!(std::mem::offset_of!(Decision, score), 4);
+
+        let sentinel = format!("#define WATTROUTER_FAILED {}", Decision::FAILED.tier);
+        assert!(
+            HEADER.contains(&sentinel),
+            "the header's sentinel is not the one the library returns"
+        );
     }
 }
