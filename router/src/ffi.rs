@@ -266,6 +266,15 @@ mod tests {
     /// The header, as the app's compiler will read it.
     const HEADER: &str = include_str!("../include/wattrouter.h");
 
+    /// The header tells a caller whether one router may be shared across
+    /// threads. Nothing but this decides that claim: the cache is behind a mutex
+    /// and everything else is read-only after construction. If that stops being
+    /// true this stops compiling, rather than the header quietly becoming wrong.
+    const _: fn() = || {
+        fn assert_shareable<T: Sync + Send>() {}
+        assert_shareable::<Router>();
+    };
+
     /// Build a router as the app would, and free it as the app must.
     fn with_router<T>(body: impl FnOnce(*mut Router) -> T) -> T {
         unsafe { std::env::set_var("NEURALWATT_API_KEY", "ffi-test") };
