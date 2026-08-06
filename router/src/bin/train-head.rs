@@ -78,11 +78,14 @@ fn sigmoid(x: f32) -> f32 {
 
 /// Read and embed the training set.
 #[allow(clippy::cast_possible_truncation)] // labels are exactly 0.0, 0.5 or 1.0
-fn load(path: &str, embedder: &HashEmbedder) -> std::io::Result<Vec<Example>> {
+fn load(path: &str, embedder: &dyn Embedder, limit: usize) -> std::io::Result<Vec<Example>> {
     let file = std::fs::File::open(path)?;
     let mut examples = Vec::new();
 
     for line in std::io::BufReader::new(file).lines() {
+        if examples.len() >= limit {
+            break;
+        }
         let line = line?;
         let Ok(row) = serde_json::from_str::<serde_json::Value>(&line) else {
             continue;
@@ -224,8 +227,32 @@ fn main() -> std::io::Result<()> {
         .nth(1)
         .unwrap_or_else(|| "train/prompts.jsonl".to_owned());
 
-    let embedder = HashEmbedder::new();
-    let mut examples = load(&path, &embedder)?;
+    let limit: usize = std::env::var("TRAIN_LIMIT")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(usize::MAX);
+
+    // Which embedder is used decides what the head means, so it is named rather
+    // than inferred: a head is only valid with the embedder that produced its
+    // vectors, and the output file records which that was.
+    let embedder: Box<dyn Embedder> = if std::env::var("TRAIN_EMBEDDER").as_deref() == Ok("onnx") {
+        #[cfg(feature = "onnx")]
+        {
+            let dir = std::env::var("WATTROUTER_MODEL_CACHE")
+                .unwrap_or_else(|_| "/tmp/wattrouter-models".to_owned());
+            Box::new(
+                wattrouter::embed::OnnxEmbedder::new(std::path::Path::new(&dir))
+                    .expect("onnx model loads"),
+            )
+        }
+        #[cfg(not(feature = "onnx"))]
+        panic!("built without the onnx feature")
+    } else {
+        Box::new(HashEmbedder::new())
+    };
+    eprintln!("embedder: {}", embedder.id());
+
+    let mut examples = load(&path, embedder.as_ref(), limit)?;
     eprintln!("loaded {} examples from {path}", examples.len());
     assert!(!examples.is_empty(), "no usable examples in {path}");
 
