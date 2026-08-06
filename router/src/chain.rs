@@ -33,28 +33,39 @@ pub const MAX_CHAIN: usize = 3;
 /// the backend that tier actually runs on, so a local model is judged by what a
 /// phone holds rather than by what its weights advertise.
 ///
-/// Candidates are ordered by how close their capability is to the original, so a
-/// substitution is the smallest one available.
+/// Candidates on the same backend come first, then the rest ordered by how close
+/// their capability is to the original, so a substitution is the smallest one
+/// available. Leaving the device is a different kind of substitution from picking
+/// another local model — it is the escape hatch for work no local window can hold
+/// — and capability distance alone would reach for it whenever it sorted well.
 ///
 /// # Returns
 /// A non-empty list of at most [`MAX_CHAIN`] models, so
 /// [`crate::upstream::Upstream::forward`] always has something to try.
 #[must_use]
 pub fn chain_for(config: &Config, tier: Tier) -> Vec<&str> {
-    let limit = tier.context_limit(config.backend_for(tier));
+    let backend = config.backend_for(tier);
+    let limit = tier.context_limit(backend);
     let mut candidates: Vec<Tier> = Tier::ALL
         .into_iter()
         .filter(|&other| other != tier && other.context_limit(config.backend_for(other)) >= limit)
         .collect();
 
-    // Closest capability first, so a heavy request degrades to the next thing
-    // down rather than straight to the cheapest that happens to fit.
+    // Own backend first, then closest capability, so a heavy request degrades to
+    // the next thing down rather than straight to the cheapest that happens to
+    // fit. `backend_for` is an array index, so reading it again here is cheaper
+    // than carrying it alongside each candidate: pairing the two widens both the
+    // vector's elements and the sort key, and measured slower.
     candidates.sort_by_key(|&other| {
         let distance = (other as i32 - tier as i32).abs();
         // Prefer a more capable substitute over a less capable one at equal
         // distance: over-serving costs a fraction of a cent, under-serving costs
         // the answer.
-        (distance, i32::from(other < tier))
+        (
+            i32::from(config.backend_for(other) != backend),
+            distance,
+            i32::from(other < tier),
+        )
     });
 
     let mut chain = vec![config.model_for(tier)];
@@ -74,12 +85,21 @@ pub fn chain_for(config: &Config, tier: Tier) -> Vec<&str> {
 #[cfg(test)]
 mod tests {
     use super::{MAX_CHAIN, chain_for};
+    use crate::backend::Backend;
     use crate::config::Config;
     use crate::tier::Tier;
 
+    /// The board: every tier behind the upstream.
     fn config() -> Config {
-        unsafe { std::env::set_var("NEURALWATT_API_KEY", "test") };
-        Config::from_env().expect("valid")
+        Config::with_backends([Backend::Remote; Tier::ALL.len()])
+    }
+
+    /// The phone: every tier on the device except the long one, which is where
+    /// work no local window can hold goes.
+    fn phone() -> Config {
+        let mut backends = [Backend::Local; Tier::ALL.len()];
+        backends[Tier::Long as usize] = Backend::Remote;
+        Config::with_backends(backends)
     }
 
     #[test]
@@ -124,6 +144,21 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn a_local_tier_does_not_leave_the_device_while_it_has_alternatives() {
+        // Capability distance alone puts the long tier first here — one step from
+        // code and more capable at that distance — so without the backend key a
+        // coding request takes the escape hatch as its first fallback, sending
+        // off the device work three local models could have served.
+        let config = phone();
+        let chain = chain_for(&config, Tier::Code);
+        let off_device = config.model_for(Tier::Long);
+        assert!(
+            !chain.contains(&off_device),
+            "code left the device with local models still available: {chain:?}"
+        );
     }
 
     #[test]
