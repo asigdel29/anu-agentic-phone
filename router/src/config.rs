@@ -194,6 +194,24 @@ impl Config {
         &self.models[tier as usize]
     }
 
+    /// A configuration with `backends` applied and defaults everywhere else.
+    ///
+    /// Built without reading the environment: the routing rules do not depend on
+    /// it, and a test that sets a process-wide variable to reach them races every
+    /// other test that reads one.
+    #[cfg(test)]
+    pub(crate) fn with_backends(backends: [Backend; Tier::ALL.len()]) -> Self {
+        Self {
+            addr: "127.0.0.1:8080".parse().expect("a literal address"),
+            upstream_base_url: "https://api.neuralwatt.com/v1".to_owned(),
+            api_key: "test".to_owned(),
+            model_cache_dir: PathBuf::from("."),
+            head_path: PathBuf::from("head.json"),
+            models: Tier::ALL.map(|tier| tier.default_model().to_owned()),
+            backends,
+        }
+    }
+
     /// Where `tier`'s model runs.
     ///
     /// # Returns
