@@ -26,6 +26,7 @@
 #ifndef WATTROUTER_H
 #define WATTROUTER_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -86,6 +87,31 @@ wattrouter_decision wattrouter_decide(const wattrouter *router,
                                       const char *body_json,
                                       const char *pin,
                                       const char *session);
+
+/* How many models back `tier`, in the order they will be tried.
+ *
+ * A decision names a tier, which is a role. What answers is the chain behind it,
+ * and a caller holding only the tier cannot dispatch.
+ *
+ * Returns at most three, or 0 IF `router` is NULL or `tier` names no tier — so
+ * every index below the result can be read without checking each for absence. */
+size_t wattrouter_chain_length(const wattrouter *router, uint8_t tier);
+
+/* The `index`th model backing `tier`.
+ *
+ * Returns a name borrowed from `router` and valid until wattrouter_free, which
+ * the caller must not free, or NULL IF `index` is past the end of the chain. */
+const char *wattrouter_chain_model(const wattrouter *router, uint8_t tier,
+                                   size_t index);
+
+/* Where the `index`th model of `tier`'s chain runs: 0 local, 1 remote.
+ *
+ * A model name does not say how to reach it — one is a file to load into this
+ * process and another is an HTTP request. This is what separates them.
+ *
+ * Returns a backend code, or WATTROUTER_FAILED IF `index` is past the end. */
+uint8_t wattrouter_chain_backend(const wattrouter *router, uint8_t tier,
+                                 size_t index);
 
 /* The name of a tier code, as configuration and metrics spell it.
  *
