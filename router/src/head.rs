@@ -77,6 +77,10 @@ struct HeadFile {
     weights: Vec<f32>,
     /// The intercept.
     bias: f32,
+    /// Top of the cheap band, calibrated against this fit's score distribution.
+    cheap_max: Option<f32>,
+    /// Top of the middle band, likewise.
+    mid_max: Option<f32>,
 }
 
 /// A fitted logistic head.
@@ -85,6 +89,7 @@ pub struct Head {
     weights: Vec<f32>,
     bias: f32,
     fitted_on: String,
+    thresholds: Option<(f32, f32)>,
 }
 
 impl Head {
@@ -146,7 +151,23 @@ impl Head {
             weights: parsed.weights,
             bias: parsed.bias,
             fitted_on: parsed.embedder,
+            thresholds: parsed.cheap_max.zip(parsed.mid_max),
         })
+    }
+
+    /// The thresholds calibrated against this head's own score distribution.
+    ///
+    /// A fitted head's scores occupy a narrow band — around 0.50 for these — so
+    /// absolute thresholds chosen in advance would strand whole tiers. Carrying
+    /// them with the weights is what keeps the two from drifting apart: a head
+    /// and the bands that read it are one artefact, not two.
+    ///
+    /// # Returns
+    /// `Some((cheap_max, mid_max))` IF the head was fitted by a trainer that
+    /// calibrated them, `None` for an older file.
+    #[must_use]
+    pub const fn thresholds(&self) -> Option<(f32, f32)> {
+        self.thresholds
     }
 
     /// The embedder this head was fitted on, for logging and metrics.
