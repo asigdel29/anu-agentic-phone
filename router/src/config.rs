@@ -58,7 +58,7 @@ pub struct Config {
     api_key: String,
     model_cache_dir: PathBuf,
     head_path: PathBuf,
-    models: [String; 6],
+    models: [String; Tier::ALL.len()],
 }
 
 impl Config {
@@ -131,6 +131,17 @@ impl Config {
         &self.api_key
     }
 
+    /// Describe the credential without disclosing it.
+    ///
+    /// The single redaction in the crate: [`Debug`] and the startup log line both
+    /// use it, so the shape cannot change in one and not the other. Reports only
+    /// the length, which separates "absent", "truncated by a shell expansion" and
+    /// "looks right" while carrying nothing usable.
+    #[must_use]
+    pub fn redacted_api_key(&self) -> String {
+        format!("<{} chars>", self.api_key.len())
+    }
+
     /// Where the embedding model is cached.
     #[must_use]
     pub fn model_cache_dir(&self) -> &Path {
@@ -164,7 +175,7 @@ impl std::fmt::Debug for Config {
         f.debug_struct("Config")
             .field("addr", &self.addr)
             .field("upstream_base_url", &self.upstream_base_url)
-            .field("api_key", &format_args!("<{} chars>", self.api_key.len()))
+            .field("api_key", &self.redacted_api_key())
             .field("model_cache_dir", &self.model_cache_dir)
             .field("head_path", &self.head_path)
             .field("models", &self.models)

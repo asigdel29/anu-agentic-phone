@@ -33,8 +33,8 @@ use crate::tier::Tier;
 /// invariant, and ordering them would tax every request for nothing.
 #[derive(Debug, Default)]
 pub struct Metrics {
-    by_tier: [AtomicU64; 6],
-    by_reason: [AtomicU64; 7],
+    by_tier: [AtomicU64; Tier::ALL.len()],
+    by_reason: [AtomicU64; Reason::ALL.len()],
     embeddings: AtomicU64,
     cache_hits: AtomicU64,
     fallbacks: AtomicU64,
@@ -99,7 +99,7 @@ impl Metrics {
 
         out.push_str("# HELP wattrouter_requests_by_reason Why each tier was chosen.\n");
         out.push_str("# TYPE wattrouter_requests_by_reason counter\n");
-        for reason in ALL_REASONS {
+        for reason in Reason::ALL {
             let n = self.by_reason[reason_index(reason)].load(Ordering::Relaxed);
             let label = reason.label();
             let _ = writeln!(
@@ -139,17 +139,6 @@ impl Metrics {
     }
 }
 
-/// Every reason, so the exposition lists all rather than only those seen.
-const ALL_REASONS: [Reason; 7] = [
-    Reason::Pinned,
-    Reason::Background,
-    Reason::ContextTooLarge,
-    Reason::Scored,
-    Reason::CodeShaped,
-    Reason::Unscored,
-    Reason::Sticky,
-];
-
 /// A stable array index for a reason. Written out rather than taken from the
 /// discriminant, so reordering the enum cannot silently reassign a counter — the
 /// numbers would keep flowing, into the wrong series.
@@ -167,7 +156,7 @@ const fn reason_index(reason: Reason) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{ALL_REASONS, Metrics, reason_index};
+    use super::{Metrics, reason_index};
     use crate::policy::Reason;
     use crate::tier::Tier;
 
@@ -179,7 +168,7 @@ mod tests {
         for tier in Tier::ALL {
             assert!(rendered.contains(&format!("tier=\"{}\"", tier.name())));
         }
-        for reason in ALL_REASONS {
+        for reason in Reason::ALL {
             assert!(rendered.contains(&format!("reason=\"{}\"", reason.label())));
         }
         assert!(rendered.contains("wattrouter_cache_hits_total 0"));
@@ -205,7 +194,7 @@ mod tests {
         // series, and the numbers would keep flowing while meaning something
         // else entirely.
         let mut seen = std::collections::HashSet::new();
-        for reason in ALL_REASONS {
+        for reason in Reason::ALL {
             assert!(
                 seen.insert(reason_index(reason)),
                 "duplicate for {reason:?}"
@@ -218,8 +207,8 @@ mod tests {
         // A variant added to Reason without extending ALL_REASONS would have its
         // series silently never exposed. reason_index is exhaustive, so its
         // highest index plus one is the true variant count.
-        let highest = ALL_REASONS.iter().map(|r| reason_index(*r)).max().unwrap();
-        assert_eq!(ALL_REASONS.len(), highest + 1);
+        let highest = Reason::ALL.iter().map(|r| reason_index(*r)).max().unwrap();
+        assert_eq!(Reason::ALL.len(), highest + 1);
     }
 
     #[test]
