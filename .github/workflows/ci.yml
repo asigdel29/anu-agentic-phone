@@ -191,12 +191,51 @@ jobs:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
         run: cargo build --manifest-path router/Cargo.toml --target aarch64-unknown-linux-gnu --release
 
+  # The iOS app links the router as a static library, and no other job compiles
+  # for that target. A break specific to it — a dependency reaching for a Unix
+  # the phone does not provide — would otherwise surface in Xcode, off CI and
+  # days later. The Apple SDK means a macOS runner, which is the scarcest thing
+  # this workflow asks for — fewer of them run at once than Linux ones, and they
+  # take longer to come up — so this job builds and checks the header and does
+  # nothing else: the tests are target-independent and already run on Linux.
+  #
+  # --lib --no-default-features is the build an app takes. It calls the decision
+  # core, never the server, and the default features drag ONNX Runtime in behind
+  # them for an embedder the app does not use — 156 MB of archive against 42.
+  ios-build:
+    name: Build (aarch64-apple-ios)
+    needs: detect
+    if: ${{ needs.detect.outputs.rust == 'true' }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/rust-setup
+        with:
+          target: aarch64-apple-ios
+          cache-key: ios
+      - name: Build
+        run: |
+          set -euo pipefail
+          cargo build --manifest-path router/Cargo.toml \
+            --target aarch64-apple-ios --release --lib --no-default-features
+
+      # A test in ffi.rs proves the header names what the library exports. It
+      # cannot prove the header is valid C, because nothing in a Rust build ever
+      # compiles it. This does, with the compiler and SDK the app will use.
+      - name: Check the header compiles as C
+        run: |
+          set -euo pipefail
+          clang -fsyntax-only -Wall -Wextra -pedantic -std=c11 \
+            -target arm64-apple-ios17 \
+            -isysroot "$(xcrun --sdk iphoneos --show-sdk-path)" \
+            router/include/wattrouter.h
+
   # One check for branch protection to require, so adding a job does not mean
   # editing the ruleset. Skipped is a pass: a job guarded off by `detect` has
   # nothing to say.
   required:
     name: Required
-    needs: [detect, format, lint, test, cross-build]
+    needs: [detect, format, lint, test, cross-build, ios-build]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -208,6 +247,7 @@ jobs:
             lint:${{ needs.lint.result }}
             test:${{ needs.test.result }}
             cross-build:${{ needs.cross-build.result }}
+            ios-build:${{ needs.ios-build.result }}
         run: |
           set -euo pipefail
           fail=0
