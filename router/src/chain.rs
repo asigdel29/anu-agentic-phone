@@ -5,7 +5,8 @@
 //!
 //! Contents
 //!   `MAX_CHAIN`  How many models one request may try.
-//!   `chain_for`  The ordered model list backing a tier.
+//!   `Step`       One attempt: a model, and where to run it.
+//!   `chain_for`  The ordered list of attempts backing a tier.
 //!
 //! A tier names a role; a chain names what will actually serve it, and what will
 //! serve it when the first choice is unavailable.
@@ -15,6 +16,7 @@
 //! answer into a rejected request — and the invariant was stated in a comment
 //! that nothing enforced. Deriving it makes the invariant hold by construction.
 
+use crate::backend::Backend;
 use crate::config::Config;
 use crate::tier::Tier;
 
@@ -24,6 +26,39 @@ use crate::tier::Tier;
 /// chain converts one provider's outage into a slow request rather than a fast
 /// failure. Three is enough to survive a single model being down.
 pub const MAX_CHAIN: usize = 3;
+
+/// One attempt: a model, and where to run it.
+///
+/// The two travel together because a model name alone does not say how to reach
+/// it. `bonsai-27b-mlx-1bit` is a file to load into this process and
+/// `kimi-k2.7-code` is an HTTP request, and a caller holding only the name has
+/// to guess which — or keep its own table, which is the thing this axis exists
+/// to remove.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Step<'a> {
+    backend: Backend,
+    model: &'a str,
+}
+
+impl<'a> Step<'a> {
+    /// Pair a model with where it runs.
+    #[must_use]
+    pub const fn new(backend: Backend, model: &'a str) -> Self {
+        Self { backend, model }
+    }
+
+    /// Where to run this attempt.
+    #[must_use]
+    pub const fn backend(self) -> Backend {
+        self.backend
+    }
+
+    /// The model to ask.
+    #[must_use]
+    pub const fn model(self) -> &'a str {
+        self.model
+    }
+}
 
 /// The ordered list of models backing `tier`.
 ///
@@ -40,10 +75,10 @@ pub const MAX_CHAIN: usize = 3;
 /// — and capability distance alone would reach for it whenever it sorted well.
 ///
 /// # Returns
-/// A non-empty list of at most [`MAX_CHAIN`] models, so
+/// A non-empty list of at most [`MAX_CHAIN`] steps, so
 /// [`crate::upstream::Upstream::forward`] always has something to try.
 #[must_use]
-pub fn chain_for(config: &Config, tier: Tier) -> Vec<&str> {
+pub fn chain_for(config: &Config, tier: Tier) -> Vec<Step<'_>> {
     let backend = config.backend_for(tier);
     let limit = tier.context_limit(backend);
     let mut candidates: Vec<Tier> = Tier::ALL
@@ -68,15 +103,17 @@ pub fn chain_for(config: &Config, tier: Tier) -> Vec<&str> {
         )
     });
 
-    let mut chain = vec![config.model_for(tier)];
+    let mut chain = vec![Step::new(backend, config.model_for(tier))];
     for other in candidates {
         if chain.len() >= MAX_CHAIN {
             break;
         }
-        let model = config.model_for(other);
+        let step = Step::new(config.backend_for(other), config.model_for(other));
         // A repeat would spend a whole round trip re-attempting what just failed.
-        if !chain.contains(&model) {
-            chain.push(model);
+        // Compared by model rather than by step: the same model reached two ways
+        // is still the same model, and would fail the same way twice.
+        if !chain.iter().any(|held| held.model() == step.model()) {
+            chain.push(step);
         }
     }
     chain
@@ -107,7 +144,13 @@ mod tests {
         let config = config();
         for tier in Tier::ALL {
             let chain = chain_for(&config, tier);
-            assert_eq!(chain[0], config.model_for(tier), "for {}", tier.name());
+            assert_eq!(
+                chain[0].model(),
+                config.model_for(tier),
+                "for {}",
+                tier.name()
+            );
+            assert_eq!(chain[0].backend(), config.backend_for(tier));
             assert!(chain.len() <= MAX_CHAIN, "{} is too long", tier.name());
         }
     }
@@ -117,7 +160,7 @@ mod tests {
         let config = config();
         for tier in Tier::ALL {
             let chain = chain_for(&config, tier);
-            let unique: std::collections::HashSet<_> = chain.iter().collect();
+            let unique: std::collections::HashSet<_> = chain.iter().map(|s| s.model()).collect();
             assert_eq!(unique.len(), chain.len(), "{} repeats", tier.name());
         }
     }
@@ -130,10 +173,10 @@ mod tests {
         // the long tier, so it passed.
         let config = config();
         for tier in Tier::ALL {
-            for model in chain_for(&config, tier) {
+            for step in chain_for(&config, tier) {
                 let served_by = Tier::ALL
                     .into_iter()
-                    .find(|t| config.model_for(*t) == model)
+                    .find(|t| config.model_for(*t) == step.model())
                     .expect("every chain entry is some tier's model");
                 assert!(
                     served_by.context_limit(config.backend_for(served_by))
@@ -154,11 +197,20 @@ mod tests {
         // off the device work three local models could have served.
         let config = phone();
         let chain = chain_for(&config, Tier::Code);
-        let off_device = config.model_for(Tier::Long);
         assert!(
-            !chain.contains(&off_device),
+            chain.iter().all(|step| step.backend() == Backend::Local),
             "code left the device with local models still available: {chain:?}"
         );
+    }
+
+    #[test]
+    fn each_step_carries_where_to_run_it() {
+        // The point of the type: a caller reads this rather than keeping its own
+        // table of which model names are files and which are HTTP.
+        let config = phone();
+        let chain = chain_for(&config, Tier::Long);
+        assert_eq!(chain[0].backend(), Backend::Remote);
+        assert_eq!(chain[0].model(), config.model_for(Tier::Long));
     }
 
     #[test]
