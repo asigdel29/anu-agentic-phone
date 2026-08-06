@@ -9,6 +9,9 @@ license = "MIT"
 [lib]
 name = "wattrouter"
 path = "src/lib.rs"
+# staticlib alongside lib: the same source serves the server binary and the iOS
+# app, so the routing rules cannot diverge between them.
+crate-type = ["lib", "staticlib"]
 
 [[bin]]
 name = "wattrouter"
