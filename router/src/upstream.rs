@@ -96,6 +96,8 @@ impl Upstream {
     ///
     /// # Arguments
     /// * `chain` — models to try in order, WHERE `chain` is non-empty.
+    /// * `body` — taken by value and mutated in place; the caller has no further
+    ///   use for it.
     ///
     /// # Returns
     /// The response, body still streaming, so the caller sees the first chunk as
@@ -112,14 +114,16 @@ impl Upstream {
     pub async fn forward(
         &self,
         chain: &[&str],
-        body: &serde_json::Value,
+        mut body: serde_json::Value,
     ) -> Result<axum::response::Response, UpstreamError> {
         let url = format!("{}/chat/completions", self.base_url);
         let mut last = String::from("chain was empty");
 
         for model in chain {
-            let mut outgoing = body.clone();
-            if let Some(object) = outgoing.as_object_mut() {
+            // In place: the body is a whole conversation plus tool definitions,
+            // and cloning it to overwrite one key was the largest avoidable
+            // allocation on the request path.
+            if let Some(object) = body.as_object_mut() {
                 object.insert("model".into(), serde_json::Value::from(*model));
             }
 
@@ -127,7 +131,7 @@ impl Upstream {
                 .client
                 .post(&url)
                 .bearer_auth(&self.api_key)
-                .json(&outgoing)
+                .json(&body)
                 .send()
                 .await;
 
@@ -210,7 +214,7 @@ mod tests {
         let upstream = Upstream::new(&base, "secret-key").unwrap();
 
         let body = serde_json::json!({"model": "auto", "messages": []});
-        let response = upstream.forward(&["kimi-k3"], &body).await.unwrap();
+        let response = upstream.forward(&["kimi-k3"], body).await.unwrap();
         let echoed = String::from_utf8(
             axum::body::to_bytes(response.into_body(), usize::MAX)
                 .await
@@ -247,7 +251,7 @@ mod tests {
 
         let body = serde_json::json!({"model": "auto"});
         let response = upstream
-            .forward(&["kimi-k3", "glm-5.2"], &body)
+            .forward(&["kimi-k3", "glm-5.2"], body)
             .await
             .unwrap();
         assert_eq!(response.status(), axum::http::StatusCode::OK);
@@ -269,7 +273,7 @@ mod tests {
         let upstream = Upstream::new(&base, "k").unwrap();
 
         let err = upstream
-            .forward(&["a", "b"], &serde_json::json!({}))
+            .forward(&["a", "b"], serde_json::json!({}))
             .await
             .expect_err("every model failed");
         assert!(matches!(err, UpstreamError::Exhausted { tried: 2, .. }));
@@ -295,7 +299,7 @@ mod tests {
         let upstream = Upstream::new(&base, "k").unwrap();
 
         let started = Instant::now();
-        let response = upstream.forward(&["m"], &json!({})).await.unwrap();
+        let response = upstream.forward(&["m"], json!({})).await.unwrap();
         let mut body = response.into_body().into_data_stream();
         let first_at = {
             use futures_util::StreamExt as _;

@@ -10,6 +10,7 @@
 //!   `Embedder`      What the router needs from any backend.
 //!   `EmbedError`    Why an embedding could not be produced.
 //!   `HashEmbedder`  Feature hashing. No model, no download.
+//!   `fnv1a`, `dot`  The crate's single hash and single dot product.
 //!   `OnnxEmbedder`  bge-small-en-v1.5. Better, and what the head needs.
 //!   `cosine`        Similarity between two normalised vectors.
 //!
@@ -80,6 +81,40 @@ pub trait Embedder: Send + Sync {
     fn embed(&self, text: &str) -> Result<Vec<f32>, EmbedError>;
 }
 
+/// FNV-1a over `bytes`, salted by `kind`.
+///
+/// The single hash in the crate. The salt separates feature spaces that would
+/// otherwise collide — a token and a trigram spelled alike, or a prompt key and
+/// an embedding feature.
+#[must_use]
+pub fn fnv1a(kind: u8, bytes: &[u8]) -> u64 {
+    const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+    const PRIME: u64 = 0x0000_0100_0000_01b3;
+
+    let mut h = OFFSET ^ u64::from(kind);
+    for byte in bytes {
+        h ^= u64::from(*byte);
+        h = h.wrapping_mul(PRIME);
+    }
+    h
+}
+
+/// The dot product of two equal-length vectors.
+///
+/// The single one in the crate: embedder, head and trainer all reduce to this, so
+/// a change here — wider accumulation, SIMD — reaches all three or none.
+///
+/// # Returns
+/// The sum of products, or `0.0` IF the lengths differ. A wrong answer beats a
+/// panic on the request path, and the callers that care check length themselves.
+#[must_use]
+pub fn dot(a: &[f32], b: &[f32]) -> f32 {
+    if a.len() != b.len() {
+        return 0.0;
+    }
+    a.iter().zip(b).map(|(x, y)| x * y).sum()
+}
+
 /// Cosine similarity between two vectors.
 ///
 /// # Arguments
@@ -92,10 +127,7 @@ pub trait Embedder: Send + Sync {
 /// path.
 #[must_use]
 pub fn cosine(a: &[f32], b: &[f32]) -> f32 {
-    if a.len() != b.len() {
-        return 0.0;
-    }
-    a.iter().zip(b).map(|(x, y)| x * y).sum()
+    dot(a, b)
 }
 
 /// Scale `v` to unit length, in place.
@@ -127,32 +159,13 @@ pub fn l2_normalize(v: &mut [f32]) {
 /// ("refactor", "refactoring") retain some overlap, which whole-token hashing
 /// alone would discard entirely.
 #[derive(Debug, Clone, Copy)]
-pub struct HashEmbedder {
-    dim: usize,
-}
+pub struct HashEmbedder;
 
 impl HashEmbedder {
-    /// Build an embedder producing `DIM`-wide vectors.
+    /// Build an embedder producing [`DIM`]-wide vectors.
     #[must_use]
     pub const fn new() -> Self {
-        Self { dim: DIM }
-    }
-
-    /// FNV-1a over `feature`, salted by `kind`.
-    ///
-    /// The salt keeps the token and trigram spaces from colliding with each
-    /// other: without it, a token and a trigram spelled alike would reinforce one
-    /// another for no reason.
-    fn hash(kind: u8, feature: &str) -> u64 {
-        const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
-        const PRIME: u64 = 0x0000_0100_0000_01b3;
-
-        let mut h = OFFSET ^ u64::from(kind);
-        for byte in feature.as_bytes() {
-            h ^= u64::from(*byte);
-            h = h.wrapping_mul(PRIME);
-        }
-        h
+        Self
     }
 
     /// Add `feature` to `out`, with a sign taken from the hash.
@@ -161,7 +174,7 @@ impl HashEmbedder {
     /// the vector drifts towards a constant as the input grows. With it,
     /// collisions cancel on average.
     fn accumulate(out: &mut [f32], kind: u8, feature: &str) {
-        let h = Self::hash(kind, feature);
+        let h = fnv1a(kind, feature.as_bytes());
         // `h % len` is strictly less than `len`, which is itself a `usize`, so
         // the conversion cannot fail. Checked rather than cast so that stays a
         // fact the compiler enforces instead of one a comment asserts.
@@ -180,7 +193,7 @@ impl Default for HashEmbedder {
 
 impl Embedder for HashEmbedder {
     fn id(&self) -> String {
-        format!("hash-v1-{}", self.dim)
+        format!("hash-v1-{DIM}")
     }
 
     fn embed(&self, text: &str) -> Result<Vec<f32>, EmbedError> {
@@ -188,7 +201,7 @@ impl Embedder for HashEmbedder {
             return Err(EmbedError::Input("text is empty".to_owned()));
         }
 
-        let mut out = vec![0.0f32; self.dim];
+        let mut out = vec![0.0f32; DIM];
         let lowered = text.to_lowercase();
 
         for token in lowered.split(|c: char| !c.is_alphanumeric()) {

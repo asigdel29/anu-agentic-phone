@@ -20,6 +20,7 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
+use crate::embed::fnv1a;
 use crate::tier::Tier;
 
 /// Entries kept per lookup kind before the oldest is evicted.
@@ -162,13 +163,20 @@ impl DecisionCache {
             return tier;
         }
         let mut inner = self.lock();
-        let effective = inner
-            .by_session
-            .get(session)
-            .copied()
-            .map_or(tier, |existing| existing.max(tier));
-        inner.by_session.put(session.to_owned(), effective);
-        effective
+        match inner.by_session.get(session).copied() {
+            // The common case. Re-inserting would allocate the key again and
+            // churn the recency ordering to record nothing.
+            Some(existing) if existing >= tier => existing,
+            Some(existing) => {
+                let effective = existing.max(tier);
+                inner.by_session.put(session.to_owned(), effective);
+                effective
+            }
+            None => {
+                inner.by_session.put(session.to_owned(), tier);
+                tier
+            }
+        }
     }
 
     /// Take the lock, recovering from a poisoned one.
@@ -191,19 +199,12 @@ impl Default for DecisionCache {
 
 /// A stable key for a prompt.
 ///
-/// FNV-1a over the text. Not cryptographic and does not need to be: a collision
-/// costs one request the wrong cached score, which the escalation rule can still
-/// correct, and prompts here are already truncated to a bounded length.
+/// Salted apart from the embedder's feature spaces so the two cannot interact.
+/// Not cryptographic and does not need to be: a collision costs one request the
+/// wrong cached score, which the escalation rule can still correct, and prompts
+/// here are already truncated to a bounded length.
 fn key_of(prompt: &str) -> String {
-    const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
-    const PRIME: u64 = 0x0000_0100_0000_01b3;
-
-    let mut h = OFFSET;
-    for byte in prompt.as_bytes() {
-        h ^= u64::from(*byte);
-        h = h.wrapping_mul(PRIME);
-    }
-    format!("{h:016x}")
+    format!("{:016x}", fnv1a(2, prompt.as_bytes()))
 }
 
 #[cfg(test)]

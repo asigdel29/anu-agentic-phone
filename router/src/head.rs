@@ -6,6 +6,7 @@
 //! Contents
 //!   `HeadError`  Why a head could not be loaded.
 //!   `Head`       Weights, and the score they produce.
+//!   `sigmoid`    The crate's link function, shared with the trainer.
 //!
 //! A logistic head over an embedding: one dot product and a sigmoid. That is the
 //! entire model, which is the point — inference costs microseconds on the board
@@ -198,25 +199,22 @@ impl Head {
             return 0.5;
         }
 
-        let logit: f32 = self
-            .weights
-            .iter()
-            .zip(embedding)
-            .map(|(w, x)| w * x)
-            .sum::<f32>()
-            + self.bias;
-
-        sigmoid(logit)
+        sigmoid(crate::embed::dot(&self.weights, embedding) + self.bias)
     }
 }
 
-/// The logistic function.
+/// The logistic function — the crate's single link function.
 ///
-/// Written with the sign split so that a large-magnitude logit cannot overflow
-/// `exp`. The naive form returns `inf` for a logit below about -88 and then `NaN`
-/// from the division, which would reach the policy as a score and route by
-/// whichever comparison happened to be false.
-fn sigmoid(x: f32) -> f32 {
+/// Public because the trainer fits against it. A second copy there would be free
+/// to drift, and drift does not error: it silently changes what a fitted weight
+/// means at serving time.
+///
+/// Written with the sign split so a large-magnitude logit cannot overflow `exp`.
+/// The naive form returns `inf` below about -88 and then `NaN` from the division,
+/// which would reach the policy as a score and route by whichever comparison
+/// happened to be false.
+#[must_use]
+pub fn sigmoid(x: f32) -> f32 {
     if x >= 0.0 {
         1.0 / (1.0 + (-x).exp())
     } else {

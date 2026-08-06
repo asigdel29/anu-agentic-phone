@@ -41,7 +41,8 @@
 
 use std::io::BufRead as _;
 
-use wattrouter::embed::{DIM, Embedder, HashEmbedder};
+use wattrouter::embed::{DIM, Embedder, HashEmbedder, dot};
+use wattrouter::head::sigmoid;
 
 /// Passes over the training set. A single linear layer over a fixed embedding
 /// converges quickly; longer gains nothing.
@@ -64,16 +65,6 @@ struct Example {
     label: f32,
     /// How much this example counts, from class balancing.
     weight: f32,
-}
-
-/// Logistic, split on sign so a large logit cannot overflow `exp`.
-fn sigmoid(x: f32) -> f32 {
-    if x >= 0.0 {
-        1.0 / (1.0 + (-x).exp())
-    } else {
-        let e = x.exp();
-        e / (1.0 + e)
-    }
 }
 
 /// Read and embed the training set.
@@ -139,15 +130,12 @@ fn fit(examples: &[Example]) -> (Vec<f32>, f32) {
         let mut grad = vec![0.0f32; DIM];
         let mut grad_bias = 0.0f32;
         let mut loss = 0.0f32;
+        // Only the epochs that print it: two logarithms per example across the
+        // 56 epochs that discard it is ~13M transcendental calls wasted.
+        let reporting = epoch % 20 == 0 || epoch + 1 == EPOCHS;
 
         for example in examples {
-            let logit: f32 = weights
-                .iter()
-                .zip(&example.embedding)
-                .map(|(w, x)| w * x)
-                .sum::<f32>()
-                + bias;
-            let predicted = sigmoid(logit);
+            let predicted = sigmoid(dot(&weights, &example.embedding) + bias);
             let error = predicted - example.label;
 
             let error = error * example.weight;
@@ -168,7 +156,7 @@ fn fit(examples: &[Example]) -> (Vec<f32>, f32) {
         }
         bias -= LEARNING_RATE * grad_bias / n;
 
-        if epoch % 20 == 0 || epoch + 1 == EPOCHS {
+        if reporting {
             eprintln!("epoch {epoch:3}  loss {:.4}", loss / n);
         }
     }
@@ -193,16 +181,10 @@ fn fit(examples: &[Example]) -> (Vec<f32>, f32) {
 /// distribution.
 #[allow(clippy::cast_precision_loss)] // counts are far below f32's limit
 fn report(examples: &[Example], weights: &[f32], bias: f32) -> (f32, f32) {
-    let score_of = |e: &Example| {
-        sigmoid(
-            weights
-                .iter()
-                .zip(&e.embedding)
-                .map(|(w, x)| w * x)
-                .sum::<f32>()
-                + bias,
-        )
-    };
+    // The serving formula, not a second one: these scores become the thresholds
+    // shipped inside the head, so calibrating against a different implementation
+    // would calibrate for a router that does not exist.
+    let score_of = |e: &Example| sigmoid(dot(weights, &e.embedding) + bias);
 
     let mut hard: Vec<f32> = Vec::new();
     let mut easy: Vec<f32> = Vec::new();

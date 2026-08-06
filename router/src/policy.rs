@@ -99,6 +99,18 @@ pub enum Reason {
 }
 
 impl Reason {
+    /// Every reason. The single enumeration, matching [`crate::tier::Tier::ALL`]:
+    /// metrics counts by it and tests iterate it, so a new variant is one edit.
+    pub const ALL: [Self; 7] = [
+        Self::Pinned,
+        Self::Background,
+        Self::ContextTooLarge,
+        Self::Scored,
+        Self::CodeShaped,
+        Self::Unscored,
+        Self::Sticky,
+    ];
+
     /// A stable label, for metrics and the response header.
     #[must_use]
     pub const fn label(self) -> &'static str {
@@ -285,17 +297,8 @@ mod tests {
     #[test]
     fn every_reason_has_a_distinct_label() {
         // Labels reach metrics; a shared one silently merges two populations.
-        let reasons = [
-            Reason::Pinned,
-            Reason::Background,
-            Reason::ContextTooLarge,
-            Reason::Scored,
-            Reason::CodeShaped,
-            Reason::Unscored,
-            Reason::Sticky,
-        ];
         let mut seen = std::collections::HashSet::new();
-        for reason in reasons {
+        for reason in Reason::ALL {
             assert!(seen.insert(reason.label()), "duplicate: {}", reason.label());
         }
     }
