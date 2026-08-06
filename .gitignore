@@ -44,3 +44,9 @@ venv/
 # The training set, downloaded by train/fetch_dataset.py. ~50MB, and
 # reproducible from a one-line command, so it is fetched rather than tracked.
 /train/prompts.jsonl
+
+# The routing core, compiled for iOS. 84 MB of build output, reproducible from
+# the Rust beside it by scripts/build-ios-core.sh, and rebuilt on every change to
+# the core — a repository carrying it would carry those bytes again each time.
+ios/WattRouterFFI.xcframework/
+ios/.build/

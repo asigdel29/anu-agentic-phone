@@ -37,7 +37,12 @@ extern "C" {
 #define WATTROUTER_FAILED 255
 
 /* Everything a decision needs: thresholds, embedder, score cache, and the
- * scoring head IF one was loaded. Not thread-safe. */
+ * scoring head IF one was loaded.
+ *
+ * One router may be shared across threads. Its score cache is behind a mutex and
+ * the rest is read-only once built, so concurrent wattrouter_decide calls are
+ * safe and only contend on a cache hit. Asserted at compile time by
+ * `assert_shareable` in ffi.rs rather than promised here. */
 typedef struct wattrouter wattrouter;
 
 /* A decision, returned by value so the caller frees nothing. */
