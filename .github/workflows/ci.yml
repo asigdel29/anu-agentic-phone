@@ -182,7 +182,10 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update -y
-          sudo apt-get install -y gcc-aarch64-linux-gnu
+          # g++ as well as gcc: ONNX Runtime and the tokenizer's regex engine are
+          # C++, and gcc-aarch64-linux-gnu alone does not bring libstdc++ for the
+          # target, so the link fails with `cannot find -lstdc++`.
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
       - name: Build
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
