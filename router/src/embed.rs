@@ -1,13 +1,16 @@
 //! embed.rs — turning a prompt into a vector.
 //!
 //! History
-//!   2026-08-05  A. Sigdel  Created with the trait and the offline backend. The
-//!                          ONNX backend follows.
+//!   2026-08-05  A. Sigdel  Created with the trait and the offline backend.
+//!   2026-08-05  A. Sigdel  Added the ONNX backend, which the scoring head needs:
+//!                          a head fitted on hash vectors separated the classes
+//!                          by 0.022, which is nothing.
 //!
 //! Contents
 //!   `Embedder`      What the router needs from any backend.
 //!   `EmbedError`    Why an embedding could not be produced.
 //!   `HashEmbedder`  Feature hashing. No model, no download.
+//!   `OnnxEmbedder`  bge-small-en-v1.5. Better, and what the head needs.
 //!   `cosine`        Similarity between two normalised vectors.
 //!
 //! Two backends exist because the deployment target forces the choice. On a board
@@ -203,6 +206,103 @@ impl Embedder for HashEmbedder {
             }
         }
 
+        l2_normalize(&mut out);
+        Ok(out)
+    }
+}
+
+/// bge-small-en-v1.5 through ONNX Runtime.
+///
+/// The better embedding, and the one the scoring head needs: hash features
+/// encode lexical overlap, and difficulty is not lexical — "prove this is
+/// NP-hard" and "spell NP-hard" share nearly all their vocabulary. Fitting a head
+/// on hash vectors separated the training classes by 0.022, which is nothing.
+///
+/// Costs ~130MB resident plus a one-time model download, which is why it is
+/// selectable rather than mandatory.
+///
+/// The model cache is shared with zeromem, so the download happens once on the
+/// board rather than once per process.
+#[cfg(feature = "onnx")]
+pub struct OnnxEmbedder {
+    model: std::sync::Mutex<fastembed::TextEmbedding>,
+}
+
+#[cfg(feature = "onnx")]
+impl std::fmt::Debug for OnnxEmbedder {
+    /// The model holds no printable state worth showing, and its `Debug` is not
+    /// implemented upstream.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OnnxEmbedder").finish_non_exhaustive()
+    }
+}
+
+#[cfg(feature = "onnx")]
+impl OnnxEmbedder {
+    /// Load the model, downloading it into `cache_dir` if absent.
+    ///
+    /// # Errors
+    /// [`EmbedError::Backend`] IF the model cannot be fetched or the runtime
+    /// cannot start. The caller is expected to fall back to [`HashEmbedder`]
+    /// rather than refuse to serve: a worse embedding beats no router.
+    ///
+    /// # Rely
+    /// Called once, at startup. Blocks for the download on first run, which is
+    /// why it is not called from the request path.
+    pub fn new(cache_dir: &std::path::Path) -> Result<Self, EmbedError> {
+        let options = fastembed::InitOptions::new(fastembed::EmbeddingModel::BGESmallENV15)
+            .with_cache_dir(cache_dir.to_path_buf())
+            .with_show_download_progress(false);
+
+        let model = fastembed::TextEmbedding::try_new(options)
+            .map_err(|e| EmbedError::Backend(e.to_string()))?;
+
+        Ok(Self {
+            model: std::sync::Mutex::new(model),
+        })
+    }
+}
+
+#[cfg(feature = "onnx")]
+impl Embedder for OnnxEmbedder {
+    fn id(&self) -> String {
+        "bge-small-en-v1.5".to_owned()
+    }
+
+    /// # Rely
+    /// **Blocks.** ONNX inference is CPU-bound and runs for milliseconds, so the
+    /// caller must dispatch this off the async executor — a blocked worker stalls
+    /// every other request sharing it.
+    ///
+    /// # Atomic
+    /// Serialized on a mutex: the session is not safe to use concurrently.
+    /// Callers queue, which is the intended behaviour on a board with few cores —
+    /// parallel inference there would contend for the same cores anyway.
+    fn embed(&self, text: &str) -> Result<Vec<f32>, EmbedError> {
+        if text.trim().is_empty() {
+            return Err(EmbedError::Input("text is empty".to_owned()));
+        }
+
+        let mut model = self
+            .model
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let mut out = model
+            .embed(vec![text], None)
+            .map_err(|e| EmbedError::Backend(e.to_string()))?
+            .pop()
+            .ok_or_else(|| EmbedError::Backend("model returned no vector".to_owned()))?;
+
+        if out.len() != DIM {
+            return Err(EmbedError::Backend(format!(
+                "model produced {} dimensions, expected {DIM}",
+                out.len()
+            )));
+        }
+
+        // The model normalises already, but the trait promises it and the head
+        // depends on it, so it is enforced here rather than assumed of upstream.
         l2_normalize(&mut out);
         Ok(out)
     }

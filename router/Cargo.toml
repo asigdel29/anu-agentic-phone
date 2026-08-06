@@ -14,7 +14,22 @@ path = "src/lib.rs"
 name = "wattrouter"
 path = "src/main.rs"
 
+[features]
+# On by default so CI exercises it and the board gets the better embedding.
+# Disable to drop ONNX Runtime entirely: `--no-default-features` yields a router
+# that only ever hashes, which is the right build for a memory-tight board.
+default = ["onnx"]
+onnx = ["dep:fastembed"]
+
 [dependencies]
+# rustls throughout, and default features off. The defaults are
+# hf-hub-native-tls and ort-download-binaries-native-tls, both of which drag in
+# openssl-sys and fail the aarch64 cross-build outright.
+fastembed = { version = "5.17.4", optional = true, default-features = false, features = [
+    "hf-hub",
+    "hf-hub-rustls-tls",
+    "ort-download-binaries-rustls-tls",
+] }
 # axum over a hand-rolled hyper service: the streaming passthrough added later
 # needs body streaming both ways, and axum's Body is hyper's, so the routing
 # convenience costs nothing.
