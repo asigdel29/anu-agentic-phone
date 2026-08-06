@@ -5,6 +5,7 @@
 //!                          the server follow.
 //!
 //! Contents
+//!   backend   Where a tier's model runs: in this process, or over the network.
 //!   cache     Remembering routing decisions.
 //!   chain     The models a tier may use, in order.
 //!   classify  Reading routing signals off a request.
@@ -30,6 +31,7 @@
 // `cargo clippy` reports exactly what CI reports.
 #![warn(clippy::pedantic)]
 
+pub mod backend;
 pub mod cache;
 pub mod chain;
 pub mod classify;

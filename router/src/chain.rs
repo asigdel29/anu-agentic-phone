@@ -25,11 +25,13 @@ use crate::tier::Tier;
 /// failure. Three is enough to survive a single model being down.
 pub const MAX_CHAIN: usize = 3;
 
-/// The ordered list of upstream models backing `tier`.
+/// The ordered list of models backing `tier`.
 ///
 /// The tier's own model comes first. Candidates follow, restricted to tiers whose
 /// context window is at least as large: a substitution should change cost or
-/// speed, never whether the request can be served at all.
+/// speed, never whether the request can be served at all. Each window is read for
+/// the backend that tier actually runs on, so a local model is judged by what a
+/// phone holds rather than by what its weights advertise.
 ///
 /// Candidates are ordered by how close their capability is to the original, so a
 /// substitution is the smallest one available.
@@ -39,9 +41,10 @@ pub const MAX_CHAIN: usize = 3;
 /// [`crate::upstream::Upstream::forward`] always has something to try.
 #[must_use]
 pub fn chain_for(config: &Config, tier: Tier) -> Vec<&str> {
+    let limit = tier.context_limit(config.backend_for(tier));
     let mut candidates: Vec<Tier> = Tier::ALL
         .into_iter()
-        .filter(|&other| other != tier && other.context_limit() >= tier.context_limit())
+        .filter(|&other| other != tier && other.context_limit(config.backend_for(other)) >= limit)
         .collect();
 
     // Closest capability first, so a heavy request degrades to the next thing
@@ -113,7 +116,8 @@ mod tests {
                     .find(|t| config.model_for(*t) == model)
                     .expect("every chain entry is some tier's model");
                 assert!(
-                    served_by.context_limit() >= tier.context_limit(),
+                    served_by.context_limit(config.backend_for(served_by))
+                        >= tier.context_limit(config.backend_for(tier)),
                     "{} falls back to {}, which holds less context",
                     tier.name(),
                     served_by.name()
