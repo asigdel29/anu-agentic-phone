@@ -194,9 +194,10 @@ jobs:
   # The iOS app links the router as a static library, and no other job compiles
   # for that target. A break specific to it — a dependency reaching for a Unix
   # the phone does not provide — would otherwise surface in Xcode, off CI and
-  # days later. The Apple SDK means a macOS runner, which bills at ten times the
-  # Linux rate, so this job builds and checks the header and does nothing else:
-  # the tests are target-independent and already run on Linux.
+  # days later. The Apple SDK means a macOS runner, which is the scarcest thing
+  # this workflow asks for — fewer of them run at once than Linux ones, and they
+  # take longer to come up — so this job builds and checks the header and does
+  # nothing else: the tests are target-independent and already run on Linux.
   #
   # --lib --no-default-features is the build an app takes. It calls the decision
   # core, never the server, and the default features drag ONNX Runtime in behind
