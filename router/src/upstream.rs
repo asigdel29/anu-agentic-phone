@@ -17,6 +17,8 @@ use std::time::Duration;
 use futures_util::TryStreamExt as _;
 use thiserror::Error;
 
+use crate::chain::Step;
+
 /// Why a request could not be forwarded.
 #[derive(Debug, Error)]
 pub enum UpstreamError {
@@ -107,24 +109,27 @@ impl Upstream {
     /// [`UpstreamError::Exhausted`] IF every model in the chain fails.
     ///
     /// # Rely
-    /// Called on the request path. Awaits the response head only.
+    /// Called on the request path. Awaits the response head only. Every step is
+    /// [`crate::backend::Backend::Remote`]: this binary has no local runtime, and
+    /// refuses to start when a tier is configured otherwise, so the check is made
+    /// once rather than per request.
     ///
     /// # Atomic
     /// Safe to call concurrently; the pool is internally synchronised.
     pub async fn forward(
         &self,
-        chain: &[&str],
+        chain: &[Step<'_>],
         mut body: serde_json::Value,
     ) -> Result<axum::response::Response, UpstreamError> {
         let url = format!("{}/chat/completions", self.base_url);
         let mut last = String::from("chain was empty");
 
-        for model in chain {
+        for model in chain.iter().copied().map(Step::model) {
             // In place: the body is a whole conversation plus tool definitions,
             // and cloning it to overwrite one key was the largest avoidable
             // allocation on the request path.
             if let Some(object) = body.as_object_mut() {
-                object.insert("model".into(), serde_json::Value::from(*model));
+                object.insert("model".into(), serde_json::Value::from(model));
             }
 
             let sent = self
@@ -186,12 +191,18 @@ impl Upstream {
 
 #[cfg(test)]
 mod tests {
-    use super::{Upstream, UpstreamError};
+    use super::{Step, Upstream, UpstreamError};
+    use crate::backend::Backend;
     use axum::Router;
     use axum::routing::post;
     use serde_json::json;
     use std::time::{Duration, Instant};
     use tokio::net::TcpListener;
+
+    /// The only kind of step this binary can forward.
+    fn remote(model: &str) -> Step<'_> {
+        Step::new(Backend::Remote, model)
+    }
 
     /// Start `app` on an ephemeral port; port zero so runs cannot collide.
     async fn serve(app: Router) -> String {
@@ -214,7 +225,7 @@ mod tests {
         let upstream = Upstream::new(&base, "secret-key").unwrap();
 
         let body = serde_json::json!({"model": "auto", "messages": []});
-        let response = upstream.forward(&["kimi-k3"], body).await.unwrap();
+        let response = upstream.forward(&[remote("kimi-k3")], body).await.unwrap();
         let echoed = String::from_utf8(
             axum::body::to_bytes(response.into_body(), usize::MAX)
                 .await
@@ -251,7 +262,7 @@ mod tests {
 
         let body = serde_json::json!({"model": "auto"});
         let response = upstream
-            .forward(&["kimi-k3", "glm-5.2"], body)
+            .forward(&[remote("kimi-k3"), remote("glm-5.2")], body)
             .await
             .unwrap();
         assert_eq!(response.status(), axum::http::StatusCode::OK);
@@ -273,7 +284,7 @@ mod tests {
         let upstream = Upstream::new(&base, "k").unwrap();
 
         let err = upstream
-            .forward(&["a", "b"], serde_json::json!({}))
+            .forward(&[remote("a"), remote("b")], serde_json::json!({}))
             .await
             .expect_err("every model failed");
         assert!(matches!(err, UpstreamError::Exhausted { tried: 2, .. }));
@@ -299,7 +310,7 @@ mod tests {
         let upstream = Upstream::new(&base, "k").unwrap();
 
         let started = Instant::now();
-        let response = upstream.forward(&["m"], json!({})).await.unwrap();
+        let response = upstream.forward(&[remote("m")], json!({})).await.unwrap();
         let mut body = response.into_body().into_data_stream();
         let first_at = {
             use futures_util::StreamExt as _;

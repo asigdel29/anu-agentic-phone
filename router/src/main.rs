@@ -22,6 +22,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde_json::{Value, json};
 
+use wattrouter::backend::Backend;
 use wattrouter::cache::DecisionCache;
 use wattrouter::chain::chain_for;
 use wattrouter::classify::classify;
@@ -185,7 +186,7 @@ async fn chat_completions(
     tracing::info!(
         tier = decision.tier.name(),
         reason = decision.reason.label(),
-        model = chain[0],
+        model = chain[0].model(),
         tokens = classified.signals.estimated_tokens,
         score = score.map(|s| format!("{s:.3}")),
         "routing"
@@ -199,7 +200,7 @@ async fn chat_completions(
                 .headers()
                 .get("x-wattrouter-model")
                 .and_then(|v| v.to_str().ok())
-                .is_some_and(|served| served != chain[0])
+                .is_some_and(|served| served != chain[0].model())
             {
                 state.metrics.record_fallback();
             }
@@ -288,6 +289,24 @@ async fn main() -> Result<(), ConfigError> {
         .init();
 
     let config = Config::from_env()?;
+
+    // This binary forwards over HTTP and does nothing else. A tier configured to
+    // run in this process would instead be sent upstream under a model name the
+    // provider does not have, so refuse at startup rather than on every request.
+    // The core is shared with an app that does have a local runtime; that caller
+    // does not come through here, which is why the check lives in the binary
+    // rather than in Config.
+    if let Some(tier) = Tier::ALL
+        .into_iter()
+        .find(|&tier| config.backend_for(tier) == Backend::Local)
+    {
+        return Err(ConfigError::Invalid {
+            name: tier.backend_env_var(),
+            expected: "backend this binary can run; it has no local runtime, so remote",
+            value: Backend::Local.name().to_owned(),
+        });
+    }
+
     let addr = config.addr();
 
     // Enough for an operator to tell a misconfiguration from a bug without
