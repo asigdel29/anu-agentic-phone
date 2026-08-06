@@ -10,6 +10,11 @@
 //! tier a prompt deserves, configuration decides which model serves that tier,
 //! and metrics count by it. Kept apart from configuration so that the vocabulary
 //! does not depend on where the values happen to be read from.
+//!
+//! A tier says how capable a model must be. Where that model runs is the other
+//! axis, and it lives in [`crate::backend`].
+
+use crate::backend::Backend;
 
 /// A routing tier: a role, not a model name.
 ///
@@ -73,25 +78,50 @@ impl Tier {
         }
     }
 
-    /// The context window of this tier's default model, in tokens.
+    /// The context window this tier's model can hold, in tokens.
     ///
-    /// Verified against the upstream catalogue. Used to keep a fallback from
-    /// substituting a model that cannot hold the request the original could —
-    /// which would turn a degraded answer into a rejected one. Nominal: an
-    /// operator who overrides a tier's model to a smaller one takes that on.
+    /// Used to keep a fallback from substituting a model that cannot hold the
+    /// request the original could — which would turn a degraded answer into a
+    /// rejected one. Nominal: an operator who overrides a tier's model to a
+    /// smaller one takes that on.
+    ///
+    /// # Arguments
+    /// * `backend` — where the model runs. The same tier holds far less
+    ///   locally: what a build advertises is what its architecture allows, and
+    ///   what a phone holds is decided by the KV cache, which at 27B outweighs
+    ///   the weights.
+    ///
+    /// # Returns
+    /// A token count. The remote figures are verified against the upstream
+    /// catalogue. The local ones are not measurements — they are the
+    /// conservative end of what the plan expects, and settling them needs a
+    /// physical iPhone. Read them as open.
     #[must_use]
     // Several tiers share a limit today, which clippy reads as duplication.
     // Merging the arms would couple facts about different models: when one
     // provider changes a window, only that tier should move. Kept separate.
     #[allow(clippy::match_same_arms)]
-    pub const fn context_limit(self) -> usize {
-        match self {
-            Self::Aux => 262_128,
-            Self::Cheap => 1_048_560,
-            Self::Mid => 131_056,
-            Self::Code => 262_128,
-            Self::Long => 1_048_560,
-            Self::Heavy => 1_048_560,
+    pub const fn context_limit(self, backend: Backend) -> usize {
+        match backend {
+            Backend::Remote => match self {
+                Self::Aux => 262_128,
+                Self::Cheap => 1_048_560,
+                Self::Mid => 131_056,
+                Self::Code => 262_128,
+                Self::Long => 1_048_560,
+                Self::Heavy => 1_048_560,
+            },
+            // Grouped by the model behind the tier rather than by the tier: the
+            // plan puts a 1.7B on aux and cheap, an 8B on mid and a 27B on the
+            // rest, and KV cache scales with the model, not with the role.
+            Backend::Local => match self {
+                Self::Aux => 65_520,
+                Self::Cheap => 65_520,
+                Self::Mid => 32_752,
+                Self::Code => 32_752,
+                Self::Long => 32_752,
+                Self::Heavy => 32_752,
+            },
         }
     }
 
@@ -107,11 +137,25 @@ impl Tier {
             Self::Heavy => "WATTROUTER_MODEL_HEAVY",
         }
     }
+
+    /// The environment variable choosing where this tier's model runs.
+    #[must_use]
+    pub const fn backend_env_var(self) -> &'static str {
+        match self {
+            Self::Aux => "WATTROUTER_BACKEND_AUX",
+            Self::Cheap => "WATTROUTER_BACKEND_CHEAP",
+            Self::Mid => "WATTROUTER_BACKEND_MID",
+            Self::Code => "WATTROUTER_BACKEND_CODE",
+            Self::Long => "WATTROUTER_BACKEND_LONG",
+            Self::Heavy => "WATTROUTER_BACKEND_HEAVY",
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::Tier;
+    use crate::backend::Backend;
 
     #[test]
     fn tiers_ascend_by_capability() {
@@ -140,8 +184,26 @@ mod tests {
         // A mismatch would make an override silently ineffective, which is the
         // kind of failure nobody notices until the bill arrives.
         for tier in Tier::ALL {
-            let expected = format!("WATTROUTER_MODEL_{}", tier.name().to_uppercase());
-            assert_eq!(tier.env_var(), expected, "for tier {}", tier.name());
+            let name = tier.name().to_uppercase();
+            let model = format!("WATTROUTER_MODEL_{name}");
+            let backend = format!("WATTROUTER_BACKEND_{name}");
+            assert_eq!(tier.env_var(), model, "for tier {}", tier.name());
+            assert_eq!(tier.backend_env_var(), backend, "for tier {}", tier.name());
+        }
+    }
+
+    #[test]
+    fn no_tier_holds_more_locally_than_it_does_remotely() {
+        // The local figures are placeholders; this relation between them is not.
+        // A tier holding more on a phone than behind the upstream would mean its
+        // local number came from the architecture's ceiling rather than from
+        // what fits in the memory the device has.
+        for tier in Tier::ALL {
+            assert!(
+                tier.context_limit(Backend::Local) <= tier.context_limit(Backend::Remote),
+                "{} holds more locally than remotely",
+                tier.name()
+            );
         }
     }
 

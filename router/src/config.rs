@@ -20,6 +20,7 @@ use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 
+use crate::backend::Backend;
 use crate::tier::Tier;
 
 /// Why configuration was rejected.
@@ -44,6 +45,12 @@ pub enum ConfigError {
     },
 }
 
+/// What a backend variable must have said, for the operator reading the
+/// failure. Written out because [`ConfigError::Invalid`] carries a `&'static
+/// str` and this is the one place a message has to outlive its formatting;
+/// `the_backend_message_names_every_backend` keeps it complete.
+const BACKEND_VALUES: &str = "backend, which is local or remote";
+
 /// Everything the router needs to run.
 ///
 /// Built once at startup and read-only thereafter, so it is shared across tasks
@@ -59,6 +66,7 @@ pub struct Config {
     model_cache_dir: PathBuf,
     head_path: PathBuf,
     models: [String; Tier::ALL.len()],
+    backends: [Backend; Tier::ALL.len()],
 }
 
 impl Config {
@@ -102,6 +110,23 @@ impl Config {
             optional(tier.env_var()).unwrap_or_else(|| tier.default_model().to_owned())
         });
 
+        // Remote unless a deployment says otherwise, so a configuration written
+        // before this axis existed keeps behaving exactly as it did. An
+        // unrecognised value is fatal rather than remote: a typo that quietly
+        // meant remote would send off the device the work an operator asked to
+        // keep on it.
+        let mut backends = [Backend::Remote; Tier::ALL.len()];
+        for tier in Tier::ALL {
+            let Some(raw) = optional(tier.backend_env_var()) else {
+                continue;
+            };
+            backends[tier as usize] = Backend::parse(&raw).ok_or(ConfigError::Invalid {
+                name: tier.backend_env_var(),
+                expected: BACKEND_VALUES,
+                value: raw,
+            })?;
+        }
+
         Ok(Self {
             addr,
             upstream_base_url,
@@ -109,6 +134,7 @@ impl Config {
             model_cache_dir,
             head_path,
             models,
+            backends,
         })
     }
 
@@ -167,6 +193,17 @@ impl Config {
         // by the same discriminants used to index it.
         &self.models[tier as usize]
     }
+
+    /// Where `tier`'s model runs.
+    ///
+    /// # Returns
+    /// The configured backend IF one was set, otherwise [`Backend::Remote`],
+    /// which is the board's answer for every tier.
+    #[must_use]
+    pub const fn backend_for(&self, tier: Tier) -> Backend {
+        // Total, for the reason `model_for` is.
+        self.backends[tier as usize]
+    }
 }
 
 impl std::fmt::Debug for Config {
@@ -179,6 +216,7 @@ impl std::fmt::Debug for Config {
             .field("model_cache_dir", &self.model_cache_dir)
             .field("head_path", &self.head_path)
             .field("models", &self.models)
+            .field("backends", &self.backends)
             .finish()
     }
 }
@@ -193,7 +231,8 @@ fn optional(name: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Config, ConfigError, optional};
+    use super::{BACKEND_VALUES, Config, ConfigError, optional};
+    use crate::backend::Backend;
     use crate::tier::Tier;
 
     /// Environment variables are process-global; mutating tests share one lock.
@@ -242,6 +281,7 @@ mod tests {
                 ("WATTROUTER_ADDR", None),
                 ("WATTROUTER_UPSTREAM", None),
                 ("WATTROUTER_MODEL_HEAVY", None),
+                ("WATTROUTER_BACKEND_HEAVY", None),
             ],
             || Config::from_env().expect("defaults are valid"),
         );
@@ -249,6 +289,9 @@ mod tests {
         assert_eq!(config.addr().to_string(), "127.0.0.1:8080");
         assert_eq!(config.upstream_base_url(), "https://api.neuralwatt.com/v1");
         assert_eq!(config.model_for(Tier::Heavy), Tier::Heavy.default_model());
+        // Saying nothing has to mean the board's answer, or this axis changes
+        // the behaviour of every deployment that predates it.
+        assert_eq!(config.backend_for(Tier::Heavy), Backend::Remote);
     }
 
     #[test]
@@ -303,6 +346,54 @@ mod tests {
         assert_eq!(config.model_for(Tier::Cheap), "some-other-model");
         // Overriding one tier must not disturb another.
         assert_eq!(config.model_for(Tier::Mid), Tier::Mid.default_model());
+    }
+
+    #[test]
+    fn a_backend_is_chosen_per_tier() {
+        // The phone's shape: local everywhere except the tier holding the work
+        // too large for a local window.
+        let config = with_env(
+            &[
+                ("NEURALWATT_API_KEY", Some("k")),
+                ("WATTROUTER_BACKEND_CODE", Some("local")),
+                ("WATTROUTER_BACKEND_LONG", Some("remote")),
+            ],
+            || Config::from_env().expect("both values are valid"),
+        );
+
+        assert_eq!(config.backend_for(Tier::Code), Backend::Local);
+        assert_eq!(config.backend_for(Tier::Long), Backend::Remote);
+        // Choosing for one tier must not disturb another.
+        assert_eq!(config.backend_for(Tier::Mid), Backend::Remote);
+    }
+
+    #[test]
+    fn an_unrecognised_backend_is_fatal() {
+        // Not remote-by-default: that would send off the device the work the
+        // operator was trying to keep on it, and nothing would report it.
+        let err = with_env(
+            &[
+                ("NEURALWATT_API_KEY", Some("k")),
+                ("WATTROUTER_BACKEND_MID", Some("on-device")),
+            ],
+            || Config::from_env().expect_err("must refuse to start on a bad backend"),
+        );
+        let message = err.to_string();
+        assert!(message.contains("WATTROUTER_BACKEND_MID"), "{message}");
+        assert!(message.contains("on-device"), "{message}");
+    }
+
+    #[test]
+    fn the_backend_message_names_every_backend() {
+        // The message is written out; this is what keeps it complete when a
+        // third backend arrives.
+        for backend in Backend::ALL {
+            assert!(
+                BACKEND_VALUES.contains(backend.name()),
+                "{} is missing from the message an operator reads",
+                backend.name()
+            );
+        }
     }
 
     #[test]
