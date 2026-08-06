@@ -25,6 +25,10 @@ readonly HEADERS="$ROOT/router/include"
 readonly OUT="${1:-$ROOT/ios/WattRouterFFI.xcframework}"
 
 readonly DEVICE=aarch64-apple-ios
+# arm64 only, so the simulator slice serves Apple silicon and not an Intel Mac.
+# Adding x86_64-apple-ios would double this build for a host nobody here has —
+# the visible cost is that `-destination 'generic/platform=iOS Simulator'` fails
+# to link, because generic means both architectures. Name the device instead.
 readonly SIMULATOR=aarch64-apple-ios-sim
 
 # Matches the platform floor in ios/Package.swift. Without it cargo builds
