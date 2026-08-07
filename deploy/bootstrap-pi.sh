@@ -137,7 +137,6 @@ Router installed and serving. Still to do by hand, and deliberately not scripted
                    symlink hermes/plugins/model-providers/neuralwatt into
                    $HERMES_HOME/plugins/model-providers/.
   2. zeromem     — needs a wheel built for this board. See the README.
-  3. OpenCode    — copy opencode/opencode.jsonc to ~/.config/opencode/.
 
 Then check the whole stack:
 

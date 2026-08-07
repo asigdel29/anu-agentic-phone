@@ -49,3 +49,11 @@ plugins:
     # Memory. Installed separately by deploy/install-zeromem.sh; naming it here
     # before it is installed is harmless, since discovery is what gates loading.
     - zeromem
+
+# Hermes does the coding itself; see docs/coding-harness.md. The bundled skill
+# that delegates it to a second harness is turned off rather than left advertised,
+# so the model is not offered a tool whose whole job is to start a process this
+# stack no longer runs.
+skills:
+  disabled:
+    - opencode
