@@ -87,7 +87,10 @@ start_probe() {
 # However this ends. A probe left holding a port is a confusing failure for
 # whoever runs this next.
 #
-# shellcheck disable=SC2329  # invoked by the trap below, which it cannot see
+# Invoked by the trap below, which shellcheck does not follow. Two codes because
+# the versions disagree about where to complain: newer ones flag the definition
+# as uncalled, older ones flag every line of the body as unreachable.
+# shellcheck disable=SC2317,SC2329
 cleanup() {
     [ -n "$probe_pid" ] && kill "$probe_pid" 2>/dev/null
     return 0
