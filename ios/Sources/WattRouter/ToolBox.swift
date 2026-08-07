@@ -104,4 +104,53 @@ public struct ToolBox: Sendable {
         context.codingPath.isEmpty
             ? "the arguments" : context.codingPath.map(\.stringValue).joined(separator: ".")
     }
+
+    /// A tool that cannot be described to the model.
+    public struct SchemaError: Error, Equatable, Sendable {
+        /// Which tool. The point of the type: a provider rejecting the request
+        /// says only that it was malformed, and never which of six tools did it.
+        public let tool: String
+        /// What is wrong with it.
+        public let detail: String
+    }
+
+    /// Every tool, in the shape the provider's `tools` field expects.
+    ///
+    /// Assembled with `JSONSerialization` rather than `JSONEncoder`, because each
+    /// schema is already-written JSON and `Encodable` has no way to place a
+    /// fragment verbatim. Parsing it to re-serialise it looks wasteful and is the
+    /// point: it is the only moment a schema is checked before the wire.
+    ///
+    /// - Returns: a JSON array, as text, in the order the tools were given.
+    /// - Throws: [`SchemaError`] IF a tool's schema is not a JSON object.
+    public func definitions() throws -> String {
+        let functions = try tools.map { tool -> [String: Any] in
+            let parsed: Any
+            do {
+                parsed = try JSONSerialization.jsonObject(
+                    with: Data(tool.schema.utf8), options: [.fragmentsAllowed])
+            } catch {
+                throw SchemaError(tool: tool.name, detail: "schema is not valid JSON")
+            }
+            // Valid JSON is not enough. `parameters` has to be a schema object;
+            // an array or a bare string parses and is rejected by the provider
+            // as part of a request that names nothing.
+            guard let object = parsed as? [String: Any] else {
+                throw SchemaError(tool: tool.name, detail: "schema is not a JSON object")
+            }
+            return [
+                "type": "function",
+                "function": [
+                    "name": tool.name,
+                    "description": tool.purpose,
+                    "parameters": object,
+                ] as [String: Any],
+            ]
+        }
+
+        // Sorted keys so two runs of the same tool set produce the same bytes,
+        // which is what makes a prompt cache hit and a diff readable.
+        let data = try JSONSerialization.data(withJSONObject: functions, options: [.sortedKeys])
+        return String(decoding: data, as: UTF8.self)
+    }
 }
