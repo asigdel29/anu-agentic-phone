@@ -31,11 +31,15 @@ final class StubTransport: URLProtocol {
     /// these tests have not got.
     nonisolated(unsafe) static var script = Script()
 
+    /// What the client actually put on the wire, for the tests that check it.
+    nonisolated(unsafe) static var sent: (headers: [String: String], body: Data)?
+
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func stopLoading() {}
 
     override func startLoading() {
+        Self.sent = (request.allHTTPHeaderFields ?? [:], Self.body(of: request))
         let script = Self.script
 
         if let error = script.transportError {
@@ -57,5 +61,27 @@ final class StubTransport: URLProtocol {
             client?.urlProtocol(self, didLoad: Data(chunk.utf8))
         }
         client?.urlProtocolDidFinishLoading(self)
+    }
+
+    /// The request body, wherever it ended up.
+    ///
+    /// A POST reaches a `URLProtocol` with its body moved to `httpBodyStream`;
+    /// `httpBody` is nil by the time it gets here. Read only `httpBody` and this
+    /// returns empty, and an assertion about what was sent then passes against a
+    /// request nobody ever inspected.
+    static func body(of request: URLRequest) -> Data {
+        if let data = request.httpBody { return data }
+        guard let stream = request.httpBodyStream else { return Data() }
+
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while stream.hasBytesAvailable {
+            let read = stream.read(&buffer, maxLength: buffer.count)
+            if read <= 0 { break }
+            data.append(contentsOf: buffer[..<read])
+        }
+        return data
     }
 }
