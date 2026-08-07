@@ -6,6 +6,8 @@
 // Contents
 //   Tier      A routing role.
 //   Reason    Why a tier was chosen.
+//   Backend   Where a model runs.
+//   Step      One attempt: a model, and where to run it.
 //   Decision  A tier, its reason, and the score behind it.
 //   Router    The core, owning its pointer.
 //
@@ -74,6 +76,17 @@ public enum Backend: UInt8, CaseIterable, Sendable {
     case local
     /// Over the network, behind the upstream API.
     case remote
+
+    /// The backend's stable name, as configuration spells it.
+    ///
+    /// Read from the core, as `Tier.name` and `Reason.name` are, and for the
+    /// same reason: what this code means is the core's to say, and a copy here
+    /// would be free to fall behind it. It is also what pins these raw values to
+    /// the core's wire codes, which nothing else does — and the two decide
+    /// whether a step loads a file or spends the credential over the network.
+    public var name: String {
+        String(cString: wattrouter_backend_name(rawValue))
+    }
 }
 
 /// One attempt: a model, and where to run it.
@@ -155,10 +168,16 @@ public final class Router: @unchecked Sendable {
     /// - Returns: at least one step, and at most three. Each name is copied out
     ///   of the core rather than borrowed, so it outlives this router.
     public func chain(for tier: Tier) -> [Step] {
-        (0..<wattrouter_chain_length(handle, tier.rawValue)).compactMap { index in
+        // `map` rather than `compactMap`: the core states that every index below
+        // the length it reported is present, so a step that failed to read is a
+        // broken invariant and not an absence. Dropping it would return a
+        // silently shorter chain — a tier quietly losing its fallback, which is
+        // the failure this type exists to make unrepresentable, and which would
+        // also make the count promised above untrue.
+        (0..<wattrouter_chain_length(handle, tier.rawValue)).map { index in
             guard let name = wattrouter_chain_model(handle, tier.rawValue, index),
                 let backend = Backend(rawValue: wattrouter_chain_backend(handle, tier.rawValue, index))
-            else { return nil }
+            else { preconditionFailure("\(tier.name) index \(index) is inside the reported chain") }
             return Step(backend: backend, model: String(cString: name))
         }
     }

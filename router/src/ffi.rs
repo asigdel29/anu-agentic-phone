@@ -376,6 +376,31 @@ pub extern "C" fn wattrouter_reason_name(reason: u8) -> *const c_char {
     name_at(&NAMES, reason)
 }
 
+/// The name of a backend code, as configuration spells it.
+///
+/// A chain crosses as a model name and a number. The name says what to ask; the
+/// number says whether to ask it over a socket or load it into this process, and
+/// a caller that wants to log or display that half needs the word for it. Here
+/// rather than in the caller for the reason the other two are: the vocabulary
+/// has one home, and a second copy is one that falls behind this one.
+///
+/// # Arguments
+/// * `backend` — a code from [`wattrouter_chain_backend`].
+///
+/// # Returns
+/// A static NUL-terminated name, borrowed for the program's lifetime and never
+/// freed by the caller, or null IF `backend` names no backend — which includes
+/// the past-the-end sentinel.
+#[unsafe(no_mangle)]
+pub extern "C" fn wattrouter_backend_name(backend: u8) -> *const c_char {
+    // Written out rather than indexed off `Backend::ALL`, for the reason
+    // `backend_code` is: the caller is compiled against these codes, and
+    // reordering the enum must not change what a number means to it.
+    // `backend_names_match_the_backend` holds the spellings to the backend's own.
+    const NAMES: [&CStr; 2] = [c"local", c"remote"];
+    name_at(&NAMES, backend)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Decision, Router, reason_code};
@@ -512,6 +537,17 @@ mod tests {
         assert!(super::wattrouter_reason_name(Decision::FAILED.reason).is_null());
     }
 
+    #[test]
+    fn backend_names_match_the_backend() {
+        for backend in Backend::ALL {
+            let code = super::backend_code(backend);
+            let name = unsafe { CStr::from_ptr(super::wattrouter_backend_name(code)) };
+            assert_eq!(name.to_str().unwrap(), backend.name());
+        }
+        // The code `wattrouter_chain_backend` returns past the end of a chain.
+        assert!(super::wattrouter_backend_name(u8::MAX).is_null());
+    }
+
     /// Every `wattrouter_*` name `text` uses as a function — the identifier
     /// immediately followed by an opening parenthesis, which is what separates a
     /// declaration or a call from a type name or a mention in prose.
@@ -535,26 +571,34 @@ mod tests {
             // The chain the server derives, read through C one index at a time.
             // `with_router` has already set the credential the config needs.
             let config = crate::config::Config::from_env().expect("valid");
-            let expected = crate::chain::chain_for(&config, Tier::Code);
-            assert!(expected.len() > 1, "code should have a fallback to compare");
 
-            let length = unsafe { super::wattrouter_chain_length(router, Tier::Code as u8) };
-            assert_eq!(length, expected.len());
+            // Every tier, not one: a caller reaches these by tier code, and a
+            // crossing that mishandled a particular code would be invisible in a
+            // check of a single tier. Compared against `chain_for` rather than
+            // against written-out names, so a change to the catalogue moves this
+            // with it instead of breaking it.
+            for tier in Tier::ALL {
+                let expected = crate::chain::chain_for(&config, tier);
+                assert!(expected.len() > 1, "{} has no fallback", tier.name());
 
-            for (index, step) in expected.iter().enumerate() {
-                let name =
-                    unsafe { super::wattrouter_chain_model(router, Tier::Code as u8, index) };
-                assert!(!name.is_null(), "index {index} is inside the chain");
-                let name = unsafe { CStr::from_ptr(name) }.to_str().unwrap();
-                assert_eq!(name, step.model(), "at index {index}");
+                let length = unsafe { super::wattrouter_chain_length(router, tier as u8) };
+                assert_eq!(length, expected.len(), "for {}", tier.name());
 
-                let backend =
-                    unsafe { super::wattrouter_chain_backend(router, Tier::Code as u8, index) };
-                assert_eq!(
-                    backend,
-                    super::backend_code(step.backend()),
-                    "at index {index}"
-                );
+                for (index, step) in expected.iter().enumerate() {
+                    let name = unsafe { super::wattrouter_chain_model(router, tier as u8, index) };
+                    assert!(!name.is_null(), "{} index {index} is inside", tier.name());
+                    let name = unsafe { CStr::from_ptr(name) }.to_str().unwrap();
+                    assert_eq!(name, step.model(), "{} at index {index}", tier.name());
+
+                    let backend =
+                        unsafe { super::wattrouter_chain_backend(router, tier as u8, index) };
+                    assert_eq!(
+                        backend,
+                        super::backend_code(step.backend()),
+                        "{} at index {index}",
+                        tier.name()
+                    );
+                }
             }
         });
     }

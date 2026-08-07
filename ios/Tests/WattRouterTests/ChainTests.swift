@@ -12,19 +12,14 @@ import XCTest
 @testable import WattRouter
 
 final class ChainTests: XCTestCase {
-    private func makeRouter() throws -> Router {
-        setenv("NEURALWATT_API_KEY", "ios-test", 1)
-        return try XCTUnwrap(Router())
-    }
-
     func testEveryTierHasAChainWithSomewhereToFallBackTo() throws {
         let router = try makeRouter()
         for tier in Tier.allCases {
             let chain = router.chain(for: tier)
-            XCTAssertFalse(chain.isEmpty, "\(tier.name) has no chain at all")
-            XCTAssertLessThanOrEqual(chain.count, 3, "\(tier.name) is longer than MAX_CHAIN")
-            // A chain of one means a single failure costs the turn.
+            // A chain of one means a single failure costs the turn, and this
+            // subsumes the chain being present at all.
             XCTAssertGreaterThan(chain.count, 1, "\(tier.name) has no fallback")
+            XCTAssertLessThanOrEqual(chain.count, 3, "\(tier.name) is longer than MAX_CHAIN")
         }
     }
 
@@ -48,27 +43,28 @@ final class ChainTests: XCTestCase {
         let decision = try XCTUnwrap(router.decide(body: conversation.requestBody()))
         let first = try XCTUnwrap(router.chain(for: decision.tier).first)
 
-        XCTAssertFalse(first.model.isEmpty)
-        // The board's configuration, which is what an unconfigured app inherits.
+        // Model names are checked in `testAChainNamesDistinctModels`; what this
+        // adds is the backend, since the board's configuration is what an
+        // unconfigured app inherits and nothing else here reads that half.
         XCTAssertEqual(first.backend, .remote)
     }
 
-    func testAChainLeadsWithTheTierOwnModel() throws {
+    func testEachTierCodeReachesItsOwnChain() throws {
         let router = try makeRouter()
-        // The configured catalogue, which is what an app inherits until it says
-        // otherwise. Written out because the point is that Swift sees the same
-        // names the core does, and reading them from the core would assert that
-        // the core equals itself.
-        let expected: [Tier: String] = [
-            .aux: "gemma-4-31b",
-            .cheap: "deepseek-v4-flash",
-            .mid: "qwen3.6-35b-fast",
-            .code: "kimi-k2.7-code",
-            .long: "glm-5.2",
-            .heavy: "kimi-k3",
-        ]
-        for (tier, model) in expected {
-            XCTAssertEqual(router.chain(for: tier).first?.model, model, "for \(tier.name)")
-        }
+        // Every tier leads with its own model and no two tiers share one, so six
+        // distinct leads is what proves each tier's code is passed through to the
+        // core rather than one code answering for several.
+        //
+        // The names themselves are deliberately not written out. They are the
+        // core's to choose — `Tier::default_model` says the catalogue moves
+        // faster than the source does, and `chain_for` is already checked
+        // through C for every tier in `a_chain_crosses_the_boundary_in_order`.
+        // Transcribing them here would put a tripwire on a routine model swap in
+        // a test target about the port.
+        let leads = Tier.allCases.compactMap { router.chain(for: $0).first?.model }
+        XCTAssertEqual(leads.count, Tier.allCases.count, "a tier has no chain")
+        XCTAssertEqual(
+            Set(leads).count, Tier.allCases.count,
+            "two tiers led with the same model, so a tier code is not reaching the core")
     }
 }
