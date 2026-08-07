@@ -1,4 +1,11 @@
+//! onnx_check.rs — proves the ONNX backend loads and embeds meaning.
+//!
+//! History
+//!   2026-08-05  A. Sigdel  Created.
+//!
 //! Confirms the ONNX backend loads and separates meaning, not just vocabulary.
+//! Built only under the `onnx` feature, so it is also the cheapest way to find
+//! out whether that feature still compiles.
 #[cfg(feature = "onnx")]
 fn main() {
     use wattrouter::embed::{Embedder, HashEmbedder, OnnxEmbedder, cosine};

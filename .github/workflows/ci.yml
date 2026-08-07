@@ -107,6 +107,15 @@ jobs:
           # suppressing the check rather than fixing it.
           git ls-files -z '*.sh' | xargs -0 -r shellcheck -x --severity=style
 
+      # Both read every tracked file rather than the diff: a header or a tag can
+      # go missing by deleting a line, and a check that only reads what a change
+      # touched never sees that.
+      - name: file headers
+        run: bash scripts/lint/file-headers.sh
+
+      - name: doc tags
+        run: bash scripts/lint/doc-tags.sh
+
       # Workflows are the one kind of source here that cannot be exercised
       # locally, so they get a linter of their own. actionlint also runs
       # shellcheck over every `run:` block, which is how the two quoting bugs in
