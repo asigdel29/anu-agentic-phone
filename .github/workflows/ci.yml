@@ -230,12 +230,45 @@ jobs:
             -isysroot "$(xcrun --sdk iphoneos --show-sdk-path)" \
             router/include/wattrouter.h
 
+  # The benches carry gates, and a gate nothing runs is a comment. These are
+  # ratios between stages timed in the same run, never absolute figures: a shared
+  # runner is slower and noisier than any developer machine, so a threshold in
+  # nanoseconds would either be loose enough to miss real regressions or tight
+  # enough to fail at random. A ratio scales with the runner and stays put.
+  #
+  # --no-default-features because neither bench touches the ONNX embedder, and it
+  # is the difference between a 1m25s build and a 15m one.
+  #
+  # WATTROUTER_BENCH_QUICK trims the sweeps to what the gates need. It reduces
+  # levels and waiting, never the samples within a level — the benches document
+  # why, having once reported connection warmup as a throughput collapse.
+  perf:
+    name: Performance gates
+    needs: detect
+    if: ${{ needs.detect.outputs.rust == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/rust-setup
+        with:
+          cache-key: perf
+      - name: Gate the serve path
+        env:
+          WATTROUTER_BENCH_QUICK: "1"
+        run: cargo bench --manifest-path router/Cargo.toml --bench serve --no-default-features
+      # Spawns the router and drives it over loopback, so it needs the binary
+      # built by the same invocation rather than a copy of the handler.
+      - name: Gate the router under load
+        env:
+          WATTROUTER_BENCH_QUICK: "1"
+        run: cargo bench --manifest-path router/Cargo.toml --bench load --no-default-features
+
   # One check for branch protection to require, so adding a job does not mean
   # editing the ruleset. Skipped is a pass: a job guarded off by `detect` has
   # nothing to say.
   required:
     name: Required
-    needs: [detect, format, lint, test, cross-build, ios-build]
+    needs: [detect, format, lint, test, cross-build, ios-build, perf]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -248,6 +281,7 @@ jobs:
             test:${{ needs.test.result }}
             cross-build:${{ needs.cross-build.result }}
             ios-build:${{ needs.ios-build.result }}
+            perf:${{ needs.perf.result }}
         run: |
           set -euo pipefail
           fail=0
