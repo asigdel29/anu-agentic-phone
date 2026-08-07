@@ -15,21 +15,15 @@ set -euo pipefail
 
 readonly LIMIT=300
 
-base="${BASE_SHA:-}"
-head="${HEAD_SHA:-HEAD}"
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/guards/lib.sh
+. "$here/lib.sh"
 
-if [ -z "$base" ]; then
-    printf 'BASE_SHA is not set; cannot compute a diff.\n' >&2
-    exit 1
-fi
+guard_range
 
 # Three dots: measure against the merge base, so that commits landing on the base
 # branch after this one opened do not count towards its size.
-stat=$(git diff --numstat "$base...$head" -- \
-    ':(exclude)*.lock' \
-    ':(exclude)**/*.lock' \
-    ':(exclude)**/testdata/**' \
-    ':(exclude)**/weights.json')
+stat=$(git diff --numstat "$base...$head" -- "${GUARD_EXCLUDES[@]}")
 
 total=$(printf '%s' "$stat" | awk '{a += $1; d += $2} END {print a + d + 0}')
 
