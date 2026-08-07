@@ -24,6 +24,26 @@ router_addr := env_var_or_default("WATTROUTER_ADDR", "127.0.0.1:8080")
 default:
     @just --list
 
+# Run the router in the foreground until Ctrl-C.
+router:
+    scripts/run-router.sh foreground
+
+# Start the router detached, and wait until it answers.
+up:
+    scripts/run-router.sh start
+
+# Stop a detached router.
+down:
+    scripts/run-router.sh stop
+
+# Is a router serving, and which process is it.
+status:
+    scripts/run-router.sh status
+
+# Check the stack end to end. Needs a router; `just up` first.
+verify:
+    scripts/verify-stack.sh {{ "http://" + router_addr }}
+
 # Report the toolchain; exit non-zero if anything is missing or too old.
 toolchain:
     #!/usr/bin/env bash
