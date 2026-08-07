@@ -97,6 +97,16 @@ public struct FileWalk: Sendable {
         return (Array(found.prefix(limit)), true)
     }
 
+    /// The file's text, or `nil` if it is not text.
+    ///
+    /// The rule `ReadFileTool` applies, minus the explanation: a zero byte or
+    /// invalid UTF-8. A search skips such a file silently, where a read has to
+    /// say why it refused, which is the only reason the two are not one call.
+    static func text(of url: URL) -> String? {
+        guard let data = try? Data(contentsOf: url), !data.contains(0) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
     /// Whether a glob selects this file.
     ///
     /// `fnmatch` is in libc and already does this correctly, including character
