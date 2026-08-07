@@ -11,9 +11,17 @@ deliberately points at the router on loopback rather than at the provider: the
 whole purpose of the stack is that every call is routed, and a profile aimed at
 the provider would be a working path that quietly bypasses it.
 
-Install by symlinking this directory into ``$HERMES_HOME/plugins/model-providers/``.
-Hermes discovers profiles there and lets them override bundled ones of the same
-name, so no Hermes source is modified.
+Installed by ``scripts/install-hermes.sh``, which symlinks this directory into
+``$HERMES_HOME/plugins/model-providers/``. Hermes discovers profiles there and
+lets them override bundled ones of the same name, so no Hermes source is
+modified.
+
+Every field below is one ``ProviderProfile`` actually has. It carried a
+``supports_prompt_cache_key=False`` that it does not, so loading it raised
+``unexpected keyword argument`` and the profile was silently unavailable — which
+nobody saw, because nothing had ever installed it. The concern behind that field
+was real but misplaced: ``prompt_cache_key`` is only ever sent on the
+Codex/Responses path, and this profile is ``chat_completions``.
 """
 
 from __future__ import annotations
@@ -45,10 +53,6 @@ NEURALWATT = ProviderProfile(
     # The router speaks the OpenAI wire protocol in both directions.
     api_mode="chat_completions",
     hostname="127.0.0.1",
-    # The router is a proxy, not a model host: it does not implement the
-    # prompt-cache extension, and an unknown top-level field would be rejected
-    # rather than ignored.
-    supports_prompt_cache_key=False,
 )
 
 register_provider(NEURALWATT)
