@@ -33,6 +33,49 @@ use thiserror::Error;
 /// than fail.
 pub const DIM: usize = 384;
 
+/// Which backend a deployment wants.
+///
+/// Kept here rather than in configuration for the reason [`crate::backend`] is
+/// kept apart from [`crate::tier`]: which embedder exists is a property of this
+/// module, and configuration only chooses between them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Choice {
+    /// Feature hashing. No model, no download, works anywhere.
+    Hash,
+    /// bge-small-en-v1.5 through ONNX. Better, and what a fitted head needs.
+    Onnx,
+}
+
+impl Choice {
+    /// Every choice, so configuration can list them and tests iterate them.
+    pub const ALL: [Self; 2] = [Self::Hash, Self::Onnx];
+
+    /// The stable name, as configuration spells it.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Hash => "hash",
+            Self::Onnx => "onnx",
+        }
+    }
+
+    /// Read a choice from a configured value, ignoring case and surrounding
+    /// space.
+    ///
+    /// # Returns
+    /// `Some` IF `value` names a backend. `None` is a configuration error for
+    /// the caller to report rather than a value to fall back from: silently
+    /// hashing when an operator asked for ONNX would route worse than they
+    /// asked for and say nothing.
+    #[must_use]
+    pub fn parse(value: &str) -> Option<Self> {
+        let value = value.trim();
+        Self::ALL
+            .into_iter()
+            .find(|choice| value.eq_ignore_ascii_case(choice.name()))
+    }
+}
+
 /// Why an embedding could not be produced.
 #[derive(Debug, Error)]
 pub enum EmbedError {
@@ -50,7 +93,12 @@ pub enum EmbedError {
 /// The backend is chosen once, at startup, and the rest of the router never
 /// learns which one it got. That is the point: routing quality degrades on a
 /// small board, but nothing else changes shape.
-pub trait Embedder: Send + Sync {
+///
+/// `Debug` is required so that a caller holding one behind a `Box` can still
+/// derive `Debug` for the state it lives in. Both backends already have it —
+/// hashing derives it and ONNX writes it by hand, precisely because its session
+/// is not printable.
+pub trait Embedder: Send + Sync + std::fmt::Debug {
     /// A stable identifier for the backend, reported in metrics and logs.
     ///
     /// Included so that a routing decision can be attributed to the backend that
@@ -369,7 +417,30 @@ impl Embedder for OnnxEmbedder {
 
 #[cfg(test)]
 mod tests {
-    use super::{DIM, EmbedError, Embedder, HashEmbedder, cosine, l2_normalize};
+    use super::{Choice, DIM, EmbedError, Embedder, HashEmbedder, cosine, l2_normalize};
+
+    #[test]
+    fn every_choice_name_parses_back_to_its_choice() {
+        for choice in Choice::ALL {
+            assert_eq!(Choice::parse(choice.name()), Some(choice));
+        }
+    }
+
+    #[test]
+    fn case_and_surrounding_space_do_not_matter() {
+        // Both are what a hand-edited .env file actually contains.
+        assert_eq!(Choice::parse("  ONNX "), Some(Choice::Onnx));
+        assert_eq!(Choice::parse("Hash"), Some(Choice::Hash));
+    }
+
+    #[test]
+    fn an_unrecognised_value_is_not_a_choice() {
+        // Notably not silently Hash: asking for the better embedder and quietly
+        // getting the worse one shows up as nothing but worse routing.
+        for value in ["", "bge", "fastembed", "onyx"] {
+            assert_eq!(Choice::parse(value), None, "for {value:?}");
+        }
+    }
 
     fn embed(text: &str) -> Vec<f32> {
         HashEmbedder::new().embed(text).expect("non-empty text")
