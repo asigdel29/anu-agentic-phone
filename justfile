@@ -24,6 +24,10 @@ router_addr := env_var_or_default("WATTROUTER_ADDR", "127.0.0.1:8080")
 default:
     @just --list
 
+# Put this repository's plugins where Hermes finds them; enables nothing.
+install-hermes:
+    scripts/install-hermes.sh
+
 # Run the router in the foreground until Ctrl-C.
 router:
     scripts/run-router.sh foreground
