@@ -16,13 +16,6 @@ final class RouterTests: XCTestCase {
     private static let chat = #"{"messages":[{"role":"user","content":"hello there"}]}"#
     private static let background = #"{"messages":[{"role":"user","content":"t"}],"max_tokens":16}"#
 
-    /// The core reads configuration from the environment, as the server does. An
-    /// app would supply this from its own storage.
-    private func makeRouter() throws -> Router {
-        setenv("NEURALWATT_API_KEY", "ios-test", 1)
-        return try XCTUnwrap(Router(), "the core builds without a head")
-    }
-
     func testADecisionCrossesTheBoundary() throws {
         let router = try makeRouter()
         let decision = try XCTUnwrap(router.decide(body: Self.chat))
@@ -73,6 +66,11 @@ final class RouterTests: XCTestCase {
             Reason.allCases.map(\.name),
             ["pinned", "background", "context-too-large", "scored", "code-shaped", "unscored",
              "sticky"])
+        // The backend decides whether a step loads a file into this process or
+        // spends the upstream credential over the network, so a raw value that
+        // had drifted from the core's code would pick the other one silently.
+        // Reading each name back is what pins the two together.
+        XCTAssertEqual(Backend.allCases.map(\.name), ["local", "remote"])
     }
 
     func testARouterIsUsableFromSeveralTasksAtOnce() async throws {

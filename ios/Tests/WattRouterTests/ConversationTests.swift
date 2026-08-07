@@ -13,11 +13,6 @@ import XCTest
 @testable import WattRouter
 
 final class ConversationTests: XCTestCase {
-    private func makeRouter() throws -> Router {
-        setenv("NEURALWATT_API_KEY", "ios-test", 1)
-        return try XCTUnwrap(Router())
-    }
-
     func testAConversationRoutesTheSameAsAHandWrittenBody() throws {
         let router = try makeRouter()
 

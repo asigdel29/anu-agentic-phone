@@ -8,10 +8,12 @@
  *   wattrouter_decision   A tier, why it was chosen, and the score behind it.
  *   wattrouter_new/free   Router lifetime.
  *   wattrouter_decide     The whole decision path: classify, score, policy.
+ *   wattrouter_chain_length/model/backend  The models behind a tier, in order.
  *   wattrouter_tier_name  The name behind a tier code.
  *   wattrouter_reason_name  The name behind a reason code.
+ *   wattrouter_backend_name  The name behind a backend code.
  *
- * Hand-written rather than generated: the surface is five functions and one
+ * Hand-written rather than generated: the surface is nine functions and one
  * struct, and a generator would cost more to keep in the build than it saves.
  * A hand-written header can drift from the library it describes, though, and a
  * mismatch here is a wrong answer rather than a link error — so the test
@@ -124,6 +126,15 @@ const char *wattrouter_tier_name(uint8_t tier);
  * Returns a static string the caller must not free, or NULL IF `reason` names
  * no reason — which includes WATTROUTER_FAILED. */
 const char *wattrouter_reason_name(uint8_t reason);
+
+/* The name of a backend code, as configuration spells it.
+ *
+ * A chain crosses as a model name and a number; this is the word behind the
+ * number, for a caller that logs or displays which half of the stack answered.
+ *
+ * Returns a static string the caller must not free, or NULL IF `backend` names
+ * no backend — which includes WATTROUTER_FAILED. */
+const char *wattrouter_backend_name(uint8_t backend);
 
 #ifdef __cplusplus
 } /* extern "C" */
