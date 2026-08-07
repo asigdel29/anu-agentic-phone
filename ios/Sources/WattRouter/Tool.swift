@@ -36,6 +36,44 @@ public struct ToolCall: Equatable, Sendable {
     }
 }
 
+extension ToolCall: Codable {
+    /// The nested shape a call has on the wire, against this type's flat one.
+    ///
+    /// `ServerSentEvent` already unpacks this nesting on the way in. Encoding it
+    /// belongs on the same type rather than in a private struct wherever a call
+    /// happens to be sent, or the two halves of one format live in two places and
+    /// only one of them gets fixed.
+    private enum CodingKeys: String, CodingKey {
+        case id, type, function
+    }
+
+    private enum FunctionKeys: String, CodingKey {
+        case name, arguments
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let function = try container.nestedContainer(
+            keyedBy: FunctionKeys.self, forKey: .function)
+        self.init(
+            id: try container.decode(String.self, forKey: .id),
+            name: try function.decode(String.self, forKey: .name),
+            arguments: try function.decode(String.self, forKey: .arguments))
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        // The only value the field takes today, and required. A provider reading
+        // a call without it treats the message as malformed rather than guessing.
+        try container.encode("function", forKey: .type)
+
+        var function = container.nestedContainer(keyedBy: FunctionKeys.self, forKey: .function)
+        try function.encode(name, forKey: .name)
+        try function.encode(arguments, forKey: .arguments)
+    }
+}
+
 /// What running a tool produced.
 public struct ToolResult: Equatable, Sendable {
     /// The call this answers.
