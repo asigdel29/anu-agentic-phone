@@ -57,6 +57,12 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 name = "decide"
 harness = false
 
+# The serve path needs a mock upstream and a runtime, so it takes the same
+# hand-rolled shape as `decide` rather than a harness that would fight both.
+[[bench]]
+name = "serve"
+harness = false
+
 [dev-dependencies]
 # Drives the router directly, so endpoint tests neither bind a port nor race for
 # one in CI.
