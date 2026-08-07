@@ -137,9 +137,14 @@ assumes. Rust has no `synchronized`, so the second half is the whole rule here: 
 async function documents its `# Rely`, and every method over shared state documents its
 `# Atomic` guarantee.
 
-Where locks are taken, the acquisition order is documented at the type holding them. There is
-one order in the router and it is stated in `policy.rs`; a change that needs a second order
-needs a better design, not a second order.
+Where locks are taken, the acquisition order is documented at the type holding them. The router
+holds two — one in `cache.rs` and one in `embed.rs` — and there is no order between them,
+because no path takes both. Each documents one acquisition per method, which is the whole of
+what a caller needs.
+
+That is a property of the code rather than a rule, so it is worth saying what the rule is: a
+change introducing a path that takes both must state the order where it does, and a change that
+needs a second order needs a better design instead.
 
 ## Not carried over
 
