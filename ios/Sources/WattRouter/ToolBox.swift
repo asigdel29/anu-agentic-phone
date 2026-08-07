@@ -100,9 +100,19 @@ public struct ToolBox: Sendable {
     }
 
     /// Where in the arguments a fault was, as the model wrote them.
+    ///
+    /// An array index's `stringValue` is "Index 0", so joining on dots produces
+    /// `todos.Index 0.status`. The model is being shown a place in JSON it wrote
+    /// and should see it spelled the way it wrote it.
     private static func path(_ context: DecodingError.Context) -> String {
-        context.codingPath.isEmpty
-            ? "the arguments" : context.codingPath.map(\.stringValue).joined(separator: ".")
+        guard !context.codingPath.isEmpty else { return "the arguments" }
+        return context.codingPath.reduce(into: "") { path, key in
+            if let index = key.intValue {
+                path += "[\(index)]"
+            } else {
+                path += path.isEmpty ? key.stringValue : ".\(key.stringValue)"
+            }
+        }
     }
 
     /// A tool that cannot be described to the model.
