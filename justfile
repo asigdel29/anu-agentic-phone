@@ -28,6 +28,18 @@ default:
 install-hermes:
     scripts/install-hermes.sh
 
+# Report what pointing Hermes at the router would change. Changes nothing.
+hermes-config:
+    scripts/apply-hermes-config.sh
+
+# Point Hermes at the router. Reversible with `just hermes-unconfig`.
+hermes-config-apply:
+    scripts/apply-hermes-config.sh --apply
+
+# Put the Hermes configuration back, leaf by leaf.
+hermes-unconfig:
+    scripts/apply-hermes-config.sh --revert
+
 # Run the router in the foreground until Ctrl-C.
 router:
     scripts/run-router.sh foreground
