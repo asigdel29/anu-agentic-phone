@@ -10,17 +10,124 @@
 # owning pid, so a stale one from a killed run is recognisable rather than
 # deadlocking whoever comes next.
 #
+# The device is found by name and created when it is absent. A UDID is generated
+# when a device is made, so one written down here names a device on the machine
+# that made it and on no other; this script used to carry one, and it worked
+# exactly as long as it never left that machine. A name is chosen rather than
+# generated, so it is the same identity everywhere — which is also what the lock
+# needs, since two agents sharing a device have to agree on which device.
+#
 # Usage
 #   scripts/build-ios-core.sh && scripts/test-ios.sh
+#
+# Environment
+#   WATTROUTER_SIM_NAME  Device to use, created if missing. Default below.
+#   WATTROUTER_SIM_UDID  An exact device, used as-is and never created.
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly ROOT
-readonly UDID=4C1C5104-238E-448C-8490-1157310AF5E2
 readonly LOCK=/tmp/ios-sim.lock
 readonly DERIVED="$ROOT/ios/.build/DerivedData"
 readonly WAIT_LIMIT=120
+
+# Named for this repository so it cannot collide with a device somebody made for
+# their own work, and so the lock's "the shared device" is unambiguous.
+readonly SIM_NAME="${WATTROUTER_SIM_NAME:-wattrouter-tests}"
+
+# The UDID of the named device, creating it if there is none.
+#
+# Reads simctl's JSON rather than its table: the table's columns move between
+# Xcode versions and its device names contain spaces, so parsing it is a bug
+# waiting for an upgrade.
+#
+# # Returns
+# A UDID on stdout.
+#
+# # Errors
+# Exits 1 IF no iOS runtime is installed, naming what to install.
+resolve_device() {
+    if [ -n "${WATTROUTER_SIM_UDID:-}" ]; then
+        printf '%s' "$WATTROUTER_SIM_UDID"
+        return 0
+    fi
+
+    local existing
+    existing="$(xcrun simctl list devices --json |
+        python3 -c '
+import json, sys
+name = sys.argv[1]
+for runtime, devices in json.load(sys.stdin)["devices"].items():
+    if "iOS" not in runtime:
+        continue
+    for d in devices:
+        if d["name"] == name and d.get("isAvailable"):
+            print(d["udid"])
+            raise SystemExit
+' "$SIM_NAME")"
+
+    if [ -n "$existing" ]; then
+        printf '%s' "$existing"
+        return 0
+    fi
+
+    # Newest iOS runtime, and an iPhone that runtime supports. Newest rather than
+    # a pinned version so a fresh Xcode works without an edit here; the tests do
+    # not depend on a particular iOS beyond the package's floor.
+    local choice
+    choice="$(xcrun simctl list --json |
+        python3 -c '
+import json, sys
+
+catalog = json.load(sys.stdin)
+runtimes = [r for r in catalog["runtimes"]
+            if r.get("isAvailable") and r["identifier"].startswith("com.apple.CoreSimulator.SimRuntime.iOS")]
+if not runtimes:
+    raise SystemExit(1)
+
+# A version sorts wrongly as text ("17.10" < "17.9"), so compare it as numbers.
+def order(runtime):
+    return [int(part) for part in runtime["version"].split(".") if part.isdigit()]
+
+newest = max(runtimes, key=order)
+supported = {d["identifier"] for d in catalog["devicetypes"]}
+usable = [d for d in catalog["devicetypes"]
+          if d["identifier"] in supported and "iPhone" in d["name"]]
+if not usable:
+    raise SystemExit(1)
+
+print(newest["identifier"])
+print(usable[-1]["identifier"])
+')" || {
+        cat >&2 <<'EOF'
+No iOS simulator runtime is installed, so there is nothing to create a device on.
+
+A fresh Xcode ships without one. Install it with:
+
+  xcodebuild -downloadPlatform iOS
+
+or from Xcode, Settings then Components. Then run this again.
+EOF
+        exit 1
+    }
+
+    local runtime devicetype udid
+    runtime="$(printf '%s' "$choice" | sed -n 1p)"
+    devicetype="$(printf '%s' "$choice" | sed -n 2p)"
+
+    printf 'creating simulator %s\n' "$SIM_NAME" >&2
+    udid="$(xcrun simctl create "$SIM_NAME" "$devicetype" "$runtime")"
+    printf '%s' "$udid"
+}
+
+UDID="$(resolve_device)"
+readonly UDID
+
+if [ -z "$UDID" ]; then
+    printf 'could not resolve a simulator to run on\n' >&2
+    exit 1
+fi
 
 if xcrun simctl list devices booted | grep -q "$UDID"; then
     printf 'simulator is already booted; another agent may be driving it\n' >&2
