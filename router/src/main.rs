@@ -27,7 +27,7 @@ use wattrouter::cache::DecisionCache;
 use wattrouter::chain::chain_for;
 use wattrouter::classify::classify;
 use wattrouter::config::{Config, ConfigError};
-use wattrouter::embed::{Embedder, HashEmbedder};
+use wattrouter::embed::{Choice, Embedder, HashEmbedder};
 use wattrouter::head::Head;
 use wattrouter::metrics::Metrics;
 use wattrouter::policy::{Decision, Reason, Thresholds, decide};
@@ -45,7 +45,11 @@ struct AppState {
     config: Config,
     upstream: Upstream,
     thresholds: Thresholds,
-    embedder: HashEmbedder,
+    /// Chosen at startup and never asked about again, which is what the trait's
+    /// own documentation says the point of it is. Boxed because the choice is a
+    /// deployment's to make: a board with the model cached takes ONNX, a small
+    /// one takes hashing, and nothing downstream can tell.
+    embedder: Box<dyn Embedder>,
     cache: DecisionCache,
     metrics: Metrics,
     /// Absent when no weights were found, which is a supported state: the policy
@@ -265,7 +269,12 @@ async fn metrics(State(state): State<Arc<AppState>>) -> (StatusCode, String) {
 ///
 /// Separate from [`main`] so tests can drive it through `tower::ServiceExt`
 /// without binding a port, which keeps them fast and free of port collisions.
-fn app(config: Config, upstream: Upstream, head: Option<Head>) -> Router {
+fn app(
+    config: Config,
+    upstream: Upstream,
+    head: Option<Head>,
+    embedder: Box<dyn Embedder>,
+) -> Router {
     // A head's scores occupy a narrow band around 0.5, so the absolute defaults
     // would strand whole tiers. When the head carries thresholds calibrated
     // against its own distribution, those win — they are the only ones that can
@@ -280,7 +289,7 @@ fn app(config: Config, upstream: Upstream, head: Option<Head>) -> Router {
         config,
         upstream,
         thresholds,
-        embedder: HashEmbedder::new(),
+        embedder,
         cache: DecisionCache::new(),
         metrics: Metrics::new(),
         head,
@@ -292,6 +301,40 @@ fn app(config: Config, upstream: Upstream, head: Option<Head>) -> Router {
         .route("/v1/chat/completions", post(chat_completions))
         .route("/metrics", get(metrics))
         .with_state(state)
+}
+
+/// Build the embedding backend the configuration asked for.
+///
+/// The binary constructed `HashEmbedder` unconditionally, which made the `onnx`
+/// feature — on by default — build a backend the server had no path to. Worse,
+/// [`Head::load`] pairs a head against the embedder that will actually be used,
+/// so a head fitted on ONNX vectors could never be loaded: the only head the
+/// server would accept was one fitted on hash vectors, and `train-head` records
+/// that those separate nothing. Choosing here is what makes scoring reachable.
+///
+/// # Errors
+/// [`ConfigError::Invalid`] IF ONNX was asked for and this binary was built
+/// without it, or IF the model cannot be loaded. Fatal rather than a silent
+/// fall back to hashing: an operator who asked for the better embedder and got
+/// the worse one would see nothing but worse routing.
+fn build_embedder(config: &Config) -> Result<Box<dyn Embedder>, ConfigError> {
+    match config.embedder() {
+        Choice::Hash => Ok(Box::new(HashEmbedder::new())),
+        #[cfg(feature = "onnx")]
+        Choice::Onnx => wattrouter::embed::OnnxEmbedder::new(config.model_cache_dir())
+            .map(|embedder| Box::new(embedder) as Box<dyn Embedder>)
+            .map_err(|e| ConfigError::Invalid {
+                name: "WATTROUTER_EMBEDDER",
+                expected: "onnx, with its model available in the cache directory",
+                value: e.to_string(),
+            }),
+        #[cfg(not(feature = "onnx"))]
+        Choice::Onnx => Err(ConfigError::Invalid {
+            name: "WATTROUTER_EMBEDDER",
+            expected: "embedder this binary has; it was built without onnx, so hash",
+            value: Choice::Onnx.name().to_owned(),
+        }),
+    }
 }
 
 /// Read configuration, bind, and serve until terminated.
@@ -350,7 +393,12 @@ async fn main() -> Result<(), ConfigError> {
     // A missing or mismatched head is reported and then tolerated. Routing gets
     // worse; serving does not stop. Refusing to start over an optional model
     // would make the stack less available than running it without one.
-    let embedder = HashEmbedder::new();
+    let embedder = match build_embedder(&config) {
+        Ok(embedder) => embedder,
+        Err(e) => return Err(e),
+    };
+    tracing::info!(embedder = embedder.id(), "embedding backend");
+
     let head = match Head::load(config.head_path(), &embedder.id()) {
         Ok(head) => {
             tracing::info!(fitted_on = head.fitted_on(), "scoring head loaded");
@@ -376,7 +424,7 @@ async fn main() -> Result<(), ConfigError> {
     // then finds a live connection instead of paying for DNS, TCP and TLS.
     upstream.prewarm().await;
 
-    axum::serve(listener, app(config, upstream, head))
+    axum::serve(listener, app(config, upstream, head, embedder))
         .with_graceful_shutdown(shutdown())
         .await
         .unwrap_or_else(|e| panic!("server failed: {e}"));
@@ -418,6 +466,18 @@ mod tests {
         Config::from_env().expect("test configuration is valid")
     }
 
+    /// The app as the tests want it: default configuration, an upstream that
+    /// refuses, no head. Named so a test that does not care which embedder it
+    /// got does not have to say.
+    fn test_app() -> Router {
+        app(
+            test_config(),
+            test_upstream(),
+            None,
+            Box::new(HashEmbedder::new()),
+        )
+    }
+
     async fn body_json(response: axum::response::Response) -> Value {
         let bytes = response.into_body().collect().await.unwrap().to_bytes();
         serde_json::from_slice(&bytes).unwrap()
@@ -425,7 +485,7 @@ mod tests {
 
     #[tokio::test]
     async fn healthz_reports_ok() {
-        let response = app(test_config(), test_upstream(), None)
+        let response = test_app()
             .oneshot(
                 Request::builder()
                     .uri("/healthz")
@@ -444,7 +504,7 @@ mod tests {
         // The whole point of the counter: it is the only thing that separates a
         // client reaching the router from a client reaching it carrying a
         // session, and no response can report that difference.
-        let app = app(test_config(), test_upstream(), None);
+        let app = test_app();
         let body = || Body::from(r#"{"messages":[{"role":"user","content":"hello there"}]}"#);
 
         // One with, one without. The upstream refuses, so both 502 — which does
@@ -484,7 +544,7 @@ mod tests {
 
     #[tokio::test]
     async fn models_lists_auto_and_every_tier() {
-        let response = app(test_config(), test_upstream(), None)
+        let response = test_app()
             .oneshot(
                 Request::builder()
                     .uri("/v1/models")
@@ -524,7 +584,7 @@ mod tests {
         // and `scripts/verify-stack.sh` reads exactly this header to assert the
         // routing rules without paying for inference.
         let body = r#"{"messages":[{"role":"user","content":"hello there"}]}"#;
-        let response = app(test_config(), test_upstream(), None)
+        let response = test_app()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -554,7 +614,7 @@ mod tests {
         // router chose from one an operator imposed. Those call for opposite
         // responses, and the status code alone says neither.
         let body = r#"{"messages":[{"role":"user","content":"hello there"}]}"#;
-        let response = app(test_config(), test_upstream(), None)
+        let response = test_app()
             .oneshot(
                 Request::builder()
                     .method("POST")

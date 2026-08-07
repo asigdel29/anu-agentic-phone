@@ -21,6 +21,7 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 use crate::backend::Backend;
+use crate::embed::Choice;
 use crate::tier::Tier;
 
 /// Why configuration was rejected.
@@ -50,6 +51,7 @@ pub enum ConfigError {
 /// str` and this is the one place a message has to outlive its formatting;
 /// `the_backend_message_names_every_backend` keeps it complete.
 const BACKEND_VALUES: &str = "backend, which is local or remote";
+const EMBEDDER_VALUES: &str = "embedder, which is hash or onnx";
 
 /// Everything the router needs to run.
 ///
@@ -67,6 +69,7 @@ pub struct Config {
     head_path: PathBuf,
     models: [String; Tier::ALL.len()],
     backends: [Backend; Tier::ALL.len()],
+    embedder: Choice,
 }
 
 impl Config {
@@ -127,6 +130,19 @@ impl Config {
             })?;
         }
 
+        // Hashing unless asked otherwise. ONNX needs a ~130MB download that a
+        // first run on a small board should not be surprised by, and a head
+        // fitted on one is unreadable by the other — so this is a deliberate
+        // choice rather than a default that changes underneath somebody.
+        let embedder = match optional("WATTROUTER_EMBEDDER") {
+            None => Choice::Hash,
+            Some(raw) => Choice::parse(&raw).ok_or(ConfigError::Invalid {
+                name: "WATTROUTER_EMBEDDER",
+                expected: EMBEDDER_VALUES,
+                value: raw,
+            })?,
+        };
+
         Ok(Self {
             addr,
             upstream_base_url,
@@ -135,7 +151,14 @@ impl Config {
             head_path,
             models,
             backends,
+            embedder,
         })
+    }
+
+    /// Which embedding backend to build.
+    #[must_use]
+    pub const fn embedder(&self) -> Choice {
+        self.embedder
     }
 
     /// The address the server binds.
@@ -209,6 +232,9 @@ impl Config {
             head_path: PathBuf::from("head.json"),
             models: Tier::ALL.map(|tier| tier.default_model().to_owned()),
             backends,
+            // The default, so a fixture built without the environment matches a
+            // deployment that has not asked for anything else.
+            embedder: Choice::Hash,
         }
     }
 
@@ -235,6 +261,7 @@ impl std::fmt::Debug for Config {
             .field("head_path", &self.head_path)
             .field("models", &self.models)
             .field("backends", &self.backends)
+            .field("embedder", &self.embedder)
             .finish()
     }
 }
@@ -249,10 +276,51 @@ fn optional(name: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{BACKEND_VALUES, Config, ConfigError, optional};
+    use super::{BACKEND_VALUES, Choice, Config, ConfigError, optional};
     use crate::backend::Backend;
     use crate::testenv::with_env;
     use crate::tier::Tier;
+
+    #[test]
+    fn the_embedder_defaults_to_hashing_and_rejects_a_typo() {
+        // Hashing by default: ONNX needs a download a first run should not be
+        // surprised by, and the two produce heads that cannot read each other.
+        let config = with_env(
+            &[
+                ("NEURALWATT_API_KEY", Some("k")),
+                ("WATTROUTER_EMBEDDER", None),
+            ],
+            || Config::from_env().expect("valid"),
+        );
+        assert_eq!(config.embedder(), Choice::Hash);
+
+        let config = with_env(
+            &[
+                ("NEURALWATT_API_KEY", Some("k")),
+                ("WATTROUTER_EMBEDDER", Some("onnx")),
+            ],
+            || Config::from_env().expect("valid"),
+        );
+        assert_eq!(config.embedder(), Choice::Onnx);
+
+        // Fatal rather than a fall back, for the reason the backend axis is.
+        let err = with_env(
+            &[
+                ("NEURALWATT_API_KEY", Some("k")),
+                ("WATTROUTER_EMBEDDER", Some("bge")),
+            ],
+            || Config::from_env().expect_err("a typo is rejected"),
+        );
+        let message = err.to_string();
+        assert!(message.contains("WATTROUTER_EMBEDDER"), "{message}");
+        for choice in Choice::ALL {
+            assert!(
+                message.contains(choice.name()),
+                "{message} omits {}",
+                choice.name()
+            );
+        }
+    }
 
     #[test]
     fn defaults_apply_when_only_the_credential_is_set() {
