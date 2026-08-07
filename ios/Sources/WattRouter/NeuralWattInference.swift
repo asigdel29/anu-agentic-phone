@@ -55,13 +55,16 @@ public struct NeuralWattInference: Inference {
                     try await Self.check(response, body: bytes, model: model)
 
                     for try await line in bytes.lines {
-                        switch try ServerSentEvent.decoding(line) {
-                        // Only text for now. Reading `tool_calls` out of the
-                        // deltas is the next change; until then a model that asks
-                        // for one produces a stream with nothing in it.
-                        case .text(let text): continuation.yield(.text(text))
-                        case .done: return continuation.finish()
-                        case .ignored: continue
+                        for event in try ServerSentEvent.decoding(line) {
+                            switch event {
+                            case .text(let text): continuation.yield(.text(text))
+                            case .done: return continuation.finish()
+                            // Read off the wire and not yet acted on. Fragments
+                            // need reassembling across lines, which is the next
+                            // change; this is a stated gap rather than a silent
+                            // drop, and the client is where it will close.
+                            case .toolCall, .finished: continue
+                            }
                         }
                     }
                     // The body ended without `[DONE]`. What arrived is the answer;
