@@ -28,17 +28,27 @@ public enum Role: String, Codable, CaseIterable, Sendable {
     case tool
 }
 
-/// One message: a role and its text.
+/// One message: a role, its text, and — for the two shapes a tool exchange
+/// needs — what was asked for or which request is being answered.
 public struct Message: Codable, Equatable, Sendable {
     /// Who produced it.
     public let role: Role
-    /// What it says.
+    /// What it says. Empty on an assistant turn that only asked for tools, which
+    /// is ordinary rather than a fault.
     public let content: String
+    /// What the model asked to run. Only on an assistant message.
+    public let toolCalls: [ToolCall]
+    /// Which call this answers. Only on a tool message.
+    public let toolCallId: String?
 
     /// Pair text with who produced it.
-    public init(role: Role, content: String) {
+    public init(
+        role: Role, content: String, toolCalls: [ToolCall] = [], toolCallId: String? = nil
+    ) {
         self.role = role
         self.content = content
+        self.toolCalls = toolCalls
+        self.toolCallId = toolCallId
     }
 
     /// Standing instructions.
@@ -51,9 +61,53 @@ public struct Message: Codable, Equatable, Sendable {
         Message(role: .user, content: content)
     }
 
-    /// Something the model said.
-    public static func assistant(_ content: String) -> Message {
-        Message(role: .assistant, content: content)
+    /// Something the model said, and anything it asked to have run.
+    ///
+    /// # Rely
+    /// A turn that asked for tools must be appended before any result is, and
+    /// with its calls intact. A tool message names a call id, and a provider that
+    /// was never sent the message announcing that id rejects the whole request —
+    /// naming, in the way of these things, nothing in particular.
+    public static func assistant(_ content: String, toolCalls: [ToolCall] = []) -> Message {
+        Message(role: .assistant, content: content, toolCalls: toolCalls)
+    }
+
+    /// What a tool produced, answering the call that asked for it.
+    public static func tool(_ content: String, answering id: String) -> Message {
+        Message(role: .tool, content: content, toolCallId: id)
+    }
+
+    /// What a tool produced. The result already knows which call it answers.
+    public static func tool(_ result: ToolResult) -> Message {
+        .tool(result.content, answering: result.id)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case role, content
+        case toolCalls = "tool_calls"
+        case toolCallId = "tool_call_id"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            role: try container.decode(Role.self, forKey: .role),
+            content: try container.decodeIfPresent(String.self, forKey: .content) ?? "",
+            toolCalls: try container.decodeIfPresent([ToolCall].self, forKey: .toolCalls) ?? [],
+            toolCallId: try container.decodeIfPresent(String.self, forKey: .toolCallId))
+    }
+
+    /// Absent, not empty.
+    ///
+    /// `"tool_calls": []` on a user message and `"tool_call_id": null` on an
+    /// assistant one are both things a provider may refuse, and refusing a whole
+    /// request over a key that means nothing is an expensive way to find out.
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(role, forKey: .role)
+        try container.encode(content, forKey: .content)
+        if !toolCalls.isEmpty { try container.encode(toolCalls, forKey: .toolCalls) }
+        try container.encodeIfPresent(toolCallId, forKey: .toolCallId)
     }
 }
 
