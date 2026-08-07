@@ -69,6 +69,10 @@ readonly EMOJI=$'\xf0\x9f|\xe2\x9c\x85|\xe2\x9d\x8c|\xe2\x9a\xa0'
 # against the `path:line:text` shape a finding is reported in.
 readonly SOURCE_LINE='^[^:]*\.(rs|swift|py):'
 
+# Markers, named once like every other pattern here. Written out at each use, the
+# two copies could drift — a word boundary fixed in one grep and not the other.
+readonly MARKER='\b(TODO|FIXME|HACK|XXX)\b'
+
 # Every hit from every check. The total is taken over the distinct lines in here,
 # because a line two checks caught is one line to go and read, not two.
 all_hits=''
@@ -86,7 +90,7 @@ check() {
 
     printf '\n%s:\n' "$what"
     printf '%s\n' "$hits" | sed 's/^/  /'
-    all_hits=$(printf '%s\n%s' "$all_hits" "$hits")
+    all_hits="$all_hits"$'\n'"$hits"
 }
 
 # Added lines in the range, as `path:line:text`. Three dots so that commits landing
@@ -154,15 +158,23 @@ printf 'slopgate: %s added line(s), %s line(s) of prose\n' \
 # added line held, and a stream grep decides is binary is answered with a single
 # "binary file matches" — which `check` would then report as the finding, hiding
 # every real hit in that run behind a line naming nothing.
+#
+# The three word-list checks read the same stream the same way, so they read it
+# through one function: the binary-safety idiom above was missing from four of
+# five checks once already, and three copies of it is three chances to miss it
+# again.
+over_everything() {
+    printf '%s\n' "$both" | LC_ALL=C grep -aiE "$1" || true
+}
 
 check 'Marketing register — say the thing instead of describing it' \
-    "$(printf '%s\n' "$both" | LC_ALL=C grep -aiE "$REGISTER" || true)"
+    "$(over_everything "$REGISTER")"
 
 check 'Chat-context shorthand — the reader was not in the conversation' \
-    "$(printf '%s\n' "$both" | LC_ALL=C grep -aiE "$SHORTHAND" || true)"
+    "$(over_everything "$SHORTHAND")"
 
 check 'Attribution trailer — the repository has one authorial voice' \
-    "$(printf '%s\n' "$both" | LC_ALL=C grep -aiE "$ATTRIBUTION" || true)"
+    "$(over_everything "$ATTRIBUTION")"
 
 # A marker naming an issue is a plan; one naming nothing is a note to somebody who
 # has already left.
@@ -172,15 +184,22 @@ check 'Attribution trailer — the repository has one authorial voice' \
 # followed by a digit anywhere. A colour literal earlier in the line is not an
 # issue number.
 check 'Marker with no issue — name one (#123), or do the work' \
-    "$(printf '%s\n' "$diff_text" | LC_ALL=C grep -aE '\b(TODO|FIXME|HACK|XXX)\b' |
-        LC_ALL=C grep -avE '\b(TODO|FIXME|HACK|XXX)\b[^#]*#[0-9]+' || true)"
+    "$(printf '%s\n' "$diff_text" | LC_ALL=C grep -aE "$MARKER" |
+        LC_ALL=C grep -avE "$MARKER"'[^#]*#[0-9]+' || true)"
 
 prose_files=$(printf '%s\n' "$diff_text" | LC_ALL=C grep -avE "$SOURCE_LINE" || true)
 
 check 'Emoji outside source — a register, not a decision' \
     "$(printf '%s\n%s\n' "$prose_files" "$prose_text" | LC_ALL=C grep -aE "$EMOJI" || true)"
 
-findings=$(printf '%s\n' "$all_hits" | LC_ALL=C grep -a . | sort -u | LC_ALL=C grep -ac . || true)
+# Distinct lines: `sort -u` collapses a line two checks caught, and `grep -c .`
+# counts what is left without the blank `all_hits` starts life as.
+#
+# The `|| true` is load-bearing under `set -o pipefail`. `grep` exits 1 when it
+# matches nothing, which is the ordinary case of a clean run — without it the
+# substitution fails, `set -e` ends the script here, and a clean guard reports
+# failure having printed no finding at all.
+findings=$(printf '%s\n' "$all_hits" | sort -u | LC_ALL=C grep -ac . || true)
 
 if [ "$findings" -eq 0 ]; then
     printf '\nslopgate: clean\n'
