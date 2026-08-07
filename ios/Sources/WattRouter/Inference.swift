@@ -55,6 +55,20 @@ public enum InferenceError: Error, Equatable, Sendable {
     }
 }
 
+/// What a model produces, in the order it produces it.
+///
+/// Two cases, and it will grow. There is deliberately no `.finished(reason)`:
+/// nothing can produce one until the streamed body is read for `finish_reason`,
+/// and a case nothing produces is a case nobody has thought about. It arrives
+/// with the parser that can fill it in.
+public enum StreamEvent: Equatable, Sendable {
+    /// Text, as the model wrote it. A fragment, carrying no token boundary.
+    case text(String)
+    /// A tool the model wants run — complete, arguments and all, however many
+    /// chunks of the response carried them.
+    case toolCall(ToolCall)
+}
+
 /// One model, asked one question.
 ///
 /// Deliberately below the chain: an implementation speaks to a single model and
@@ -67,45 +81,50 @@ public protocol Inference: Sendable {
     ///   - model: the model to ask, named as the provider names it. A [`Step`]
     ///     carries one, along with where it runs.
     ///   - maxTokens: a cap on the reply, or `nil` for the provider's default.
-    /// - Returns: the answer in the order it is produced. Chunks are fragments of
-    ///   text and carry no token boundary — a caller that needs the whole answer
-    ///   concatenates them.
+    /// - Returns: what the model produced, in order.
     ///
     /// # Rely
-    /// A failure before the first chunk is the caller's to retry. A failure after
-    /// one has been yielded is not: text has already reached the caller, and no
-    /// second model can un-deliver it. Conformances must therefore not yield a
-    /// chunk they are not committed to — in particular, nothing may be emitted
+    /// A failure before the first event is the caller's to retry. A failure after
+    /// one has been yielded is not: it has already reached the caller, and no
+    /// second model can un-deliver it. Conformances must therefore not yield an
+    /// event they are not committed to — in particular, nothing may be emitted
     /// before the response status is known.
     ///
     /// # Atomic
     /// Safe to call concurrently. Each call owns its own stream; ending one, by
     /// cancellation or by leaving the loop early, must not disturb another.
     func complete(_ conversation: Conversation, model: String, maxTokens: Int?)
-        -> AsyncThrowingStream<String, any Error>
+        -> AsyncThrowingStream<StreamEvent, any Error>
 }
 
-/// A fixed answer, delivered in chunks, optionally ending in a failure.
+/// A fixed answer, delivered in pieces, optionally ending in a failure.
 ///
 /// In the library rather than the test target on purpose: a SwiftUI preview needs
 /// something to render, and so does the app before it can reach a model at all.
 public struct ScriptedInference: Inference {
     /// Yielded in order, then `failure` if there is one.
-    public let chunks: [String]
-    /// Waited before each chunk, so a caller can be seen to receive them
+    public let events: [StreamEvent]
+    /// Waited before each one, so a caller can be seen to receive them
     /// separately rather than all at once.
     public let perChunk: Duration
-    /// Ends the stream after the last chunk, or `nil` to end it normally.
+    /// Ends the stream after the last event, or `nil` to end it normally.
     public let failure: InferenceError?
 
-    /// Script the chunks exactly.
+    /// Script the events exactly, including tool calls.
+    public init(
+        events: [StreamEvent], perChunk: Duration = .zero, failure: InferenceError? = nil
+    ) {
+        self.events = events
+        self.perChunk = perChunk
+        self.failure = failure
+    }
+
+    /// Script text.
     ///
     /// Empty `chunks` with a `failure` is a model that fails outright — the case
     /// a chain walk is allowed to retry.
     public init(chunks: [String], perChunk: Duration = .zero, failure: InferenceError? = nil) {
-        self.chunks = chunks
-        self.perChunk = perChunk
-        self.failure = failure
+        self.init(events: chunks.map(StreamEvent.text), perChunk: perChunk, failure: failure)
     }
 
     /// Deliver `answer` a word at a time, as a model would.
@@ -123,16 +142,16 @@ public struct ScriptedInference: Inference {
     }
 
     public func complete(_ conversation: Conversation, model: String, maxTokens: Int?)
-        -> AsyncThrowingStream<String, any Error>
+        -> AsyncThrowingStream<StreamEvent, any Error>
     {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    for chunk in chunks {
+                    for event in events {
                         // Zero is the common case — a test that only wants the
                         // text — and sleeping for it would still suspend.
                         if perChunk > .zero { try await Task.sleep(for: perChunk) }
-                        continuation.yield(chunk)
+                        continuation.yield(event)
                     }
                     continuation.finish(throwing: failure)
                 } catch {

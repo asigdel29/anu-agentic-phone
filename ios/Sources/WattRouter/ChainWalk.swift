@@ -35,6 +35,10 @@ public enum TurnEvent: Equatable, Sendable {
     case answering(model: String, backend: Backend)
     /// Text, in the order the model produced it.
     case text(String)
+    /// A tool the model wants run. Forwarded rather than handled here: what to do
+    /// about it is the turn loop's, and a walk that dropped it would leave the
+    /// model waiting on a result nothing was ever going to produce.
+    case toolCall(ToolCall)
 }
 
 /// The loop over a tier's models.
@@ -82,15 +86,21 @@ public struct ChainWalk: Sendable {
 
                     var delivered = false
                     do {
-                        for try await text in inference.complete(
+                        for try await event in inference.complete(
                             conversation, model: step.model, maxTokens: maxTokens)
                         {
+                            // A tool call counts as delivered exactly as text
+                            // does: once one has been handed up, a second model
+                            // would produce a different one.
                             if !delivered {
                                 delivered = true
                                 continuation.yield(
                                     .answering(model: step.model, backend: step.backend))
                             }
-                            continuation.yield(.text(text))
+                            switch event {
+                            case .text(let text): continuation.yield(.text(text))
+                            case .toolCall(let call): continuation.yield(.toolCall(call))
+                            }
                         }
                         // A model that answered with nothing still answered. The
                         // alternative is spending the rest of the chain on a

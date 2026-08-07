@@ -40,8 +40,8 @@ final class NeuralWattInferenceTests: XCTestCase {
 
         var received: [String] = []
         do {
-            for try await chunk in client().complete(asking(), model: "m", maxTokens: nil) {
-                received.append(chunk)
+            for try await event in client().complete(asking(), model: "m", maxTokens: nil) {
+                if case .text(let chunk) = event { received.append(chunk) }
             }
             XCTFail("a 500 is a failure")
         } catch let error as InferenceError {
@@ -123,9 +123,9 @@ final class NeuralWattInferenceTests: XCTestCase {
         let started = clock.now
         var firstAt: Duration?
         var received: [String] = []
-        for try await chunk in client().complete(asking(), model: "m", maxTokens: nil) {
+        for try await event in client().complete(asking(), model: "m", maxTokens: nil) {
             if firstAt == nil { firstAt = clock.now - started }
-            received.append(chunk)
+            if case .text(let chunk) = event { received.append(chunk) }
         }
         let total = clock.now - started
 
