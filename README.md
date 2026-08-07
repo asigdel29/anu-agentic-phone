@@ -1,21 +1,16 @@
 # anu-agentic-stack
 
 A personal agent stack that runs on a small aarch64 board: [Hermes
-Agent](https://github.com/NousResearch/hermes-agent) on top,
-[OpenCode](https://opencode.ai) underneath as the coding harness,
+Agent](https://github.com/NousResearch/hermes-agent) as the harness,
 [zeromem](https://github.com/ptaranat/zeromem) for memory that costs no tokens, and a local
 router that picks the cheapest model on [NeuralWatt](https://neuralwatt.com) that can still do
 the job.
 
 ```
-  you ── CLI / chat ──►  Hermes Agent
-                           ├─ memory: zeromem      (Rust core, SQLite, zero LLM calls)
-                           └─ skill:  opencode     (delegates coding tasks)
+  you ── CLI / chat ──►  Hermes Agent   (conversation, tools, coding)
+                           └─ memory: zeromem      (Rust core, SQLite, zero LLM calls)
                                      │
-                                     ▼
-                           OpenCode  (coding harness)
-                                     │
-           both point at ────────────┤  OpenAI-compatible, 127.0.0.1
+                                     │  OpenAI-compatible, 127.0.0.1
                                      ▼
                            wattrouter  (Rust)
                              heuristics → sticky tier → embed → score → tier
@@ -24,13 +19,11 @@ the job.
                            api.neuralwatt.com/v1
 ```
 
-## The four pieces
+## The three pieces
 
-**Hermes Agent** is the thing you talk to. It holds the conversation, keeps long-term memory,
-and delegates. It is not the coding agent.
-
-**OpenCode** is the coding harness. Hermes drives it through its bundled `opencode` skill —
-one-shot `opencode run` for bounded tasks, a background PTY session for iterative work.
+**Hermes Agent** is the thing you talk to, and the only agent here. It holds the conversation,
+keeps long-term memory, and does the coding itself. It used to delegate that to a second
+harness; `docs/coding-harness.md` records why it no longer does.
 
 **zeromem** is the memory provider. Its point is in the name: indexing and retrieval are
 deterministic, so remembering something costs zero tokens. It keeps raw conversation turns

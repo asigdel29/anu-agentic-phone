@@ -38,7 +38,7 @@ pub enum UpstreamError {
 /// The upstream client.
 ///
 /// Holds the only copy of the credential on the board, so a compromise of Hermes
-/// or OpenCode does not yield one.
+/// does not yield one.
 #[derive(Debug, Clone)]
 pub struct Upstream {
     client: reqwest::Client,

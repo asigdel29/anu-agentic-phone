@@ -24,7 +24,7 @@
 //! binary does rather than a copy of them.
 //!
 //! The router presents itself as an OpenAI-compatible endpoint, because that is
-//! the only protocol both Hermes and OpenCode speak. Everything it adds — tier
+//! the protocol its clients speak. Everything it adds — tier
 //! selection, stickiness, fallback — happens behind that interface.
 
 #![warn(missing_docs)]

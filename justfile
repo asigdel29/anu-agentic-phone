@@ -17,7 +17,7 @@
 # download happens once rather than once per process.
 model_cache_dir := env_var_or_default("WATTROUTER_MODEL_CACHE", home_directory() / ".hermes/memory/zeromem-models")
 
-# Address the router binds. Both Hermes and OpenCode point at this.
+# Address the router binds. Hermes points at this.
 router_addr := env_var_or_default("WATTROUTER_ADDR", "127.0.0.1:8080")
 
 # List available recipes.
