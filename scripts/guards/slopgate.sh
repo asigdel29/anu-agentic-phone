@@ -25,25 +25,17 @@
 
 set -euo pipefail
 
-base="${BASE_SHA:-}"
-head="${HEAD_SHA:-HEAD}"
-title="${PR_TITLE:-}"
-body="${PR_BODY:-}"
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/guards/lib.sh
+. "$here/lib.sh"
 
-if [ -z "$base" ]; then
-    printf 'BASE_SHA is not set; cannot compute a diff.\n' >&2
-    exit 1
-fi
+guard_range
+guard_pr_text
 
 # The word lists live beside this file rather than in it. They are the only thing
 # here that must contain the words it rejects, and keeping them separate is what
 # lets the guard read the rest of this script — two hundred lines of prose about
 # the register — instead of exempting it.
-#
-# `here` rather than a path relative to the caller: run-all.sh already resolves
-# its own directory this way, and a guard that only works from the repository root
-# is a guard that fails the first time somebody runs it from anywhere else.
-here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/guards/slopgate.patterns
 . "$here/slopgate.patterns"
 
@@ -90,15 +82,10 @@ check() {
 # -U0 leaves only added and removed lines, so the new-file line number is the
 # hunk's start advanced once per added line; a removed line does not advance it.
 added_lines() {
-    # `top` anchors each pathspec at the repository root. Without it they are read
-    # relative to the working directory, so running this from a subdirectory
-    # excludes nothing — and the first file to stop being excluded is this one,
-    # whose word lists then match themselves.
+    # The shared excludes, plus the word lists: those are the one thing here that
+    # must contain what it rejects. `lib.sh` says why each is anchored at the root.
     git diff --unified=0 --no-color --no-renames "$base...$head" -- \
-        ':(exclude,top)*.lock' \
-        ':(exclude,top)**/*.lock' \
-        ':(exclude,top)**/testdata/**' \
-        ':(exclude,top)**/weights.json' \
+        "${GUARD_EXCLUDES[@]}" \
         ':(exclude,top)scripts/guards/slopgate.patterns' |
         awk '
             # `+++ b/path` names a file only before the first hunk of its section.

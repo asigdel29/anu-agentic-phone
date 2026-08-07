@@ -1,0 +1,68 @@
+# shellcheck shell=bash
+# lib.sh — what every guard needs to agree on before it can judge anything.
+#
+# History
+#   2026-08-07  A. Sigdel  Created, from the copies in pr-size.sh and slopgate.sh.
+#
+# Contents
+#   guard_range     Read BASE_SHA and HEAD_SHA, or fail saying which is missing.
+#   guard_pr_text   Read PR_TITLE and PR_BODY, which are allowed to be empty.
+#   GUARD_EXCLUDES  What a diff does not count as reviewable.
+#
+# Sourced, not run. Every guard reads the same range the same way and excludes
+# the same paths, because "what counts as a reviewable diff" is one decision:
+# registry.json already describes it once for both guards that use it, and it was
+# the code that kept two copies.
+#
+# That is not a hypothetical cost. The copies had already drifted — pr-size.sh
+# was still using unanchored pathspecs after slopgate.sh learned it had to anchor
+# them, so the two guards disagreed about what the diff was whenever either ran
+# from a subdirectory.
+
+# Where a change starts and ends.
+#
+# Sets `base` and `head` in the caller. HEAD_SHA defaults, BASE_SHA cannot: a
+# guard silently measuring against the wrong base reports a number that looks
+# like an answer.
+#
+# # Errors
+# Exits 1 IF BASE_SHA is unset or empty.
+#
+# shellcheck disable=SC2034  # `base` and `head` are set for the caller, by design.
+guard_range() {
+    base="${BASE_SHA:-}"
+    head="${HEAD_SHA:-HEAD}"
+
+    if [ -z "$base" ]; then
+        printf 'BASE_SHA is not set; cannot compute a diff.\n' >&2
+        exit 1
+    fi
+}
+
+# The pull request's own words.
+#
+# Sets `title` and `body` in the caller. Both may be empty: a draft has no body,
+# and a guard reading prose has nothing to say about prose that is not there.
+#
+# shellcheck disable=SC2034  # `title` and `body` are set for the caller, by design.
+guard_pr_text() {
+    title="${PR_TITLE:-}"
+    body="${PR_BODY:-}"
+}
+
+# Paths a diff does not count.
+#
+# Generated and vendored files: nobody reads them line by line, so counting them
+# pushes a change over a limit for reasons unrelated to how much there is to
+# review, and reading them as prose finds words no person wrote.
+#
+# `top` anchors each at the repository root. Without it a pathspec is read
+# relative to the working directory, so a guard run from anywhere but the root
+# excludes nothing — silently, since a pathspec that matches no file is not an
+# error.
+readonly GUARD_EXCLUDES=(
+    ':(exclude,top)*.lock'
+    ':(exclude,top)**/*.lock'
+    ':(exclude,top)**/testdata/**'
+    ':(exclude,top)**/weights.json'
+)

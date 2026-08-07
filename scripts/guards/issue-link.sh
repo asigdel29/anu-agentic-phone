@@ -15,8 +15,11 @@
 
 set -euo pipefail
 
-title="${PR_TITLE:-}"
-body="${PR_BODY:-}"
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/guards/lib.sh
+. "$here/lib.sh"
+
+guard_pr_text
 branch="${PR_HEAD_REF:-}"
 
 # `#12` in the title or body, or a leading `12-` in the branch name, which is the
