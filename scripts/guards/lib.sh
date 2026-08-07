@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # lib.sh — what every guard needs to agree on before it can judge anything.
 #
 # History
@@ -26,6 +27,8 @@
 #
 # # Errors
 # Exits 1 IF BASE_SHA is unset or empty.
+#
+# shellcheck disable=SC2034  # `base` and `head` are set for the caller, by design.
 guard_range() {
     base="${BASE_SHA:-}"
     head="${HEAD_SHA:-HEAD}"
@@ -40,6 +43,8 @@ guard_range() {
 #
 # Sets `title` and `body` in the caller. Both may be empty: a draft has no body,
 # and a guard reading prose has nothing to say about prose that is not there.
+#
+# shellcheck disable=SC2034  # `title` and `body` are set for the caller, by design.
 guard_pr_text() {
     title="${PR_TITLE:-}"
     body="${PR_BODY:-}"
