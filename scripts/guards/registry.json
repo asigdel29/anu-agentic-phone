@@ -20,6 +20,12 @@
             "script": "pr-size.sh",
             "mode": "hard",
             "description": "The diff is at most 300 lines, excluding lockfiles and vendored data."
+        },
+        {
+            "id": "slopgate",
+            "script": "slopgate.sh",
+            "mode": "advisory",
+            "description": "Added lines, commit messages and the pull request text avoid the register of unreviewed prose."
         }
     ]
 }

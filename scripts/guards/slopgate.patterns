@@ -1,0 +1,36 @@
+# slopgate.patterns — the words slopgate.sh rejects, kept where they can be read.
+#
+# History
+#   2026-08-07  A. Sigdel  Created, from the constants at the top of slopgate.sh.
+#
+# Sourced by slopgate.sh, and the only file that guard excludes from the diff it
+# reads. It has to exclude something: a list of forbidden words contains every
+# word on it, so the file defining the list always matches itself.
+#
+# Splitting the list out of the script is what keeps that exclusion honest. It
+# used to cover all of slopgate.sh, which is two hundred lines of prose about the
+# register — the file most likely to drift into it, and the one file the guard
+# could never catch drifting. Only these four lines have to be exempt; the rest of
+# that script is now read like anything else.
+#
+# On adding a word: it is eligible only while this repository's own prose does not
+# already use it. That rule is the whole defence of the list, and applying it cost
+# five candidates — `additionally`, `significant`, `notably`, `unlock` and
+# `landscape` are all in files written here, so none of them can be banned. Check
+# before adding.
+
+# Marketing register: words that describe a thing rather than say it.
+readonly REGISTER='leverages?|leveraging|utili[sz]e[sd]?|delve[sd]?|seamless(ly)?|robust|comprehensive|powerful|plethora|myriad|elevates?|boasts|testament|cutting-edge|state-of-the-art|best-in-class|meticulous(ly)?'
+
+# Chat-context shorthand: phrases addressed to a conversation rather than to a
+# reader who was not in it.
+readonly SHORTHAND="it.?s worth noting|as mentioned (above|earlier)|as (we|you) (discussed|saw)|in (summary|conclusion)|deep dive|dive into|at the end of the day|needless to say|ever-evolving|in today.s|game.chang|under the hood|first-class citizen"
+
+# Attribution, matched by shape rather than by name. The standard forbids naming a
+# tool, so a guard that grepped for product names would be the first file here to
+# break the rule it enforces.
+readonly ATTRIBUTION='co-authored-by:|generated (with|by) \['
+
+# Markers. A marker naming an issue is a plan; one naming nothing is a note to
+# somebody who has already left.
+readonly MARKER='\b(TODO|FIXME|HACK|XXX)\b'

@@ -100,7 +100,12 @@ jobs:
           set -euo pipefail
           # -r so an empty file list is a no-op rather than a bare invocation:
           # shell scripts arrive in later changes.
-          git ls-files -z '*.sh' | xargs -0 -r shellcheck --severity=style
+          #
+          # -x follows a sourced file, which a guard now has. Without it the
+          # source is reported unresolved and every variable the sourced file
+          # defines reads as undefined — noise that would push somebody towards
+          # suppressing the check rather than fixing it.
+          git ls-files -z '*.sh' | xargs -0 -r shellcheck -x --severity=style
 
       # Workflows are the one kind of source here that cannot be exercised
       # locally, so they get a linter of their own. actionlint also runs
