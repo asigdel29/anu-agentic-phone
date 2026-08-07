@@ -70,16 +70,16 @@ its description, and a second copy in this file would turn a one-line promotion 
 edit — with the failure mode that this document ends up asserting the opposite of what CI does.
 Read the registry: it is nine lines per guard and it is the truth.
 
-Every guard is an ordinary script taking its inputs from the environment, so it runs by hand:
+Run them before pushing:
 
 ```
-BASE_SHA=$(git merge-base main HEAD) HEAD_SHA=$(git rev-parse HEAD) \
-    PR_TITLE=... PR_BODY=... PR_HEAD_REF=$(git branch --show-current) \
-    bash scripts/guards/run-all.sh
+just guards                    # against the default branch
+just guards 153-agents-md      # when the pull request targets something else
 ```
 
 A gate you can only exercise by opening a pull request is a gate you debug by opening pull
-requests.
+requests. Each guard is an ordinary script taking its inputs from the environment, so the recipe
+is a convenience over them rather than a second path — `run-all.sh` is what CI calls too.
 
 ## Issues and pull requests
 

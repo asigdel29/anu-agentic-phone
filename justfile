@@ -74,6 +74,37 @@ ios-test:
 verify:
     scripts/verify-stack.sh {{ "http://" + router_addr }}
 
+# Run the pull request guards over this branch, before there is a pull request.
+#
+# Pass the base when the pull request will not target the default branch, which
+# is how a change that ran over 300 lines and split into a follow-up is reviewed:
+#   just guards 153-agents-md
+guards base="":
+    #!/usr/bin/env bash
+    # The same scripts pr-governance.yml runs, with the same inputs, so what this
+    # reports is what the job will report. There is no pull request text to pass:
+    # `issue-link` falls back to the branch name, which is the convention here
+    # anyway, and `slopgate` still reads the commit messages in the range.
+    set -euo pipefail
+
+    base="{{ base }}"
+    if [ -z "$base" ]; then
+        base="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/main)"
+    fi
+
+    if ! git rev-parse --verify --quiet "$base" >/dev/null; then
+        printf 'No such base: %s\n' "$base" >&2
+        exit 1
+    fi
+
+    # The merge base rather than the base tip, matching what CI passes: commits
+    # landing on the base after this branch opened are not this branch's work.
+    printf 'guards: %s...%s\n' "$base" "$(git branch --show-current)"
+    BASE_SHA="$(git merge-base "$base" HEAD)" \
+    HEAD_SHA="$(git rev-parse HEAD)" \
+    PR_HEAD_REF="$(git branch --show-current)" \
+        scripts/guards/run-all.sh
+
 # Report the toolchain; exit non-zero if anything is missing or too old.
 toolchain:
     #!/usr/bin/env bash
