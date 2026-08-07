@@ -19,7 +19,7 @@ final class ChainWalkTests: XCTestCase {
         let scripts: [String: ScriptedInference]
 
         func complete(_ conversation: Conversation, model: String, maxTokens: Int?)
-            -> AsyncThrowingStream<String, any Error>
+            -> AsyncThrowingStream<StreamEvent, any Error>
         {
             let script =
                 scripts[model]
@@ -66,6 +66,44 @@ final class ChainWalkTests: XCTestCase {
         XCTAssertEqual(
             events.filter({ if case .answering = $0 { true } else { false } }).count, 1,
             "the serving model is named exactly once")
+    }
+
+    func testAToolCallTravelsThroughRatherThanBeingDropped() async throws {
+        // A walk that forwarded text and silently discarded the other case would
+        // leave the model waiting on a result nothing was going to produce.
+        let call = ToolCall(id: "c1", name: "read_file", arguments: #"{"path":"a.swift"}"#)
+        let walk = ChainWalk(
+            asking: PerModel(scripts: [
+                "m": ScriptedInference(events: [.text("looking… "), .toolCall(call)])
+            ]))
+
+        let events = try await collect(walk.complete(asking(), following: remote("m")))
+        XCTAssertEqual(
+            events,
+            [.answering(model: "m", backend: .remote), .text("looking… "), .toolCall(call)])
+    }
+
+    func testAToolCallCountsAsDeliveredAndStopsTheChain() async throws {
+        // Once one has been handed up, a second model would produce a different
+        // one — so a failure after it is not retryable, exactly as with text.
+        let call = ToolCall(id: "c1", name: "read_file", arguments: "{}")
+        let walk = ChainWalk(
+            asking: PerModel(scripts: [
+                "first": ScriptedInference(
+                    events: [.toolCall(call)],
+                    failure: .unavailable(model: "first", detail: "dropped")),
+                "second": ScriptedInference(answer: "a whole different answer"),
+            ]))
+
+        var events: [TurnEvent] = []
+        do {
+            for try await event in walk.complete(asking(), following: remote("first", "second")) {
+                events.append(event)
+            }
+            XCTFail("the turn failed")
+        } catch is InferenceError {
+            XCTAssertEqual(events.last, .toolCall(call), "it was retried: \(events)")
+        }
     }
 
     func testAClientErrorDoesNotTryTheNextModel() async throws {

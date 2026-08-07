@@ -22,12 +22,20 @@ final class InferenceTests: XCTestCase {
         return conversation
     }
 
-    /// Drain a stream into the chunks it yielded.
+    /// Drain a stream into the text it yielded, which is all these scripts
+    /// produce. A tool call arriving here would be a scripting mistake, and
+    /// `compactMap` would hide it, so it is a failure instead.
     private func collect(
-        _ stream: AsyncThrowingStream<String, any Error>
+        _ stream: AsyncThrowingStream<StreamEvent, any Error>
     ) async throws -> [String] {
         var chunks: [String] = []
-        for try await chunk in stream { chunks.append(chunk) }
+        for try await event in stream {
+            guard case .text(let chunk) = event else {
+                XCTFail("unexpected \(event)")
+                continue
+            }
+            chunks.append(chunk)
+        }
         return chunks
     }
 
@@ -86,7 +94,8 @@ final class InferenceTests: XCTestCase {
 
         var received: [String] = []
         do {
-            for try await chunk in inference.complete(asking(), model: "m", maxTokens: nil) {
+            for try await event in inference.complete(asking(), model: "m", maxTokens: nil) {
+                guard case .text(let chunk) = event else { continue }
                 received.append(chunk)
             }
             XCTFail("the script ends in a failure")
@@ -121,8 +130,8 @@ final class InferenceTests: XCTestCase {
         let clock = ContinuousClock()
         let started = clock.now
         var received: [String] = []
-        for try await chunk in inference.complete(asking(), model: "m", maxTokens: nil) {
-            received.append(chunk)
+        for try await event in inference.complete(asking(), model: "m", maxTokens: nil) {
+            if case .text(let chunk) = event { received.append(chunk) }
             break
         }
 

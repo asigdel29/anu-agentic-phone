@@ -45,7 +45,7 @@ public struct NeuralWattInference: Inference {
     }
 
     public func complete(_ conversation: Conversation, model: String, maxTokens: Int?)
-        -> AsyncThrowingStream<String, any Error>
+        -> AsyncThrowingStream<StreamEvent, any Error>
     {
         AsyncThrowingStream { continuation in
             let task = Task {
@@ -56,7 +56,10 @@ public struct NeuralWattInference: Inference {
 
                     for try await line in bytes.lines {
                         switch try ServerSentEvent.decoding(line) {
-                        case .text(let text): continuation.yield(text)
+                        // Only text for now. Reading `tool_calls` out of the
+                        // deltas is the next change; until then a model that asks
+                        // for one produces a stream with nothing in it.
+                        case .text(let text): continuation.yield(.text(text))
                         case .done: return continuation.finish()
                         case .ignored: continue
                         }
