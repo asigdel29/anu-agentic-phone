@@ -54,21 +54,34 @@ public struct NeuralWattInference: Inference {
                         for: request(conversation, model: model, maxTokens: maxTokens))
                     try await Self.check(response, body: bytes, model: model)
 
+                    // Calls are held until something says they are complete:
+                    // half of one is a commitment to a call that does not exist,
+                    // and nothing on the wire marks the end of an individual one.
+                    var assembly = ToolCallAssembly()
+                    func flush() {
+                        for call in assembly.take() { continuation.yield(.toolCall(call)) }
+                    }
+
                     for try await line in bytes.lines {
                         for event in try ServerSentEvent.decoding(line) {
                             switch event {
                             case .text(let text): continuation.yield(.text(text))
-                            case .done: return continuation.finish()
-                            // Read off the wire and not yet acted on. Fragments
-                            // need reassembling across lines, which is the next
-                            // change; this is a stated gap rather than a silent
-                            // drop, and the client is where it will close.
-                            case .toolCall, .finished: continue
+                            case .toolCall(let fragment): assembly.add(fragment)
+                            // The reason itself goes no further for now; what it
+                            // is used for here is knowing the calls are whole.
+                            case .finished: flush()
+                            case .done:
+                                // Flushed here too: a provider that sends `[DONE]`
+                                // without a finish reason would otherwise swallow
+                                // everything assembled.
+                                flush()
+                                return continuation.finish()
                             }
                         }
                     }
                     // The body ended without `[DONE]`. What arrived is the answer;
                     // a provider closing early is not this layer's to second-guess.
+                    flush()
                     continuation.finish()
                 } catch let error as InferenceError {
                     continuation.finish(throwing: error)

@@ -112,6 +112,31 @@ final class NeuralWattInferenceTests: XCTestCase {
         XCTAssertNil(body["x_wattrouter_background"])
     }
 
+    func testAToolCallIsAssembledAcrossChunksAndArrivesWhole() async throws {
+        // End to end through the real `URLSession`: the id and name on one line,
+        // the arguments a few characters at a time over three more, and nothing
+        // marking the end of the call but the finish reason.
+        StubTransport.script = .init(chunks: [
+            #"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","#
+                + #""function":{"name":"read_file","arguments":""}}]}}]}"# + "\n\n",
+            #"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"pa"}}]}}]}"#
+                + "\n\n",
+            #"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"th\":\"a.swift\"}"}}]}}]}"#
+                + "\n\n",
+            #"data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}"# + "\n\n",
+            "data: [DONE]\n",
+        ])
+
+        var events: [StreamEvent] = []
+        for try await event in client().complete(asking(), model: "m", maxTokens: nil) {
+            events.append(event)
+        }
+
+        XCTAssertEqual(
+            events,
+            [.toolCall(ToolCall(id: "call_1", name: "read_file", arguments: #"{"path":"a.swift"}"#))])
+    }
+
     func testTheFirstChunkArrivesLongBeforeTheLast() async throws {
         // The property `upstream.rs` exists to protect, on this side of the wire.
         // Swap `bytes(for:)` for `data(for:)` and this is the only test that
