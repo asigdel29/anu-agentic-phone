@@ -164,7 +164,7 @@ The standard is CI's business, not review's, wherever a machine can decide.
 |---|---|
 | File headers | `scripts/lint/file-headers.sh` |
 | Public items documented | `missing_docs` denied; ruff `D` |
-| `# Errors` / `# Panics` / `# Rely` / `# Atomic` present | `scripts/lint/doc-tags.sh` |
+| `# Rely` on `pub async fn`, `# Errors` on a public `Result` | `scripts/lint/doc-tags.sh` |
 | Formatting | `cargo fmt --check`, `ruff format --check`, `shfmt`, `yamllint` |
 | Lints | `cargo clippy -D warnings`, `ruff check`, `shellcheck` |
 | Types | `mypy --strict` |
@@ -174,6 +174,12 @@ The standard is CI's business, not review's, wherever a machine can decide.
 Not mechanically checkable, and therefore review's job: whether a comment earns its place,
 whether a function is cohesive rather than merely short, and whether a name says what the
 thing is.
+
+`# Panics` and `# Atomic` are in that list too, and the row above says so by naming only the two
+tags a script decides. Whether a function touches shared state needs to know what a receiver
+holds and what its callees reach; whether it can panic needs the same walk, since a panic hides
+behind any callee. A gate that guessed at either would fail honest code or miss the cases that
+matter, and a wrong gate is worse than a stated gap.
 
 ## Commits, pull requests, prose
 
