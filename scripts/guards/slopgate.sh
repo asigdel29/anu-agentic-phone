@@ -94,18 +94,28 @@ added_lines() {
         ':(exclude)**/weights.json' \
         ':(exclude)scripts/guards/slopgate.sh' |
         awk '
-            /^\+\+\+ / {
+            # `+++ b/path` names a file only before the first hunk of its section.
+            # Inside a hunk the same three characters are an added line whose text
+            # begins with two pluses, and reading that as a header renames the file
+            # to the line content, restarts the numbering, and swallows the line.
+            /^diff --git / {
+                in_hunk = 0
+                path = ""
+                next
+            }
+            /^\+\+\+ / && in_hunk == 0 {
                 path = substr($0, 5)
                 sub(/^b\//, "", path)
                 next
             }
             /^@@ / {
+                in_hunk = 1
                 match($0, /\+[0-9]+/)
                 line = substr($0, RSTART + 1, RLENGTH - 1) + 0
                 next
             }
             /^\+/ {
-                if (path != "/dev/null")
+                if (path != "" && path != "/dev/null")
                     print path ":" line ":" substr($0, 2)
                 line++
             }
