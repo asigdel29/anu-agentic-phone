@@ -56,18 +56,26 @@ readonly ATTRIBUTION='co-authored-by:|generated (with|by) \['
 # F0 9F covers the emoji planes; the three after it are the dingbats that turn up
 # in generated checklists.
 #
-# Read over prose and Markdown only, never over source. Six emoji are already in
-# the tree and every one of them is load-bearing: `WriteFileToolTests.swift:69`
-# and its neighbours feed hostile Unicode through a round trip precisely to prove
-# it survives. An emoji in a commit message is a register; an emoji in a test
+# Read everywhere except program source. Six emoji are already in the tree and
+# every one of them is load-bearing: `WriteFileToolTests.swift:69` and its
+# neighbours feed hostile Unicode through a round trip precisely to prove it
+# survives. An emoji in a commit message is a register; an emoji in a test
 # fixture is the test.
 readonly EMOJI=$'\xf0\x9f|\xe2\x9c\x85|\xe2\x9d\x8c|\xe2\x9a\xa0'
 
-findings=0
+# Program source, where a non-ASCII literal is usually data under test. Everything
+# else carries prose — Markdown, YAML, unit files, shell, the justfile — and none
+# of those end in `.md`, which is all an earlier version of this read. Anchored
+# against the `path:line:text` shape a finding is reported in.
+readonly SOURCE_LINE='^[^:]*\.(rs|swift|py):'
+
+# Every hit from every check. The total is taken over the distinct lines in here,
+# because a line two checks caught is one line to go and read, not two.
+all_hits=''
 
 # Record one check's hits. Takes them as an argument rather than on stdin, so that
-# it runs in this shell and its addition to `findings` survives — a pipeline would
-# put it in a subshell and the count would be lost.
+# it runs in this shell and what it accumulates survives — a pipeline would put it
+# in a subshell and the additions would be lost.
 check() {
     local what="$1"
     local hits="$2"
@@ -78,7 +86,7 @@ check() {
 
     printf '\n%s:\n' "$what"
     printf '%s\n' "$hits" | sed 's/^/  /'
-    findings=$((findings + $(printf '%s\n' "$hits" | wc -l)))
+    all_hits=$(printf '%s\n%s' "$all_hits" "$hits")
 }
 
 # Added lines in the range, as `path:line:text`. Three dots so that commits landing
@@ -87,12 +95,16 @@ check() {
 # -U0 leaves only added and removed lines, so the new-file line number is the
 # hunk's start advanced once per added line; a removed line does not advance it.
 added_lines() {
+    # `top` anchors each pathspec at the repository root. Without it they are read
+    # relative to the working directory, so running this from a subdirectory
+    # excludes nothing — and the first file to stop being excluded is this one,
+    # whose word lists then match themselves.
     git diff --unified=0 --no-color --no-renames "$base...$head" -- \
-        ':(exclude)*.lock' \
-        ':(exclude)**/*.lock' \
-        ':(exclude)**/testdata/**' \
-        ':(exclude)**/weights.json' \
-        ':(exclude)scripts/guards/slopgate.sh' |
+        ':(exclude,top)*.lock' \
+        ':(exclude,top)**/*.lock' \
+        ':(exclude,top)**/testdata/**' \
+        ':(exclude,top)**/weights.json' \
+        ':(exclude,top)scripts/guards/slopgate.sh' |
         awk '
             # `+++ b/path` names a file only before the first hunk of its section.
             # Inside a hunk the same three characters are an added line whose text
@@ -135,27 +147,40 @@ prose_text=$(prose_lines)
 both=$(printf '%s\n%s\n' "$diff_text" "$prose_text")
 
 printf 'slopgate: %s added line(s), %s line(s) of prose\n' \
-    "$(printf '%s' "$diff_text" | grep -c . || true)" \
-    "$(printf '%s' "$prose_text" | grep -c . || true)"
+    "$(printf '%s' "$diff_text" | LC_ALL=C grep -ac . || true)" \
+    "$(printf '%s' "$prose_text" | LC_ALL=C grep -ac . || true)"
+
+# Every check reads with `-a` under LC_ALL=C. A diff carries whatever bytes an
+# added line held, and a stream grep decides is binary is answered with a single
+# "binary file matches" — which `check` would then report as the finding, hiding
+# every real hit in that run behind a line naming nothing.
 
 check 'Marketing register — say the thing instead of describing it' \
-    "$(printf '%s\n' "$both" | grep -iE "$REGISTER" || true)"
+    "$(printf '%s\n' "$both" | LC_ALL=C grep -aiE "$REGISTER" || true)"
 
 check 'Chat-context shorthand — the reader was not in the conversation' \
-    "$(printf '%s\n' "$both" | grep -iE "$SHORTHAND" || true)"
+    "$(printf '%s\n' "$both" | LC_ALL=C grep -aiE "$SHORTHAND" || true)"
 
 check 'Attribution trailer — the repository has one authorial voice' \
-    "$(printf '%s\n' "$both" | grep -iE "$ATTRIBUTION" || true)"
+    "$(printf '%s\n' "$both" | LC_ALL=C grep -aiE "$ATTRIBUTION" || true)"
 
 # A marker naming an issue is a plan; one naming nothing is a note to somebody who
 # has already left.
+#
+# The exclusion starts at the marker and refuses to cross a hash, so it asks
+# whether the marker names an issue rather than whether the line holds a hash
+# followed by a digit anywhere. A colour literal earlier in the line is not an
+# issue number.
 check 'Marker with no issue — name one (#123), or do the work' \
-    "$(printf '%s\n' "$diff_text" | grep -E '\b(TODO|FIXME|HACK|XXX)\b' | grep -v '#[0-9]' || true)"
+    "$(printf '%s\n' "$diff_text" | LC_ALL=C grep -aE '\b(TODO|FIXME|HACK|XXX)\b' |
+        LC_ALL=C grep -avE '\b(TODO|FIXME|HACK|XXX)\b[^#]*#[0-9]+' || true)"
 
-markdown_text=$(printf '%s\n' "$diff_text" | grep -E '^[^:]*\.md:' || true)
+prose_files=$(printf '%s\n' "$diff_text" | LC_ALL=C grep -avE "$SOURCE_LINE" || true)
 
-check 'Emoji in prose — a register, not a decision' \
-    "$(printf '%s\n%s\n' "$markdown_text" "$prose_text" | LC_ALL=C grep -aE "$EMOJI" || true)"
+check 'Emoji outside source — a register, not a decision' \
+    "$(printf '%s\n%s\n' "$prose_files" "$prose_text" | LC_ALL=C grep -aE "$EMOJI" || true)"
+
+findings=$(printf '%s\n' "$all_hits" | LC_ALL=C grep -a . | sort -u | LC_ALL=C grep -ac . || true)
 
 if [ "$findings" -eq 0 ]; then
     printf '\nslopgate: clean\n'
