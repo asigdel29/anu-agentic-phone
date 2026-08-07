@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  PrivacyInfo.xcprivacy — what this app collects, tracks, and reaches for.
+
+  History
+    2026-08-07  A. Sigdel  Created.
+
+  All four lists are deliberately empty and each will stay that way or not for a
+  stated reason.
+
+  Nothing is collected: a conversation goes to the provider because that is what
+  answering it requires, and nowhere else. That is not collection by Apple's
+  definition — no data leaves for this developer — so declaring a data type here
+  would be wrong rather than cautious.
+
+  No accessed-API categories yet. Two are already visible on the way: the file
+  tools will read modification dates, which is NSPrivacyAccessedAPICategoryFileTimestamp,
+  and anything persisting settings brings NSPrivacyAccessedAPICategoryUserDefaults.
+  Adding either before the code that needs it would claim a reason nothing backs.
+  Keychain is not a required-reason API and needs no entry.
+-->
+<plist version="1.0">
+<dict>
+    <key>NSPrivacyTracking</key>
+    <false/>
+    <key>NSPrivacyTrackingDomains</key>
+    <array/>
+    <key>NSPrivacyCollectedDataTypes</key>
+    <array/>
+    <key>NSPrivacyAccessedAPITypes</key>
+    <array/>
+</dict>
+</plist>
