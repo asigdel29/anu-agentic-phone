@@ -98,14 +98,15 @@ now checks for the trailer.
 
 ## Finding out why something is the way it is
 
-In order of how much they carry:
-
-1. **Merged pull request bodies.** The reasoning lives here, and it is better than anything in
-   `docs/`. `gh pr view <n>` — and `gh pr list --state merged --search <term>` when you do not
-   have a number.
-2. **File headers.** Every file opens with its purpose and a history line. `head -20` on a file
+1. **`docs/decisions/INDEX.md`.** Start here. It routes a question — why is a round committed
+   atomically, why does `patch` refuse an ambiguous match — to the pull request that argued it,
+   and holds the records for decisions with no diff to live in.
+2. **Merged pull request bodies.** Where the reasoning actually is, which is why the index
+   points at them rather than restating them. `gh pr view <n>`, or
+   `gh pr list --state merged --search <term>` when the index has no row for your question.
+3. **File headers.** Every file opens with its purpose and a history line. `head -20` on a file
    is usually faster than reading it.
-3. **`docs/`.** The standard, and a decision record for retiring the second coding harness.
+4. **`docs/coding-standard.md`.** What is expected of the code, and which gate decides it.
 
 ## Before you claim something works
 

@@ -23,7 +23,7 @@ the job.
 
 **Hermes Agent** is the thing you talk to, and the only agent here. It holds the conversation,
 keeps long-term memory, and does the coding itself. It used to delegate that to a second
-harness; `docs/coding-harness.md` records why it no longer does.
+harness; `docs/decisions/retiring-the-second-harness.md` records why it no longer does.
 
 **zeromem** is the memory provider. Its point is in the name: indexing and retrieval are
 deterministic, so remembering something costs zero tokens. It keeps raw conversation turns
