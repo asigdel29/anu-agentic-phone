@@ -18,14 +18,10 @@
 # Every check runs even after one has found something, so a contributor sees the
 # whole list in one run. That mirrors run-all.sh, and for the same reason.
 #
-# On the lists: a word is eligible only while this repository's own prose does not
-# already use it. That rule is the whole defence of the list, and applying it cost
-# five candidates — `additionally`, `significant`, `notably`, `unlock` and
-# `landscape` are all in files written here, so none of them can be banned. Re-run
-# that check before adding a word.
-#
-# This file excludes itself from the diff it reads. It has to: a file defining a
-# list of forbidden words necessarily contains every word on it.
+# The words are in slopgate.patterns, which is the one file excluded from the diff
+# this reads, and which explains the rule for adding one. This script is not
+# excluded: it is prose about the register, so it is the last thing that should be
+# exempt from a check on the register.
 
 set -euo pipefail
 
@@ -39,18 +35,17 @@ if [ -z "$base" ]; then
     exit 1
 fi
 
-# Marketing register: words that describe a thing rather than say it.
-readonly REGISTER='leverages?|leveraging|utili[sz]e[sd]?|delve[sd]?|seamless(ly)?|robust|comprehensive|powerful|plethora|myriad|elevates?|boasts|testament|cutting-edge|state-of-the-art|best-in-class|meticulous(ly)?'
-
-# Chat-context shorthand: phrases addressed to a conversation rather than to a
-# reader who was not in it.
-readonly SHORTHAND="it.?s worth noting|as mentioned (above|earlier)|as (we|you) (discussed|saw)|in (summary|conclusion)|deep dive|dive into|at the end of the day|needless to say|ever-evolving|in today.s|game.chang|under the hood|first-class citizen"
-
-# Attribution, matched by shape rather than by name. The standard forbids naming a
-# tool, so a guard that grepped for product names would be the first file here to
-# break the rule it enforces. The robot emoji those trailers carry is left to the
-# emoji check, which keeps this tree free of the character entirely.
-readonly ATTRIBUTION='co-authored-by:|generated (with|by) \['
+# The word lists live beside this file rather than in it. They are the only thing
+# here that must contain the words it rejects, and keeping them separate is what
+# lets the guard read the rest of this script — two hundred lines of prose about
+# the register — instead of exempting it.
+#
+# `here` rather than a path relative to the caller: run-all.sh already resolves
+# its own directory this way, and a guard that only works from the repository root
+# is a guard that fails the first time somebody runs it from anywhere else.
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/guards/slopgate.patterns
+. "$here/slopgate.patterns"
 
 # Emoji as UTF-8 bytes, so the match does not depend on the locale grep was given.
 # F0 9F covers the emoji planes; the three after it are the dingbats that turn up
@@ -68,10 +63,6 @@ readonly EMOJI=$'\xf0\x9f|\xe2\x9c\x85|\xe2\x9d\x8c|\xe2\x9a\xa0'
 # of those end in `.md`, which is all an earlier version of this read. Anchored
 # against the `path:line:text` shape a finding is reported in.
 readonly SOURCE_LINE='^[^:]*\.(rs|swift|py):'
-
-# Markers, named once like every other pattern here. Written out at each use, the
-# two copies could drift — a word boundary fixed in one grep and not the other.
-readonly MARKER='\b(TODO|FIXME|HACK|XXX)\b'
 
 # Every hit from every check. The total is taken over the distinct lines in here,
 # because a line two checks caught is one line to go and read, not two.
@@ -108,7 +99,7 @@ added_lines() {
         ':(exclude,top)**/*.lock' \
         ':(exclude,top)**/testdata/**' \
         ':(exclude,top)**/weights.json' \
-        ':(exclude,top)scripts/guards/slopgate.sh' |
+        ':(exclude,top)scripts/guards/slopgate.patterns' |
         awk '
             # `+++ b/path` names a file only before the first hunk of its section.
             # Inside a hunk the same three characters are an added line whose text
