@@ -80,6 +80,8 @@ for runtime, devices in json.load(sys.stdin)["devices"].items():
         python3 -c '
 import json, sys
 
+import re
+
 catalog = json.load(sys.stdin)
 runtimes = [r for r in catalog["runtimes"]
             if r.get("isAvailable") and r["identifier"].startswith("com.apple.CoreSimulator.SimRuntime.iOS")]
@@ -91,14 +93,24 @@ def order(runtime):
     return [int(part) for part in runtime["version"].split(".") if part.isdigit()]
 
 newest = max(runtimes, key=order)
-supported = {d["identifier"] for d in catalog["devicetypes"]}
-usable = [d for d in catalog["devicetypes"]
-          if d["identifier"] in supported and "iPhone" in d["name"]]
+
+# The runtime says which devices it runs, and that is the only thing that does.
+# The catalogue lists every device type Xcode knows, including ones this runtime
+# refuses — pairing those is a create that fails for a reason neither names.
+usable = [d for d in newest.get("supportedDeviceTypes", []) if "iPhone" in d["name"]]
 if not usable:
     raise SystemExit(1)
 
+# Highest model number, then the shortest name at that number, so "iPhone 17"
+# wins over "iPhone 17 Pro Max". Chosen rather than taken from the list order,
+# which carries no promise: reading it positionally once picked a phone a decade
+# old, and said nothing about having done so.
+def model(device):
+    numbers = [int(n) for n in re.findall(r"\d+", device["name"])]
+    return (max(numbers) if numbers else 0, -len(device["name"]))
+
 print(newest["identifier"])
-print(usable[-1]["identifier"])
+print(max(usable, key=model)["identifier"])
 ')" || {
         cat >&2 <<'EOF'
 No iOS simulator runtime is installed, so there is nothing to create a device on.
