@@ -61,12 +61,7 @@ and `include/module.modulemap` names the module `WattRouterFFI`, which must matc
 target in `ios/Package.swift`. Changing one without the other breaks the import with a message
 naming neither.
 
-**Locks, and a contradiction to be aware of.** `cache.rs:91` and `embed.rs:335` hold one each.
-They are independent, no code path takes both, and `cache.rs` documents one acquisition per
-method rather than an order across two.
-
-`docs/coding-standard.md:140` says otherwise — "There is one order in the router and it is
-stated in `policy.rs`". There is no such statement in `policy.rs`, which says nothing about
-locks at all. The standard describes a design this crate does not have; the paragraph above
-describes the code. If you add a third lock, you are the one who gets to make the standard true,
-and #150 tracks correcting it.
+**Locks.** `cache.rs:91` and `embed.rs:335` hold one each. They are independent, no path takes
+both, and each documents one acquisition per method rather than an order across two. Add a path
+that takes both and you owe it an order, stated where it does — that is what the standard asks
+for, and there is nothing to state until then.
