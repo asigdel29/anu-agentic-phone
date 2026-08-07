@@ -49,6 +49,12 @@ WattRouter`.
 
 ## Saying what ran
 
-`just ios-test` runs the suite on the shared simulator and needs `just ios-core` first. When
-neither could run, say so in the pull request and name what you did instead. "Six checks in a
-scratch package, no simulator" is a claim a reviewer can weigh; "tests pass" is not.
+`just ios-test` runs the suite on the simulator and needs `just ios-core` first. It finds a
+device called `wattrouter-tests` by name and creates it if there is none, so a machine that has
+never run it needs no setup beyond Xcode and one simulator runtime — it says which to install if
+there is none. `WATTROUTER_SIM_NAME` picks a different device, `WATTROUTER_SIM_UDID` pins an
+exact one and never creates.
+
+When neither the build nor the suite could run, say so in the pull request and name what you did
+instead. "Six checks in a scratch package, no simulator" is a claim a reviewer can weigh; "tests
+pass" is not.
