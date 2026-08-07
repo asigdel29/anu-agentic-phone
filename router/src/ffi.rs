@@ -381,6 +381,7 @@ mod tests {
     use super::{Decision, Router, reason_code};
     use crate::backend::Backend;
     use crate::policy::Reason;
+    use crate::testenv::with_env;
     use crate::tier::Tier;
     use std::ffi::{CStr, CString};
 
@@ -397,13 +398,22 @@ mod tests {
     };
 
     /// Build a router as the app would, and free it as the app must.
+    ///
+    /// Holds the crate-wide environment lock for the whole of `body`, not just
+    /// the construction. `wattrouter_new` reads the environment, and so does any
+    /// `Config::from_env` a body makes to compare against — the credential
+    /// vanishing between the two is what failed CI, and a stray
+    /// `WATTROUTER_MODEL_*` from a concurrent test would have been worse, since
+    /// that compares two different configurations and reports a wrong answer
+    /// rather than a missing one.
     fn with_router<T>(body: impl FnOnce(*mut Router) -> T) -> T {
-        unsafe { std::env::set_var("NEURALWATT_API_KEY", "ffi-test") };
-        let router = unsafe { super::wattrouter_new(std::ptr::null()) };
-        assert!(!router.is_null(), "router builds without a head");
-        let out = body(router);
-        unsafe { super::wattrouter_free(router) };
-        out
+        with_env(&[("NEURALWATT_API_KEY", Some("ffi-test"))], || {
+            let router = unsafe { super::wattrouter_new(std::ptr::null()) };
+            assert!(!router.is_null(), "router builds without a head");
+            let out = body(router);
+            unsafe { super::wattrouter_free(router) };
+            out
+        })
     }
 
     fn decide(router: *mut Router, json: &str, pin: Option<&str>, sess: &str) -> Decision {

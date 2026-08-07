@@ -17,6 +17,7 @@
 //!   policy  Choosing a tier from a score and the request's signals.
 //!   upstream  Forwarding a request to the provider.
 //!   tier    The routing tiers: the vocabulary the rest of the router speaks.
+//!   testenv The environment lock the tests share. Test builds only.
 //!
 //! Split from the binary so that each piece can be tested without binding a port
 //! or starting a runtime, and so integration tests can reach the same items the
@@ -43,3 +44,8 @@ pub mod metrics;
 pub mod policy;
 pub mod tier;
 pub mod upstream;
+
+// Not part of the crate's surface: one lock the tests share, so that a module
+// setting a variable cannot fail a module reading one.
+#[cfg(test)]
+mod testenv;

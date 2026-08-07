@@ -251,45 +251,8 @@ fn optional(name: &str) -> Option<String> {
 mod tests {
     use super::{BACKEND_VALUES, Config, ConfigError, optional};
     use crate::backend::Backend;
+    use crate::testenv::with_env;
     use crate::tier::Tier;
-
-    /// Environment variables are process-global; mutating tests share one lock.
-    static ENV: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-    /// Run `body` with `vars` applied, restoring previous values afterwards. A
-    /// leaked variable would silently change whichever test ran next.
-    fn with_env<T>(vars: &[(&str, Option<&str>)], body: impl FnOnce() -> T) -> T {
-        let _guard = ENV
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let saved: Vec<_> = vars
-            .iter()
-            .map(|(k, _)| ((*k).to_owned(), env_get(k)))
-            .collect();
-
-        for (k, v) in vars {
-            set(k, *v);
-        }
-        let out = body();
-        for (k, v) in &saved {
-            set(k, v.as_deref());
-        }
-        out
-    }
-
-    fn env_get(key: &str) -> Option<String> {
-        std::env::var(key).ok()
-    }
-
-    fn set(key: &str, value: Option<&str>) {
-        // Serialised by ENV above; nothing else reads the environment meanwhile.
-        unsafe {
-            match value {
-                Some(v) => std::env::set_var(key, v),
-                None => std::env::remove_var(key),
-            }
-        }
-    }
 
     #[test]
     fn defaults_apply_when_only_the_credential_is_set() {
