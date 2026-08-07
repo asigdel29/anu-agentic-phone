@@ -204,24 +204,39 @@ async fn chat_completions(
             {
                 state.metrics.record_fallback();
             }
-            // Both parts, because the tier alone does not say whether it was
-            // chosen or imposed, and that is the first thing anyone asks.
-            if let Ok(value) =
-                format!("{}; {}", decision.tier.name(), decision.reason.label()).parse()
-            {
-                response.headers_mut().insert("x-wattrouter-tier", value);
-            }
+            report(&mut response, decision);
             response
         }
         Err(e) => {
             state.metrics.record_upstream_failure();
             tracing::error!(error = %e, tier = decision.tier.name(), "every model failed");
-            (
+            // Reported here too. The decision is as true of a failure as of a
+            // success, and which tier failed is the first thing anyone asks of a
+            // 502 — answering it from the logs means still having them.
+            let mut response = (
                 StatusCode::BAD_GATEWAY,
                 Json(json!({"error": {"message": e.to_string(), "type": "upstream_error"}})),
             )
-                .into_response()
+                .into_response();
+            report(&mut response, decision);
+            response
         }
+    }
+}
+
+/// Add the decision to a response, whatever the response says.
+///
+/// Both parts, because the tier alone does not say whether it was chosen or
+/// imposed, and that is the first thing anyone asks. One function rather than a
+/// call on each arm: the format is a small contract with
+/// `scripts/verify-stack.sh` and a second copy of it would be free to drift.
+///
+/// A tier or reason that could not be turned into a header value is dropped
+/// rather than failing the request. Every name is ASCII and none can fail today;
+/// a request lost to a header is a worse outcome than a header lost to a name.
+fn report(response: &mut Response, decision: Decision) {
+    if let Ok(value) = format!("{}; {}", decision.tier.name(), decision.reason.label()).parse() {
+        response.headers_mut().insert("x-wattrouter-tier", value);
     }
 }
 
@@ -450,5 +465,63 @@ mod tests {
                 tier.name()
             );
         }
+    }
+
+    #[tokio::test]
+    async fn a_failed_request_still_reports_its_decision() {
+        // The upstream here refuses connections, so the chain is exhausted and
+        // this takes the error arm. What it must not lose on the way is the
+        // decision: an operator reading a 502 wants to know which tier failed,
+        // and `scripts/verify-stack.sh` reads exactly this header to assert the
+        // routing rules without paying for inference.
+        let body = r#"{"messages":[{"role":"user","content":"hello there"}]}"#;
+        let response = app(test_config(), test_upstream(), None)
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/chat/completions")
+                    .header("content-type", "application/json")
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+        let reported = response
+            .headers()
+            .get("x-wattrouter-tier")
+            .expect("a 502 still names its tier")
+            .to_str()
+            .unwrap();
+        // Both halves, in the shape the verifier parses. Unscored because no head
+        // is loaded, which is the policy's defined path rather than a gap.
+        assert_eq!(reported, "mid; unscored");
+    }
+
+    #[tokio::test]
+    async fn a_pinned_failure_reports_the_pin() {
+        // The reason travels with the tier, so a 502 distinguishes a tier the
+        // router chose from one an operator imposed. Those call for opposite
+        // responses, and the status code alone says neither.
+        let body = r#"{"messages":[{"role":"user","content":"hello there"}]}"#;
+        let response = app(test_config(), test_upstream(), None)
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/chat/completions")
+                    .header("content-type", "application/json")
+                    .header("x-wattrouter-tier", "heavy")
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+        assert_eq!(
+            response.headers().get("x-wattrouter-tier").unwrap(),
+            "heavy; pinned"
+        );
     }
 }
