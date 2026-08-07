@@ -180,7 +180,10 @@ cd "$ROOT/ios"
 
 # Piping xcodebuild straight into grep discards its exit status, which is how a
 # failing suite reads as a passing script. The log decides; grep only formats.
-if xcodebuild test -scheme WattRouter \
+# `WattRouterTests` rather than `WattRouter`: the latter is the scheme the Swift
+# package contributes, and it has no test action, so this asked to run tests
+# through a scheme that cannot and got told so by a message about configuration.
+if xcodebuild test -scheme WattRouterTests \
     -destination "platform=iOS Simulator,id=$UDID" \
     -derivedDataPath "$DERIVED" >"$log" 2>&1; then
     grep -E "Test Case .*passed|Executed [0-9]+ test" "$log" | sort -u

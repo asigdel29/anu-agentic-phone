@@ -68,3 +68,28 @@ targets:
         # later has to be a deliberate edit.
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: false
+
+  # The package's own tests, so they can run on a simulator. Package.swift declares
+  # the same sources as a testTarget, which is what `swift build` uses; this is the
+  # second way in, and it exists because a package test target is not reachable
+  # through the app's scheme, so `xcodebuild test` had nothing to run.
+  #
+  # Hosted in the application, which is not a formality. Most of these exercise the
+  # library and would run anywhere, but the Keychain ones need a keychain, and an
+  # unhosted bundle has no application identifier to own an item — every write
+  # returns false and every read nil, which reads as a broken Keychain wrapper
+  # rather than a missing host. Measured: nine failures without a host, none with.
+  WattRouterTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/WattRouterTests
+    dependencies:
+      - target: WattRouterApp
+      - package: WattRouter
+        product: WattRouter
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        GENERATE_INFOPLIST_FILE: true
