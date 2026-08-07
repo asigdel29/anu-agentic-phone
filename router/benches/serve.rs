@@ -6,9 +6,12 @@
 //! Contents
 //!   `SIZES`         The conversation sizes swept, smallest first.
 //!   `conversation`  A request body of roughly a given size.
+//!   `ROUNDS`        Timed rounds per stage, of which the fastest is reported.
+//!   `quick`         Whether to run the reduced sweep CI uses.
+//!   `check`         Assert a gate, printing either way.
 //!   `bench`         Times one closure and reports nanoseconds per call.
 //!   `bench_async`   The same, inside one runtime rather than one per call.
-//!   `main`          Sweeps every stage across every size.
+//!   `main`          Sweeps every stage across every size, then gates the ratios.
 //!
 //! [`super::decide`] measures the work between reading a body and opening a
 //! socket, and says so. This measures the two stages on either side of that,
@@ -113,6 +116,30 @@ fn conversation(bytes: usize) -> Value {
 /// what makes a regression threshold mean anything.
 const ROUNDS: usize = 5;
 
+/// Whether to run the reduced sweep CI uses.
+///
+/// The gates below are ratios between stages measured in the same run, so they
+/// hold at any sample count; only the noise around them grows. A tenth of the
+/// budget keeps the CI job to a couple of minutes and still leaves every gate
+/// with the margin recorded beside it.
+fn quick() -> bool {
+    std::env::var_os("WATTROUTER_BENCH_QUICK").is_some()
+}
+
+/// Assert a gate, printing either way, and report whether it held.
+///
+/// Prints rather than panicking so one run reports every gate it broke instead
+/// of only the first, which is the difference between one CI round trip and
+/// four.
+#[must_use]
+fn check(name: &str, held: bool, detail: &str) -> bool {
+    println!(
+        "  {:<4} {name:<44} {detail}",
+        if held { "ok" } else { "FAIL" }
+    );
+    held
+}
+
 /// Time `f` and report nanoseconds per call, fastest round.
 ///
 /// `n` is the whole budget, split across [`ROUNDS`], so raising the round count
@@ -197,7 +224,11 @@ async fn main() {
 
     println!("mock upstream at {base}\n");
 
+    // Per size, the three stages the gates below compare.
+    let mut measured: Vec<(f64, f64, f64)> = Vec::with_capacity(SIZES.len());
+
     for (label, bytes, n) in SIZES {
+        let n = if quick() { (n / 10).max(50) } else { n };
         let body = conversation(bytes);
         let encoded = serde_json::to_vec(&body).expect("a body serializes");
         let chain = chain_for(&config, Tier::Mid);
@@ -209,17 +240,18 @@ async fn main() {
         });
 
         let classified = classify(&body, None);
-        bench("classify", n, || {
+        let classify_ns = bench("classify", n, || {
             black_box(classify(black_box(&body), None));
         });
 
-        bench("decide", n, || {
+        let decide_ns = bench("decide", n, || {
             black_box(decide(
                 black_box(&classified.signals),
                 Some(0.6),
                 &thresholds,
             ));
         });
+        measured.push((extract, classify_ns, decide_ns));
 
         // `forward` takes the body by value, so a clone is unavoidable per call.
         // Timed on its own line rather than hidden inside the next one: it is
@@ -257,5 +289,47 @@ async fn main() {
         println!("    {:<34} {clone:>12.0} ns\n", "   of which clone");
     }
 
-    println!("Read the sweep, not one row: the question is which stages grow with the body.");
+    println!("Read the sweep, not one row: the question is which stages grow with the body.\n");
+
+    // Gates, not thresholds. An absolute figure says as much about the machine
+    // as about the code — two runs of this on one idle laptop disagreed by 2.3x
+    // before the fastest-round change, and a shared CI runner is worse. A ratio
+    // between two stages timed in the same run survives that: a slow runner
+    // scales both, so only the code can move them apart.
+    println!("gates");
+    let (first_extract, first_classify, _) = measured[0];
+    let (last_extract, last_classify, _) = measured[measured.len() - 1];
+
+    let extract_growth = last_extract / first_extract;
+    let classify_growth = last_classify / first_classify;
+    // `classify` truncates at MAX_ROUTING_CHARS; `extract` parses everything. So
+    // across a 2500x range of bodies the first must grow far less than the
+    // second. Removing the cap is the change this catches, and it would invert
+    // the two rather than nudge them. Measured at 47x against 765x, a margin of
+    // four over the gate.
+    let mut held = check(
+        "classify grows far less than extract",
+        classify_growth * 4.0 < extract_growth,
+        &format!("{classify_growth:.0}x against {extract_growth:.0}x over the sweep"),
+    );
+
+    // `decide` is pure arithmetic over a handful of fields and measures 1-2ns
+    // against classify's 200ns and up. Anything that made the policy touch the
+    // message list, or allocate, closes that gap long before it reaches parity.
+    for (index, (_, classify_ns, decide_ns)) in measured.iter().enumerate() {
+        held &= check(
+            "decide stays far below classify",
+            decide_ns * 10.0 < *classify_ns,
+            &format!(
+                "{decide_ns:.0}ns against {classify_ns:.0}ns at size {}",
+                index + 1
+            ),
+        );
+    }
+
+    if !held {
+        // Non-zero, or CI reports a broken gate as a passing job.
+        eprintln!("\na performance gate broke; the ratios above say which");
+        std::process::exit(1);
+    }
 }
