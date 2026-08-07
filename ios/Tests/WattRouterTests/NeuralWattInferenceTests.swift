@@ -64,6 +64,54 @@ final class NeuralWattInferenceTests: XCTestCase {
         }
     }
 
+    func testARefusalQuotesWhatTheProviderSaid() async throws {
+        // Without this a 400 is a status and nothing else: every model in the
+        // chain refused, and no way to tell whether the fault was the request, the
+        // credential or the account.
+        StubTransport.script = .init(
+            status: 400, chunks: [#"{"error":{"message":"unknown parameter: temperture"}}"#])
+
+        do {
+            for try await _ in client().complete(asking(), model: "m", maxTokens: nil) {}
+            XCTFail("a 400 is a failure")
+        } catch let error as InferenceError {
+            guard case .rejected(_, let status, let detail) = error else {
+                return XCTFail("a 4xx is a refusal, not \(error)")
+            }
+            XCTAssertEqual(status, 400)
+            XCTAssertTrue(detail.contains("unknown parameter"), detail)
+        }
+    }
+
+    func testAFailureWithNothingToSayStillSaysSo() async throws {
+        // An empty body is common enough — a proxy returning a bare 502 — and
+        // "HTTP 502: " with nothing after it reads like the message was lost.
+        StubTransport.script = .init(status: 502)
+
+        do {
+            for try await _ in client().complete(asking(), model: "m", maxTokens: nil) {}
+            XCTFail("a 502 is a failure")
+        } catch let error as InferenceError {
+            XCTAssertTrue(String(describing: error).contains("no message"), "\(error)")
+        }
+    }
+
+    func testTheRequestNamesTheModelAndAsksForAStream() async throws {
+        StubTransport.script = .init(chunks: ["data: [DONE]\n"])
+        for try await _ in client().complete(asking(), model: "kimi-k3", maxTokens: 256) {}
+
+        let sent = try XCTUnwrap(StubTransport.sent)
+        XCTAssertEqual(sent.headers["Authorization"], "Bearer ios-test")
+
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: sent.body) as? [String: Any])
+        XCTAssertEqual(body["model"] as? String, "kimi-k3")
+        XCTAssertEqual(body["stream"] as? Bool, true)
+        XCTAssertEqual(body["max_tokens"] as? Int, 256)
+        // The classification key is the router's, not the provider's: the decision
+        // it feeds was taken before this call was made.
+        XCTAssertNil(body["x_wattrouter_background"])
+    }
+
     func testTheFirstChunkArrivesLongBeforeTheLast() async throws {
         // The property `upstream.rs` exists to protect, on this side of the wire.
         // Swap `bytes(for:)` for `data(for:)` and this is the only test that

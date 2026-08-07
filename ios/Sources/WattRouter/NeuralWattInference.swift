@@ -52,7 +52,7 @@ public struct NeuralWattInference: Inference {
                 do {
                     let (bytes, response) = try await session.bytes(
                         for: request(conversation, model: model, maxTokens: maxTokens))
-                    try Self.check(response, model: model)
+                    try await Self.check(response, body: bytes, model: model)
 
                     for try await line in bytes.lines {
                         switch try ServerSentEvent.decoding(line) {
@@ -98,8 +98,11 @@ public struct NeuralWattInference: Inference {
     /// chain's to retry, and a client yielding anything at all before this
     /// returns would take that choice away.
     ///
-    /// - Throws: [`InferenceError`] IF the status is not a success.
-    private static func check(_ response: URLResponse, model: String) throws {
+    /// - Throws: [`InferenceError`] IF the status is not a success. The body is
+    ///   read only in that case, and only to quote what the provider said.
+    private static func check(
+        _ response: URLResponse, body: URLSession.AsyncBytes, model: String
+    ) async throws {
         guard let http = response as? HTTPURLResponse else {
             throw InferenceError.unavailable(model: model, detail: "not an HTTP response")
         }
@@ -108,10 +111,37 @@ public struct NeuralWattInference: Inference {
             return
         case .stop:
             throw InferenceError.rejected(
-                model: model, status: http.statusCode, detail: "HTTP \(http.statusCode)")
+                model: model, status: http.statusCode, detail: await explanation(from: body))
         case .retry:
-            throw InferenceError.unavailable(model: model, detail: "HTTP \(http.statusCode)")
+            throw InferenceError.unavailable(
+                model: model, detail: "HTTP \(http.statusCode): \(await explanation(from: body))")
         }
+    }
+
+    /// The start of a failed response's body, where the provider says what was
+    /// wrong. Without it a 400 is a status and nothing else — every model in a
+    /// chain refused, and no way to find out whether the fault was the request,
+    /// the credential, or the account.
+    ///
+    /// Bounded, because this body was already going to be discarded and reading
+    /// all of one to print it is a way to be hurt by an upstream having a bad day.
+    /// A truncated explanation is still an explanation.
+    private static func explanation(
+        from body: URLSession.AsyncBytes, limit: Int = 1024
+    ) async -> String {
+        var collected = Data()
+        do {
+            for try await byte in body {
+                collected.append(byte)
+                if collected.count >= limit { break }
+            }
+        } catch {
+            // A body that failed midway is still the best account available, and
+            // the status was the finding in any case.
+        }
+        let text = String(decoding: collected, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? "no message" : text
     }
 
     private func request(_ conversation: Conversation, model: String, maxTokens: Int?) throws
