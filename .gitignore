@@ -50,3 +50,9 @@ venv/
 # the core — a repository carrying it would carry those bytes again each time.
 ios/WattRouterFFI.xcframework/
 ios/.build/
+
+# The Xcode project, generated from ios/project.yml by `just ios-project`. A
+# checked-in pbxproj is unreviewable under this repository's size limit: it is
+# generated, it reorders itself between Xcode versions, and it conflicts on every
+# parallel change. The spec beside it says the same thing in a file people can read.
+ios/WattRouter.xcodeproj/

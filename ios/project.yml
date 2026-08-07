@@ -1,0 +1,70 @@
+# project.yml — the Xcode project, as a file a person can read.
+#
+# History
+#   2026-08-07  A. Sigdel  Created.
+#
+# Generated into WattRouter.xcodeproj by `just ios-project`, which is why that
+# directory is gitignored. A checked-in project.pbxproj is unreviewable under this
+# repository's size limit: it is generated, it reorders itself between Xcode
+# versions, and it conflicts on every parallel change. This says the same thing in
+# forty lines that can be diffed.
+#
+# The library target stays in Package.swift. Only the app is described here, and
+# it depends on the package next to it, so `swift build` and `scripts/test-ios.sh`
+# keep working untouched.
+
+name: WattRouter
+
+options:
+  bundleIdPrefix: com.getlora
+  # Matches the floor in Package.swift. Two floors that can disagree is a link
+  # error naming neither, so this is the one place either is written.
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+packages:
+  # The package in this directory, by path rather than by URL: it is the same
+  # working copy, so a change to the library is in the app on the next build
+  # without a version to bump.
+  WattRouter:
+    path: .
+
+targets:
+  WattRouterApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+    dependencies:
+      - package: WattRouter
+        product: WattRouter
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.getlora.wattrouter
+        # No asset catalogue yet, so nothing here names an icon. Xcode warns
+        # about that and the warning is correct; an empty appiconset carrying no
+        # image would silence it while changing nothing.
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: "0.1.0"
+        SWIFT_VERSION: "6.0"
+        # The library is built with strict concurrency and the app has to be too,
+        # or an actor mistake surfaces only after the app target is the one
+        # holding state.
+        SWIFT_STRICT_CONCURRENCY: complete
+        ENABLE_USER_SCRIPT_SANDBOXING: true
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: WattRouter
+        # Portrait only for now. A landscape layout is a design decision nobody
+        # has made, and shipping one that was never looked at is worse than not
+        # offering it.
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UILaunchScreen: {}
+        # Nothing here talks to anything but the provider, over HTTPS. The
+        # default already forbids cleartext; this states it so that relaxing it
+        # later has to be a deliberate edit.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: false
