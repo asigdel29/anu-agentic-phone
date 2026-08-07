@@ -39,6 +39,9 @@ public enum TurnEvent: Equatable, Sendable {
     /// about it is the turn loop's, and a walk that dropped it would leave the
     /// model waiting on a result nothing was ever going to produce.
     case toolCall(ToolCall)
+    /// What a tool produced. Never from a walk: the loop above yields this, and
+    /// shares the type so an interface has one stream rather than two.
+    case toolResult(ToolResult)
 }
 
 /// The loop over a tier's models.
