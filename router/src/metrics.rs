@@ -39,6 +39,7 @@ pub struct Metrics {
     cache_hits: AtomicU64,
     fallbacks: AtomicU64,
     upstream_failures: AtomicU64,
+    with_session: AtomicU64,
 }
 
 impl Metrics {
@@ -71,6 +72,16 @@ impl Metrics {
     /// Record that the first model in a chain was not the one that answered.
     pub fn record_fallback(&self) {
         self.fallbacks.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Record that a request named the session it belongs to.
+    ///
+    /// Stickiness is the cache's larger win and it needs that header. Nothing in
+    /// this repository sends one yet, so a zero here is the finding rather than
+    /// the absence of one — and no response can report it, since a request with
+    /// no session and one with a session never seen before route identically.
+    pub fn record_session(&self) {
+        self.with_session.fetch_add(1, Ordering::Relaxed);
     }
 
     /// Record that every model in a chain failed.
@@ -129,6 +140,15 @@ impl Metrics {
                 "Requests for which every model in the chain failed.",
                 &self.upstream_failures,
             ),
+            // Its own series rather than a label on the two families above.
+            // Carrying a session is a property of the request, not of the tier
+            // it reached or the reason it got there, and widening either family
+            // would change its cardinality for every scraper already reading it.
+            (
+                "wattrouter_requests_with_session_total",
+                "Requests that named a session, and so could be made sticky.",
+                &self.with_session,
+            ),
         ] {
             let _ = writeln!(out, "# HELP {name} {help}");
             let _ = writeln!(out, "# TYPE {name} counter");
@@ -172,6 +192,31 @@ mod tests {
             assert!(rendered.contains(&format!("reason=\"{}\"", reason.label())));
         }
         assert!(rendered.contains("wattrouter_cache_hits_total 0"));
+        // The one that starts at zero and is supposed to: today nothing sends a
+        // session, so this reads zero until that is fixed. It has to be present
+        // to say so.
+        assert!(rendered.contains("wattrouter_requests_with_session_total 0"));
+    }
+
+    #[test]
+    fn a_session_is_counted_apart_from_the_tier_it_reached() {
+        // Its own series, so a scraper already reading the two labelled families
+        // does not see their cardinality change under it.
+        let metrics = Metrics::new();
+        metrics.record(Tier::Mid, Reason::Unscored);
+        metrics.record(Tier::Mid, Reason::Unscored);
+        metrics.record_session();
+
+        let rendered = metrics.render();
+        assert!(
+            rendered.contains("wattrouter_requests_with_session_total 1"),
+            "{rendered}"
+        );
+        assert!(rendered.contains("tier=\"mid\"} 2"), "{rendered}");
+        assert!(
+            !rendered.contains("session=\""),
+            "session is a series, not a label: {rendered}"
+        );
     }
 
     #[test]

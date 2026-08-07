@@ -135,12 +135,18 @@ async fn chat_completions(
     let pin = headers
         .get("x-wattrouter-tier")
         .and_then(|v| v.to_str().ok());
-    // Both clients send a session id; without one every request is independent,
-    // which is correct rather than merely tolerated.
+    // Without one every request is independent, which is correct rather than
+    // merely tolerated. Counted because nothing in this repository sends one
+    // today, so stickiness — which `cache.rs` calls the larger win — has never
+    // fired, and a response cannot say so: no session and an unseen session
+    // route identically.
     let session = headers
         .get("x-session-id")
         .and_then(|v| v.to_str().ok())
         .unwrap_or_default();
+    if !session.is_empty() {
+        state.metrics.record_session();
+    }
     let classified = classify(&body, pin);
 
     // Only when a head is loaded and there is something to score. Embedding an
@@ -431,6 +437,49 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(body_json(response).await["status"], "ok");
+    }
+
+    #[tokio::test]
+    async fn only_a_request_naming_a_session_is_counted_as_one() {
+        // The whole point of the counter: it is the only thing that separates a
+        // client reaching the router from a client reaching it carrying a
+        // session, and no response can report that difference.
+        let app = app(test_config(), test_upstream(), None);
+        let body = || Body::from(r#"{"messages":[{"role":"user","content":"hello there"}]}"#);
+
+        // One with, one without. The upstream refuses, so both 502 — which does
+        // not matter here: the header is read before anything is forwarded.
+        for session in [Some("verify-1"), None] {
+            let mut request = Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json");
+            if let Some(id) = session {
+                request = request.header("x-session-id", id);
+            }
+            let _ = app
+                .clone()
+                .oneshot(request.body(body()).unwrap())
+                .await
+                .unwrap();
+        }
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/metrics")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let rendered = String::from_utf8(bytes.to_vec()).unwrap();
+
+        assert!(
+            rendered.contains("wattrouter_requests_with_session_total 1"),
+            "two requests, one session: {rendered}"
+        );
     }
 
     #[tokio::test]
