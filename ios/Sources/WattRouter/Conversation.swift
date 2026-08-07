@@ -127,6 +127,7 @@ public struct Conversation: Codable, Equatable, Sendable {
         messages.append(message)
     }
 
+
     /// The request body `Router.decide` classifies.
     ///
     /// - Parameters:

@@ -11,6 +11,7 @@
 // failing for one cause, and the Rust suite already answers this with a single
 // `with_router` fixture rather than a copy per test.
 
+import Foundation
 import XCTest
 
 @testable import WattRouter
