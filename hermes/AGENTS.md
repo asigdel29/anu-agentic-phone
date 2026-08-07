@@ -23,15 +23,27 @@ and does the applying too.
 
 ## Editing a plugin
 
-`plugin.yaml` carries `name`, and it is the key `plugins.enabled` matches — not the directory.
-They are kept identical so there is one thing to remember, and a rename has to change both.
-Names are underscored because a plugin directory is imported as a Python module.
+`plugin.yaml` carries `name`, and the two plugins here treat it differently — check which kind
+you are editing before assuming a rule.
+
+`session_routing` is matched by `plugins.enabled` in `config.yaml`, and its `name` is the
+directory name, underscored because a plugin directory is imported as a Python module. Renaming
+it means changing the directory, the `name`, and the `config.yaml` entry together.
+
+`neuralwatt` is a model provider and is not listed in `plugins.enabled` at all. Its `name` is
+`neuralwatt-profile` — hyphenated, and deliberately not the directory name. Do not "fix" it to
+match.
 
 State `kind` rather than omitting it. Leaving it out puts the loader through a heuristic that
 guesses whether a plugin is a memory provider, and a guess is not a default.
 
 ## Verifying
 
-There is no test suite here and CI does not lint this directory: `ruff` and `mypy --strict` run
-over `train/` only. A change to a plugin is verified by installing it and running the agent, so
-a pull request touching this directory should say whether that happened. It usually has not.
+There is no test suite here, and what CI does check is narrower than it looks. `yamllint` runs
+unconditionally over the whole repository, so `config.yaml` and both `plugin.yaml` files are
+held to `.yamllint.yml` — 140 columns, no trailing space. Nothing else covers this directory:
+`ruff` and `mypy --strict` are configured for `train/` and skipped entirely today, so no Python
+here is linted or type-checked by anything.
+
+A change to a plugin is verified by installing it and running the agent. A pull request touching
+this directory should say whether that happened. It usually has not.

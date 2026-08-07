@@ -38,21 +38,37 @@ running first.
 
 Two workflows, and they check different things.
 
-`.github/workflows/ci.yml` checks the code. Format is `shfmt`, `yamllint`, `cargo fmt` and
-`ruff format`. Lint is `shellcheck`, `actionlint`, `clippy -D warnings`, `ruff` and
-`mypy --strict`. Test is `cargo test --all-targets` and `pytest`. Then a cross-build for
-`aarch64-unknown-linux-gnu`, a build for `aarch64-apple-ios`, and performance gates.
+`.github/workflows/ci.yml` checks the code, and **most of it is conditional** — the surprising
+property of this pipeline, and the first thing to know about it. A `detect` job probes for
+`router/Cargo.toml` and `train/pyproject.toml` and sets a flag per language; every later step
+carries an `if` on those flags.
+
+`router/Cargo.toml` exists, so the Rust half runs: `cargo fmt --check`, `clippy -D warnings`,
+`cargo test --all-targets`, a cross-build for `aarch64-unknown-linux-gnu`, a build for
+`aarch64-apple-ios`, and performance gates.
+
+**`train/pyproject.toml` does not exist, so the Python half runs over nothing.** `ruff format`,
+`ruff`, `mypy --strict` and `pytest` are all configured and all skipped. `train/` currently
+holds one file, so there is little to check — but a contributor writing Python here and
+trusting CI to catch a type error will not be caught. Adding `train/pyproject.toml` turns all
+four on at once.
+
+`shfmt`, `yamllint`, `shellcheck` and `actionlint` are **not** conditional and run over the
+whole repository, whatever you touched.
 
 `.github/workflows/pr-governance.yml` checks the pull request itself, through
 `scripts/guards/`. Severity lives in `scripts/guards/registry.json` rather than in the
 workflow, so promoting or demoting a guard is a one-line edit reviewed like any other change.
 `hard` fails the job; `advisory` reports and does not.
 
-| Guard | Mode | Rejects |
-|---|---|---|
-| `issue-link` | hard | A pull request referencing no issue. |
-| `pr-size` | hard | A diff over 300 lines, excluding lockfiles and vendored data. |
-| `slopgate` | advisory | Marketing register, chat-context shorthand, attribution trailers, markers naming no issue, emoji in prose. |
+The guards are `issue-link` (a pull request references an issue), `pr-size` (a diff is at most
+300 lines, excluding lockfiles and vendored data) and `slopgate` (added lines, commit messages
+and the pull request text avoid the register of unreviewed prose).
+
+Which of them blocks is **not repeated here**. `registry.json` carries each guard's mode and
+its description, and a second copy in this file would turn a one-line promotion into a two-file
+edit — with the failure mode that this document ends up asserting the opposite of what CI does.
+Read the registry: it is nine lines per guard and it is the truth.
 
 Every guard is an ordinary script taking its inputs from the environment, so it runs by hand:
 
