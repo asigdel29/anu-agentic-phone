@@ -36,6 +36,16 @@ memory:
   provider: zeromem
   write_approval: false
 
+# User plugins are opt-in, and the allow-list is a flat list of names under
+# `enabled`. It was written here as `plugins.<name>.enabled: true`, which
+# `_get_enabled_plugins` does not read: it looks for the `enabled` key, finds a
+# mapping where it wants a list, and returns "nothing enabled". Under that shape
+# neither plugin below would ever have loaded, and nothing would have said so.
 plugins:
-  zeromem:
-    enabled: true
+  enabled:
+    # Adds x-session-id to routed requests, so the router can keep a
+    # conversation on the tier it was raised to instead of re-scoring each turn.
+    - session_routing
+    # Memory. Installed separately by deploy/install-zeromem.sh; naming it here
+    # before it is installed is harmless, since discovery is what gates loading.
+    - zeromem

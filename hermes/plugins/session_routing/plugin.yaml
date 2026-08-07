@@ -1,0 +1,11 @@
+# `name` is the key `plugins.enabled` matches, not the directory — they are kept
+# the same here so there is only one thing to remember. Underscored because a
+# plugin directory is imported as a Python module, and several bundled ones
+# (context_engine, image_gen, cron_providers) already read that way.
+name: session_routing
+# The default, stated rather than omitted: leaving `kind` out puts the loader
+# through a heuristic that guesses whether a plugin is a memory provider.
+kind: standalone
+version: 1.0.0
+description: Sends x-session-id on routed requests, so a follow-up turn keeps its tier.
+author: A. Sigdel
