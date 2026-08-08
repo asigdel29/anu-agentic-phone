@@ -48,6 +48,8 @@ pub mod ffi_memory;
 #[cfg(feature = "git")]
 pub mod git;
 pub mod head;
+#[cfg(feature = "android")]
+pub mod jni;
 #[cfg(feature = "memory")]
 pub mod memory;
 pub mod metrics;

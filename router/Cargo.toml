@@ -32,6 +32,10 @@ git = ["dep:git2"]
 # build should not carry SQLite for a table it never opens. The iOS build turns
 # it on. CI tests it through --all-features.
 memory = ["dep:rusqlite", "dep:zeromem"]
+# Off by default and on only for an Android build. The jni crate compiles
+# anywhere, and a JVM entry point in a board binary is dead weight that also
+# claims something untrue about how the binary is reached.
+android = ["dep:jni"]
 
 [dependencies]
 # rustls throughout, and default features off. The defaults are
@@ -57,6 +61,9 @@ git2 = { version = "0.19", optional = true, default-features = false }
 # reason the cross-build needs it — the system SQLite is not there to link
 # against on an iOS slice.
 rusqlite = { version = "0.32", optional = true, features = ["bundled"] }
+# The JVM's side of the boundary. Header-only in effect: it binds against
+# whatever JNI the runtime provides, so nothing here needs a JDK to build.
+jni = { version = "0.21", optional = true }
 # Pinned by revision rather than by tag: the crate is new and single-author, and
 # an unpinned dependency means the memory layer can change under a rebuild with
 # no signal. The same revision deploy/install-zeromem.sh puts on the board.

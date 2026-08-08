@@ -26,8 +26,14 @@
 static ENV: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 /// A directory that removes itself, so a failing case leaves nothing behind.
+///
+/// Gated on the features whose tests want one. A build with neither — `android`
+/// on its own is one — would otherwise carry it as dead code, and dead code is
+/// denied.
+#[cfg(any(feature = "git", feature = "memory"))]
 pub(crate) struct Scratch(std::path::PathBuf);
 
+#[cfg(any(feature = "git", feature = "memory"))]
 impl Scratch {
     /// A fresh empty directory, named after the case that asked for it.
     ///
@@ -48,6 +54,7 @@ impl Scratch {
     }
 }
 
+#[cfg(any(feature = "git", feature = "memory"))]
 impl Drop for Scratch {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
