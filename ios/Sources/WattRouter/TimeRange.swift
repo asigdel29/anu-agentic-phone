@@ -95,6 +95,25 @@ public struct TimeRange: Equatable, Sendable {
         return "\(shown.string(from: start)) to \(shown.string(from: end)) (\(zone.identifier))"
     }
 
+    /// One written date, as an instant, reading a bare day as its start.
+    ///
+    /// Shared with whatever schedules rather than searches. Those want the same
+    /// three shapes and none of the range rules, and a second copy of the shapes
+    /// is a second thing to keep in step.
+    ///
+    /// - Returns: the instant, and whether it was written as a bare day. A day
+    ///   is midnight, which is right for the start of a search and is a silent
+    ///   mistake for the start of a meeting, so the caller is told rather than
+    ///   left to guess.
+    static func instant(_ written: String, zone: TimeZone = .current) throws -> (
+        date: Date, wasBareDay: Bool
+    ) {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        let date = try instant(written, zone: zone, calendar: calendar, endOfDay: false)
+        return (date, parse("yyyy-MM-dd", written.trimmingCharacters(in: .whitespaces), zone: zone) != nil)
+    }
+
     /// One written date, as an instant.
     ///
     /// Three shapes, because models write all three and accepting one produces a
