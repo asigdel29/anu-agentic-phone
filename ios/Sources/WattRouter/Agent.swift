@@ -94,6 +94,32 @@ public actor Agent {
         }
     }
 
+    /// Run the turn the conversation is already holding.
+    ///
+    /// The same loop as `send` without the append, for a turn that was
+    /// interrupted before it produced anything committable. A round goes in
+    /// atomically, so an interrupted turn leaves the conversation ending at the
+    /// person's own message and re-asking is the same question rather than a
+    /// repair — but sending it again would append that message twice and the
+    /// model would see it twice.
+    ///
+    /// # Rely
+    /// The conversation ends with a message the model has not answered. Calling
+    /// this after a completed turn asks the model to answer its own last reply.
+    public func resume() -> AsyncThrowingStream<TurnEvent, any Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    try await loop(continuation)
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
     /// Rounds, until the model stops asking for tools.
     private func loop(
         _ continuation: AsyncThrowingStream<TurnEvent, any Error>.Continuation
