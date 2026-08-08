@@ -15,5 +15,6 @@ doc-valid-idents = [
     "NeuralWatt",
     "OpenAI",
     "RouteLLM",
+    "SQLite",
     "ZeroMem",
 ]
