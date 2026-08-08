@@ -2,6 +2,8 @@
  *
  * History
  *   2026-08-06  A. Sigdel  Created.
+ *   2026-08-08  A. Sigdel  Declared the git half, which allocates and so needs a
+ *                          way to give the allocation back.
  *
  * Contents
  *   wattrouter            A router; opaque.
@@ -12,8 +14,16 @@
  *   wattrouter_tier_name  The name behind a tier code.
  *   wattrouter_reason_name  The name behind a reason code.
  *   wattrouter_backend_name  The name behind a backend code.
+ *   wattrouter_git_head      Where a repository's HEAD points.
+ *   wattrouter_string_free   Release what the git half returned.
  *
- * Hand-written rather than generated: the surface is nine functions and one
+ * The git half is compiled only into a build with the `git` feature, and the
+ * board's is not one — it has a shell and does not need libgit2 in a process
+ * that would never call it. One header describes both builds, so calling these
+ * without the feature is a link error naming the symbol, which is the failure
+ * worth having. `scripts/build-ios-core.sh` turns it on: a phone has no shell.
+ *
+ * Hand-written rather than generated: the surface is eleven functions and one
  * struct, and a generator would cost more to keep in the build than it saves.
  * A hand-written header can drift from the library it describes, though, and a
  * mismatch here is a wrong answer rather than a link error — so the test
@@ -135,6 +145,29 @@ const char *wattrouter_reason_name(uint8_t reason);
  * Returns a static string the caller must not free, or NULL IF `backend` names
  * no backend — which includes WATTROUTER_FAILED. */
 const char *wattrouter_backend_name(uint8_t backend);
+
+/* Every git call answers with one JSON envelope — {"ok": …} with the operation's
+ * result, or {"error": "…"} with why it could not be done. The refusals are
+ * written for the model to act on rather than for a caller to classify, so they
+ * cross as text; a caller switches on which key is present.
+ *
+ * A returned string is owned by the caller and released with
+ * wattrouter_string_free, never with free: Rust allocated it and the two
+ * allocators need not be the same one.
+ */
+
+/* Where HEAD points.
+ *
+ * `ok` carries a `kind` of "branch", "detached" or "unborn", and the name or
+ * commit behind it. Unborn is a repository with no commits yet, which libgit2
+ * reports as a failure and this does not: it is the state an agent most often
+ * finds on a repository it has just made.
+ *
+ * Returns an owned string, or NULL IF `path` was NULL or not UTF-8. */
+char *wattrouter_git_head(const char *path);
+
+/* Release a string returned by the git half. NULL is accepted and ignored. */
+void wattrouter_string_free(char *text);
 
 #ifdef __cplusplus
 } /* extern "C" */

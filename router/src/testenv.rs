@@ -2,9 +2,12 @@
 //!
 //! History
 //!   2026-08-07  A. Sigdel  Created, from the lock that lived in config's tests.
+//!   2026-08-08  A. Sigdel  Took in `Scratch`, which `ffi_git` needs as well as
+//!                          `git`, for the reason the lock is here.
 //!
 //! Contents
 //!   `with_env`  Run a body with variables applied, holding the crate-wide lock.
+//!   `Scratch`   A directory that removes itself.
 //!
 //! Environment variables are process-global and the lib tests share one process,
 //! so a test that sets one races every test that reads one. `config` knew this
@@ -21,6 +24,35 @@
 
 /// The one lock. Anything reading or writing the environment in a test holds it.
 static ENV: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// A directory that removes itself, so a failing case leaves nothing behind.
+pub(crate) struct Scratch(std::path::PathBuf);
+
+impl Scratch {
+    /// A fresh empty directory, named after the case that asked for it.
+    ///
+    /// # Arguments
+    /// * `name` — WHERE `name` is unique across the crate's tests. They share one
+    ///   process and run in parallel, so two cases naming theirs the same get one
+    ///   directory between them and fail each other.
+    pub(crate) fn new(name: &str) -> Self {
+        let path = std::env::temp_dir().join(format!("wattrouter-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&path);
+        std::fs::create_dir_all(&path).expect("could not make a scratch directory");
+        Self(path)
+    }
+
+    /// Where it is.
+    pub(crate) fn path(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
 
 /// Run `body` with `vars` applied, restoring previous values afterwards.
 ///
