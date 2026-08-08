@@ -141,9 +141,28 @@ if [ -z "$UDID" ]; then
     exit 1
 fi
 
+# A lock whose owner is gone is not a lock. The pid was already being recorded for
+# exactly this, and only ever read back to print in the message after two minutes
+# of waiting for a process that had already exited.
+if [ -d "$LOCK" ]; then
+    owner="$(cat "$LOCK/pid" 2>/dev/null || true)"
+    if [ -z "$owner" ] || ! kill -0 "$owner" 2>/dev/null; then
+        printf 'clearing a lock left by pid %s, which is gone\n' "${owner:-unknown}" >&2
+        rm -rf "$LOCK"
+    fi
+fi
+
+# Booted and owned is somebody's session. Booted and unowned is what a killed run
+# leaves behind, and refusing that protects a process that no longer exists —
+# which cost two invocations the first time a run here was timed out and killed.
 if xcrun simctl list devices booted | grep -q "$UDID"; then
-    printf 'simulator is already booted; another agent may be driving it\n' >&2
-    exit 2
+    if [ -d "$LOCK" ]; then
+        printf 'simulator is booted and pid %s holds the lock; leaving it alone\n' \
+            "$(cat "$LOCK/pid" 2>/dev/null || echo unknown)" >&2
+        exit 2
+    fi
+    printf 'simulator was left booted by a run that did not finish; shutting it down\n' >&2
+    xcrun simctl shutdown "$UDID" 2>/dev/null || true
 fi
 
 waited=0
