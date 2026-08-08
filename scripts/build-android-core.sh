@@ -99,10 +99,12 @@ export AR_aarch64_linux_android="$BIN/llvm-ar"
 export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$CC_aarch64_linux_android"
 
 printf 'building %s\n' "$TARGET"
-# --features git,memory for the reason build-ios-core.sh has them: a phone has no
-# shell and cannot afford the ONNX embedder, whichever phone it is.
+# git and memory for the reason build-ios-core.sh has them: a phone has no shell
+# and cannot afford the ONNX embedder, whichever phone it is. android for the JNI
+# entry points, which is the half iOS does not want — it links the archive
+# directly and has no JVM to be reached from.
 cargo rustc --manifest-path "$MANIFEST" --target "$TARGET" \
-    --release --lib --no-default-features --features git,memory \
+    --release --lib --no-default-features --features git,memory,android \
     --crate-type cdylib
 
 mkdir -p "$OUT/$ABI"
