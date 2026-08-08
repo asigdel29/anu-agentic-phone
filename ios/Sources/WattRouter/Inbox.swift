@@ -28,6 +28,22 @@ import Foundation
 
 /// What another app handed in.
 public struct Inbox: Sendable {
+    /// The App Group both halves share.
+    ///
+    /// Written once here rather than in each target's entitlements *and* in the
+    /// code that reads them, which is two places to get one string right.
+    public static let group = "group.com.getlora.wattrouter"
+
+    /// Where the shared container is, or `nil` when the group is not
+    /// provisioned.
+    ///
+    /// Nil is the honest answer and both halves have to act on it. An extension
+    /// that silently writes nowhere loses somebody's text; an app that silently
+    /// reads nowhere shows nothing and looks correct.
+    public static var container: URL? {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group)
+    }
+
     /// Where both processes can reach. On a phone this is the App Group
     /// container; in a test it is a temporary directory, which is the whole
     /// reason it is a parameter.
