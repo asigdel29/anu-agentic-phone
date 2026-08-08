@@ -216,6 +216,12 @@ jobs:
   # --lib --no-default-features is the build an app takes. It calls the decision
   # core, never the server, and the default features drag ONNX Runtime in behind
   # them for an embedder the app does not use — 156 MB of archive against 42.
+  #
+  # --features git matches scripts/build-ios-core.sh, and the point is that it
+  # matches: a phone has no shell, so the app is the one build that turns git on.
+  # Without it here this job compiles a library the app does not ship, and a
+  # break in the git half reaches a developer running `just ios-core` rather than
+  # the push that caused it.
   ios-build:
     name: Build (aarch64-apple-ios)
     needs: detect
@@ -231,7 +237,8 @@ jobs:
         run: |
           set -euo pipefail
           cargo build --manifest-path router/Cargo.toml \
-            --target aarch64-apple-ios --release --lib --no-default-features
+            --target aarch64-apple-ios --release --lib \
+            --no-default-features --features git
 
       # A test in ffi.rs proves the header names what the library exports. It
       # cannot prove the header is valid C, because nothing in a Rust build ever
