@@ -101,6 +101,16 @@ targets:
 # suite reads as nine broken assertions about the Keychain, and the cause is a
 # scheme that did not build one target.
 schemes:
+  # Naming any scheme here stops XcodeGen inventing the rest, so the application
+  # needs one too — it had one by default until this block existed, and lost it
+  # silently because nothing built it by name until the app grew a second screen.
+  WattRouterApp:
+    build:
+      targets:
+        WattRouterApp: all
+    run:
+      config: Debug
+
   WattRouterTests:
     build:
       targets:
