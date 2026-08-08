@@ -29,6 +29,15 @@ public struct ConversationView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
+            // Above the transcript rather than below it: it describes the round
+            // being answered, and a person watching text arrive is looking at the
+            // top of the newest answer, not the bottom of the screen.
+            if let routing = driver.routing {
+                RoutingPanel(decision: routing.decision, chain: routing.chain)
+                Rectangle()
+                    .fill(Theme.cyan.color.opacity(0.25))
+                    .frame(height: 1)
+            }
             rows
             composer
         }

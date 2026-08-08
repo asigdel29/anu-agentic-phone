@@ -128,13 +128,16 @@ public actor Agent {
         guard let decision = router.decide(body: conversation.requestBody(), session: session)
         else { throw AgentError.cannotDecide }
 
+        let chain = router.chain(for: decision.tier)
+        continuation.yield(.decided(decision, chain: chain))
+
         var text = ""
         var calls: [ToolCall] = []
-        for try await event in walk.complete(conversation, following: router.chain(for: decision.tier)) {
+        for try await event in walk.complete(conversation, following: chain) {
             switch event {
             case .text(let chunk): text += chunk
             case .toolCall(let call): calls.append(call)
-            case .answering, .toolResult: break
+            case .answering, .toolResult, .decided: break
             }
             continuation.yield(event)
         }
