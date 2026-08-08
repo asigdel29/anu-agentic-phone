@@ -15,11 +15,11 @@ import XCTest
 
 final class RepositoryTests: XCTestCase {
     private func head(_ json: String) throws -> GitHead {
-        try GitAnswer<GitHead>.value(from: Data(json.utf8))
+        try CoreAnswer<GitHead>.value(from: Data(json.utf8), failing: GitError.self)
     }
 
     private func status(_ json: String) throws -> GitStatus {
-        try GitAnswer<GitStatus>.value(from: Data(json.utf8))
+        try CoreAnswer<GitStatus>.value(from: Data(json.utf8), failing: GitError.self)
     }
 
     func testEachHeadKindArrivesAsItsOwnCase() throws {
@@ -84,7 +84,7 @@ final class RepositoryTests: XCTestCase {
     func testACommitIdArrivesAsAStringRatherThanAnObject() throws {
         // The one entry point whose ok is a scalar, so the envelope is exercised
         // against something other than a keyed container.
-        let id = try GitAnswer<String>.value(from: Data(#"{"ok":"a1b2c3d"}"#.utf8))
+        let id = try CoreAnswer<String>.value(from: Data(#"{"ok":"a1b2c3d"}"#.utf8), failing: GitError.self)
         XCTAssertEqual(id, "a1b2c3d")
     }
 

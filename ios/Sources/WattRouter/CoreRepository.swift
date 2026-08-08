@@ -85,6 +85,7 @@ public struct CoreRepository: Repository {
     ) throws(GitError) -> Value {
         guard let returned else { throw .unanswered }
         defer { wattrouter_string_free(returned) }
-        return try GitAnswer<Value>.value(from: Data(String(cString: returned).utf8))
+        return try CoreAnswer<Value>.value(
+            from: Data(String(cString: returned).utf8), failing: GitError.self)
     }
 }
