@@ -141,6 +141,18 @@ public actor Agent {
             }
             continuation.yield(event)
         }
+
+        // A cancelled walk ends without throwing, so text that stopped partway
+        // arrives here looking exactly like an answer that finished. Committing
+        // it would put a truncated assistant turn in the conversation and, with
+        // no tool calls on it, end the loop as though the model were done — and
+        // the next turn would be sent a reply the model never gave.
+        //
+        // The atomicity in #149 is about a tool throwing mid-round. This is the
+        // other way a round can stop, and it has to reach the same place: nothing
+        // committed.
+        try Task.checkCancellation()
+
         return (text, calls)
     }
 }
