@@ -7,6 +7,8 @@
     2026-08-07  A. Sigdel  Created.
     2026-08-08  A. Sigdel  Argued the calendar, which is the first thing read off
                            the phone rather than out of the conversation.
+    2026-08-08  A. Sigdel  Recorded that reminders are the same argument, and why
+                           that is worth writing rather than assuming.
 
   All four lists are deliberately empty and each will stay that way or not for a
   stated reason.
@@ -32,6 +34,13 @@
   the device, or analyses a turn for a purpose other than answering it. None
   exists, and the first one to be proposed is the point at which this list gains
   an entry rather than this paragraph gaining a sentence.
+
+  Reminders are that argument a second time and reach the same end, and the point
+  of writing it down is that reaching the same end is not automatic. Each thing
+  read off the phone gets asked separately whether it goes anywhere this
+  paragraph does not cover — the honest answer for reminders is no, and the day
+  one of them answers yes is the day this file changes rather than the day
+  somebody notices it did not.
 
   No accessed-API categories yet. Two are already visible on the way: the file
   tools will read modification dates, which is NSPrivacyAccessedAPICategoryFileTimestamp,

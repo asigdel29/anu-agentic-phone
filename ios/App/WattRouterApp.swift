@@ -88,6 +88,12 @@ struct RootView: View {
             // the compiler cannot check.
             let permission = Permission(EventKitAuthorizer())
             let calendars = EventKitCalendars()
+            // A third store, on the same reasoning as the second: EKEventStore
+            // is not Sendable, and one shared between two actors is a value in
+            // two isolation domains. Reminders and events are separate
+            // capabilities anyway, so a person may grant one and refuse the
+            // other, and each connection is scoped to what was granted.
+            let reminders = EventKitReminders()
 
             // Stateless, so one instance and no lifetime to manage. The three git
             // tools go in together: a git that reads and cannot commit is a half
@@ -108,6 +114,7 @@ struct RootView: View {
                 TodoTool(),
                 ReadCalendarTool(calendars: calendars, permission: permission),
                 AddEventTool(calendars: calendars, permission: permission),
+                ReadRemindersTool(reminders: reminders, permission: permission),
                 GitStatusTool(repository: git, workspace: workspace),
                 GitAddTool(repository: git, workspace: workspace),
                 GitCommitTool(repository: git, workspace: workspace),
