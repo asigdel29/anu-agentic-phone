@@ -143,4 +143,42 @@ final class TranscriptTests: XCTestCase {
 
         XCTAssertEqual(transcript.rows, before)
     }
+
+    func testARoundThatOnlyCallsAToolLeavesNoEmptyAnswer() {
+        // The most common shape of turn there is: the model calls a tool before
+        // it says anything. Opening a row when the model announces itself leaves
+        // a blank bubble attributed to it, above the tool that ran.
+        var transcript = Transcript()
+        transcript.said("what does notes.txt say")
+        transcript.apply(.answering(model: "kimi", backend: .remote))
+        transcript.apply(.toolCall(call("read_file")))
+        transcript.apply(.toolResult(ToolResult(id: "call-1", content: "forty two")))
+        transcript.apply(.answering(model: "kimi", backend: .remote))
+        transcript.apply(.text("it says forty two"))
+
+        XCTAssertEqual(
+            transcript.rows,
+            [
+                .said(id: 0, text: "what does notes.txt say"),
+                .used(id: 1, tool: "read_file", result: "forty two"),
+                .answered(id: 2, model: "kimi", text: "it says forty two"),
+            ])
+    }
+
+    func testAModelThatNeverSpeaksIsNotAttributedToTheNextAnswer() {
+        // The model is remembered rather than written down, so whatever ends the
+        // round without a word has to forget it — or the next answer is credited
+        // to a model that said nothing.
+        var transcript = Transcript()
+        transcript.apply(.answering(model: "kimi", backend: .remote))
+        transcript.failed("the connection went away")
+        transcript.apply(.text("later, from somewhere else"))
+
+        XCTAssertEqual(
+            transcript.rows,
+            [
+                .failed(id: 0, reason: "the connection went away"),
+                .answered(id: 1, model: nil, text: "later, from somewhere else"),
+            ])
+    }
 }

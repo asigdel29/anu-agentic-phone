@@ -2,6 +2,7 @@
 //
 // History
 //   2026-08-07  A. Sigdel  Created.
+//   2026-08-08  A. Sigdel  A model announcing itself no longer opens a row.
 //
 // Contents
 //   TranscriptRow  One thing on screen.
@@ -69,6 +70,7 @@ public struct Transcript: Equatable, Sendable {
     /// model's text to the last one's paragraph.
     public mutating func said(_ text: String) {
         openAnswer = nil
+        pendingModel = nil
         rows.append(.said(id: take(), text: text))
     }
 
@@ -76,14 +78,16 @@ public struct Transcript: Equatable, Sendable {
     public mutating func apply(_ event: TurnEvent) {
         switch event {
         case .answering(let model, _):
-            // A model announcing itself opens an answer, or names one that text
-            // already opened. `ChainWalk` sends this before any text, but a
-            // fragment arriving first is not worth losing.
+            // Names an answer that text already opened, and otherwise opens
+            // nothing. `ChainWalk` sends this when a model starts serving a
+            // round, which is before it is known whether the round will say
+            // anything — and a round that only calls a tool would leave the row
+            // it opened empty, so a person sees a blank bubble attributed to a
+            // model above the tool that ran.
             if let index = openAnswer, case .answered(let id, _, let text) = rows[index] {
                 rows[index] = .answered(id: id, model: model, text: text)
             } else {
-                openAnswer = rows.count
-                rows.append(.answered(id: take(), model: model, text: ""))
+                pendingModel = model
             }
 
         case .text(let fragment):
@@ -91,13 +95,15 @@ public struct Transcript: Equatable, Sendable {
                 rows[index] = .answered(id: id, model: model, text: text + fragment)
             } else {
                 openAnswer = rows.count
-                rows.append(.answered(id: take(), model: nil, text: fragment))
+                rows.append(.answered(id: take(), model: pendingModel, text: fragment))
+                pendingModel = nil
             }
 
         case .toolCall(let call):
             // Closes the answer: text after a call belongs to the next round, and
             // appending it to the paragraph before would read as one thought.
             openAnswer = nil
+            pendingModel = nil
             rows.append(.used(id: take(), tool: call.name, result: nil))
 
         case .decided:
@@ -124,6 +130,7 @@ public struct Transcript: Equatable, Sendable {
     /// leaving again should not stack up notices about the same stopped turn.
     public mutating func interrupted() {
         openAnswer = nil
+        pendingModel = nil
         if case .interrupted = rows.last { return }
         rows.append(.interrupted(id: take()))
     }
@@ -145,11 +152,19 @@ public struct Transcript: Equatable, Sendable {
     /// Record why the turn stopped, leaving everything already shown in place.
     public mutating func failed(_ reason: String) {
         openAnswer = nil
+        pendingModel = nil
         rows.append(.failed(id: take(), reason: reason))
     }
 
     /// Index into `rows` of the answer still being written, if any.
     private var openAnswer: Int?
+
+    /// The model that announced itself and has not said anything yet.
+    ///
+    /// Held rather than written into a row, so a round that turns out to be only
+    /// a tool call leaves nothing behind. Cleared by the first fragment it
+    /// names, and by anything that ends the round without one.
+    private var pendingModel: String?
 
     private mutating func take() -> Int {
         defer { nextID += 1 }
