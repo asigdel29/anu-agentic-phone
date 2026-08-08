@@ -99,4 +99,34 @@ final class EventKitRemindersTests: XCTestCase {
         let ordered = EventKitReminders.ordered([reminder("b"), reminder("a"), reminder("c")])
         XCTAssertEqual(ordered.map(\.title), ["a", "b", "c"])
     }
+
+    func testTheWordAndTheFrameworksNumberRoundTrip() {
+        // A priority written to the store and read back has to be the same word.
+        // The middle of each band rather than an edge is what makes that true.
+        for word in Reminder.Priority.allCases {
+            XCTAssertEqual(
+                Reminder.Priority.read(EventKitReminders.raw(word)), word, "\(word)")
+        }
+    }
+
+    func testADayGoesBackInAsComponentsWithNoTime() {
+        let utc = TimeZone(identifier: "UTC")!
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = utc
+        let day = calendar.date(from: DateComponents(year: 2026, month: 8, day: 9))!
+
+        let asDay = EventKitReminders.components(for: day, isAllDay: true, zone: utc)
+        XCTAssertNil(asDay?.hour)
+        XCTAssertEqual(asDay?.day, 9)
+
+        // And an instant keeps its time, or the round trip loses it.
+        let asInstant = EventKitReminders.components(for: day, isAllDay: false, zone: utc)
+        XCTAssertEqual(asInstant?.hour, 0)
+    }
+
+    func testNoDueDateBecomesNoComponentsAtAll() {
+        // Not components-with-nothing-set, which EventKit reads as a due date.
+        XCTAssertNil(
+            EventKitReminders.components(for: nil, isAllDay: false, zone: .current))
+    }
 }

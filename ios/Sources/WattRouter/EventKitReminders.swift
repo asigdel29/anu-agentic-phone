@@ -102,6 +102,76 @@ public actor EventKitReminders: Reminders {
         return Self.ordered(Self.within(dueBefore, found))
     }
 
+    /// The components a due date goes back in as.
+    ///
+    /// The inverse of [`due(from:zone:)`], and the reason a `Reminder` carries
+    /// `isAllDay` at all. A day stored with an hour is due at midnight and reads
+    /// as overdue by breakfast; a day stored without one is due that day, which
+    /// is what somebody saying "remind me on Friday" meant.
+    ///
+    /// - Returns: `nil` where there is no due date, which is the ordinary case.
+    static func components(for due: Date?, isAllDay: Bool, zone: TimeZone) -> DateComponents? {
+        guard let due else { return nil }
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        let wanted: Set<Calendar.Component> =
+            isAllDay ? [.year, .month, .day] : [.year, .month, .day, .hour, .minute]
+        return calendar.dateComponents(wanted, from: due)
+    }
+
+    /// # Rely
+    /// The reminders capability has been obtained.
+    public func add(_ reminder: Reminder) async throws -> String {
+        let target = try writable(named: reminder.list)
+
+        let fresh = EKReminder(eventStore: store)
+        fresh.title = reminder.title
+        fresh.notes = reminder.notes
+        fresh.calendar = target
+        fresh.dueDateComponents = Self.components(
+            for: reminder.due, isAllDay: reminder.isAllDay, zone: TimeZone.current)
+        fresh.priority = Self.raw(reminder.priority)
+
+        try store.save(fresh, commit: true)
+        return target.title
+    }
+
+    /// The framework's integer for a word.
+    ///
+    /// The middle of each band rather than its edge, so a value written here and
+    /// read back by [`Reminder.Priority.read`] is the same word — which is not
+    /// true of every number in the band.
+    static func raw(_ priority: Reminder.Priority) -> Int {
+        switch priority {
+        case .none: 0
+        case .high: 1
+        case .medium: 5
+        case .low: 9
+        }
+    }
+
+    /// Which list to put it on.
+    ///
+    /// An unmatched name is refused rather than quietly redirected, as
+    /// `EventKitCalendars` refuses one: a work reminder silently filed under
+    /// Personal is a mistake somebody finds later, and the model can retry with
+    /// a name from the list it is given.
+    private func writable(named asked: String) throws -> EKCalendar {
+        let usable = store.calendars(for: .reminder).filter(\.allowsContentModifications)
+
+        guard !asked.isEmpty else {
+            guard let fallback = store.defaultCalendarForNewReminders() ?? usable.first else {
+                throw EventKitError.nowhereToWrite
+            }
+            return fallback
+        }
+        guard let match = usable.first(where: { $0.title == asked }) else {
+            throw EventKitError.noSuchCalendar(asked: asked, available: usable.map(\.title))
+        }
+        return match
+    }
+
     /// One reminder, as this app's type.
     private static func read(_ reminder: EKReminder, zone: TimeZone) -> Reminder {
         let (due, isAllDay) = due(from: reminder.dueDateComponents, zone: zone)

@@ -15,15 +15,26 @@ import Foundation
 actor StubReminders: Reminders {
     private(set) var reads = 0
     private(set) var cutoffs: [Date?] = []
+    private(set) var added: [Reminder] = []
     private let answer: [Reminder]
+    private let lands: String
 
-    init(_ answer: [Reminder] = []) {
+    init(_ answer: [Reminder] = [], lands: String = "Personal") {
         self.answer = answer
+        self.lands = lands
     }
 
     func outstanding(dueBefore: Date?) async throws -> [Reminder] {
         reads += 1
         cutoffs.append(dueBefore)
         return answer
+    }
+
+    func add(_ reminder: Reminder) async throws -> String {
+        added.append(reminder)
+        // Deliberately not the list it was asked for. Where a reminder landed and
+        // where it was aimed are different things, and a stub returning the
+        // argument cannot tell whether the tool says the right one.
+        return lands
     }
 }
