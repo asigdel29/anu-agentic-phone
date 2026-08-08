@@ -8,8 +8,7 @@
 //!   `wattrouter_memory_open`     Bound it, then open it.
 //!   `wattrouter_memory_free`     Release it.
 //!   `wattrouter_memory_remember` Put a turn in.
-//!
-//! Recall joins this file next, on the lock `remember` already takes.
+//!   `wattrouter_memory_recall`   Ask it something.
 //!
 //! Opening is where the horizon runs. `ZeroMem::open` loads and indexes every
 //! turn, so bounding afterwards is bounding it after paying for it —
@@ -149,6 +148,43 @@ pub unsafe extern "C" fn wattrouter_memory_remember(
     })
 }
 
+/// Ask the store something.
+///
+/// # Arguments
+/// * `top_k` — how many pieces of evidence to return, WHERE `0` takes zeromem's
+///   own default rather than returning nothing.
+///
+/// # Returns
+/// An owned JSON string to pass to `wattrouter_string_free`, carrying `ok` with
+/// the route taken and the evidence found, or `error`. Null on the terms
+/// [`wattrouter_memory_remember`] states.
+///
+/// # Safety
+/// As [`wattrouter_memory_remember`].
+///
+/// # Atomic
+/// Serialised on the store's lock, which `remember` also takes: recall reads the
+/// index that ingest mutates.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wattrouter_memory_recall(
+    memory: *const Memory,
+    query: *const c_char,
+    top_k: usize,
+) -> *mut c_char {
+    guarded(|| {
+        let (Some(memory), Some(query)) = (unsafe { memory.as_ref() }, unsafe { borrowed(query) })
+        else {
+            return std::ptr::null_mut();
+        };
+
+        rendered(memory.with(|store| {
+            store
+                .query(query, (top_k > 0).then_some(top_k))
+                .map_err(|why| Failed::Store(why.to_string()))
+        }))
+    })
+}
+
 impl Memory {
     /// Run `body` against the store, holding its lock.
     ///
@@ -236,6 +272,49 @@ mod tests {
     }
 
     #[test]
+    fn what_went_in_comes_back_out() {
+        // The round trip, through C both ways. Recall returns evidence rather
+        // than an answer, which is what the tool above it will render.
+        with_store("ffi-memory-roundtrip", 100, |store| {
+            remember(store, "the spare key is with Dave next door", 1);
+
+            let query = CString::new("where is the spare key").unwrap();
+            let found =
+                answer(unsafe { super::wattrouter_memory_recall(store, query.as_ptr(), 5) });
+
+            let evidence = found["ok"]["evidence"].as_array().expect("evidence");
+            assert!(!evidence.is_empty(), "recalled nothing: {found}");
+            assert!(
+                evidence[0]["text"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .contains("spare key"),
+                "recalled the wrong turn: {found}"
+            );
+        });
+    }
+
+    #[test]
+    fn a_top_k_of_zero_takes_the_default_rather_than_returning_nothing() {
+        // Zero is what a caller sends when it has no opinion, and an unchecked
+        // `Some(0)` would answer every question with silence.
+        with_store("ffi-memory-topk", 100, |store| {
+            remember(store, "the bins go out on Tuesday", 1);
+
+            let query = CString::new("bins").unwrap();
+            let found =
+                answer(unsafe { super::wattrouter_memory_recall(store, query.as_ptr(), 0) });
+            assert!(
+                !found["ok"]["evidence"]
+                    .as_array()
+                    .expect("evidence")
+                    .is_empty(),
+                "zero was read as none: {found}"
+            );
+        });
+    }
+
+    #[test]
     fn hostile_input_returns_a_value_rather_than_unwinding() {
         // A panic across the boundary is undefined behaviour, and so is a bad free.
         assert!(unsafe { super::wattrouter_memory_open(std::ptr::null(), 10) }.is_null());
@@ -244,5 +323,6 @@ mod tests {
         let t = CString::new("x").unwrap();
         let (p, n) = (t.as_ptr(), std::ptr::null());
         assert!(unsafe { super::wattrouter_memory_remember(n, p, p, p, 1) }.is_null());
+        assert!(unsafe { super::wattrouter_memory_recall(n, p, 1) }.is_null());
     }
 }

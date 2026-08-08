@@ -21,6 +21,7 @@
  *   wattrouter_string_free   Release what an allocating call returned.
  *   wattrouter_memory_open/free  A memory store's lifetime.
  *   wattrouter_memory_remember   Putting a turn in.
+ *   wattrouter_memory_recall     Asking it something.
  *
  * The git half is compiled only into a build with the `git` feature, and the
  * board's is not one — it has a shell and does not need libgit2 in a process
@@ -31,7 +32,7 @@
  * The memory half is compiled only into a build with the `memory` feature, on
  * the same terms as `git` above and for the same reason.
  *
- * Hand-written rather than generated: the surface is seventeen functions and one
+ * Hand-written rather than generated: the surface is eighteen functions and one
  * struct, and a generator would cost more to keep in the build than it saves.
  * A hand-written header can drift from the library it describes, though, and a
  * mismatch here is a wrong answer rather than a link error — so the test
@@ -245,6 +246,15 @@ char *wattrouter_memory_remember(const wattrouter_memory *memory,
                                  const char *session, const char *speaker,
                                  const char *text, int64_t ts);
 
+
+/* Ask the store something.
+ *
+ * `top_k` is how much evidence to return, or 0 to take the store's own default
+ * rather than nothing. `ok` carries the route it took and the evidence it found.
+ *
+ * Returns an owned string on the terms above. */
+char *wattrouter_memory_recall(const wattrouter_memory *memory,
+                               const char *query, size_t top_k);
 
 #ifdef __cplusplus
 } /* extern "C" */
