@@ -3,6 +3,7 @@
 // History
 //   2026-08-07  A. Sigdel  Created.
 //   2026-08-07  A. Sigdel  Show the conversation once the core comes up.
+//   2026-08-08  A. Sigdel  Wire the calendar tools in, over one permission.
 //
 // Contents
 //   WattRouterApp  The entry point.
@@ -47,7 +48,22 @@ struct WattRouterApp: App {
             let workspace = try? Workspace(root: URL.documentsDirectory)
         else { return nil }
 
-        // Five of the six. `ClarifyTool` asks the person a question and waits for
+        // One `Permission` for the whole app, not one per tool. It holds the
+        // record of what has already been asked, so a second instance means a
+        // second prompt for one capability — the failure #193 exists to prevent,
+        // reintroduced by building the thing that prevents it twice. A tool each
+        // looks natural and is wrong.
+        //
+        // The two EventKit actors do *not* share a store, and that is deliberate
+        // rather than an oversight. `EKEventStore` is not `Sendable`, so one
+        // handed to both would be a value living in two isolation domains — the
+        // exact thing actor isolation is being used here to rule out. The cost is
+        // a second connection to the calendar database, which is cheaper than a
+        // claim the compiler cannot check.
+        let permission = Permission(EventKitAuthorizer())
+        let calendars = EventKitCalendars()
+
+        // `ClarifyTool` is still out. It asks the person a question and waits for
         // the answer, and nothing on this screen can give one — a model that
         // reached for it would stop, correctly, forever. It goes in with the
         // affordance that answers it, not before.
@@ -57,6 +73,8 @@ struct WattRouterApp: App {
             SearchFilesTool(workspace: workspace),
             PatchTool(workspace: workspace),
             TodoTool(),
+            ReadCalendarTool(calendars: calendars, permission: permission),
+            AddEventTool(calendars: calendars, permission: permission),
         ])
 
         return TurnDriver(
