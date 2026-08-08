@@ -55,6 +55,14 @@ public struct CalendarEvent: Equatable, Sendable {
 public protocol Calendars: Sendable {
     /// Everything overlapping the range, earliest first.
     func events(in range: TimeRange) async throws -> [CalendarEvent]
+
+    /// Put one on the calendar.
+    ///
+    /// - Parameter event: its `calendar` names where to put it, or is empty for
+    ///   wherever new events go.
+    /// - Returns: the calendar it landed on, which is not always the one asked
+    ///   for and is the thing worth saying back.
+    func add(_ event: CalendarEvent) async throws -> String
 }
 
 /// What is on the calendar.

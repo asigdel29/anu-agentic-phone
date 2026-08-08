@@ -86,6 +86,31 @@ public actor EventKitAuthorizer: Authorizer {
     }
 }
 
+/// Why the store could not take an event.
+public enum EventKitError: LocalizedError, Equatable, Sendable {
+    /// No calendar of that name, or none that can be written to.
+    case noSuchCalendar(asked: String, available: [String])
+    /// Nothing on this device can be written to at all.
+    case nowhereToWrite
+
+    public var errorDescription: String? {
+        switch self {
+        case .noSuchCalendar(let asked, let available):
+            // The alternatives, not just the mistake — the same reason `ToolBox`
+            // lists the tools it knows when a name does not match one.
+            """
+            there is no calendar called "\(asked)" that can be written to. \
+            Available: \(available.joined(separator: ", ")).
+            """
+        case .nowhereToWrite:
+            """
+            no calendar on this device can be written to, so there is nowhere to \
+            put this. Nothing was added.
+            """
+        }
+    }
+}
+
 /// Events out of the store.
 public actor EventKitCalendars: Calendars {
     private let store: EKEventStore
@@ -119,6 +144,42 @@ public actor EventKitCalendars: Calendars {
             isAllDay: event.isAllDay,
             calendar: written(event.calendar?.title) ?? "(unknown calendar)",
             location: written(event.location))
+    }
+
+    public func add(_ event: CalendarEvent) async throws -> String {
+        let target = try writable(named: event.calendar)
+
+        let fresh = EKEvent(eventStore: store)
+        fresh.title = event.title
+        fresh.startDate = event.starts
+        fresh.endDate = event.ends
+        fresh.isAllDay = event.isAllDay
+        fresh.location = event.location
+        fresh.calendar = target
+
+        try store.save(fresh, span: .thisEvent, commit: true)
+        return target.title
+    }
+
+    /// Where to put it.
+    ///
+    /// An unmatched name is refused rather than quietly redirected. The return
+    /// value says where the event landed, so a fallback would be reported
+    /// honestly — but a work meeting silently filed under Personal is a mistake
+    /// somebody finds later, and the model can retry with a name from the list.
+    private func writable(named asked: String) throws -> EKCalendar {
+        let usable = store.calendars(for: .event).filter(\.allowsContentModifications)
+
+        guard !asked.isEmpty else {
+            guard let fallback = store.defaultCalendarForNewEvents ?? usable.first else {
+                throw EventKitError.nowhereToWrite
+            }
+            return fallback
+        }
+        guard let match = usable.first(where: { $0.title == asked }) else {
+            throw EventKitError.noSuchCalendar(asked: asked, available: usable.map(\.title))
+        }
+        return match
     }
 
     /// Text somebody actually wrote, or nothing. Blank and absent are one thing.
