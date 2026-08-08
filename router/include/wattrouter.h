@@ -18,7 +18,9 @@
  *   wattrouter_git_status    The working tree, against the index and the head.
  *   wattrouter_git_add       Staging paths.
  *   wattrouter_git_commit    Writing what is staged.
- *   wattrouter_string_free   Release what the git half returned.
+ *   wattrouter_string_free   Release what an allocating call returned.
+ *   wattrouter_memory_open/free  A memory store's lifetime.
+ *   wattrouter_memory_remember   Putting a turn in.
  *
  * The git half is compiled only into a build with the `git` feature, and the
  * board's is not one — it has a shell and does not need libgit2 in a process
@@ -26,7 +28,10 @@
  * without the feature is a link error naming the symbol, which is the failure
  * worth having. `scripts/build-ios-core.sh` turns it on: a phone has no shell.
  *
- * Hand-written rather than generated: the surface is fourteen functions and one
+ * The memory half is compiled only into a build with the `memory` feature, on
+ * the same terms as `git` above and for the same reason.
+ *
+ * Hand-written rather than generated: the surface is seventeen functions and one
  * struct, and a generator would cost more to keep in the build than it saves.
  * A hand-written header can drift from the library it describes, though, and a
  * mismatch here is a wrong answer rather than a link error — so the test
@@ -205,8 +210,41 @@ char *wattrouter_git_add(const char *path, const char *paths_json);
  * Returns an owned string, or NULL on the terms above. */
 char *wattrouter_git_commit(const char *path, const char *message);
 
-/* Release a string returned by the git half. NULL is accepted and ignored. */
+/* Release a string returned by any call that allocates one. NULL is accepted and
+ * ignored. */
 void wattrouter_string_free(char *text);
+
+/* A memory store, bounded and opened. Opaque.
+ *
+ * `keep` is how many recent turns stay in front of the horizon; everything older
+ * moves to an archive table in the same file before the store opens, because
+ * opening is what loads and indexes all of it. See
+ * docs/decisions/memory-on-a-phone-forgets.md.
+ *
+ * One store may be shared across threads: it is behind a mutex, so concurrent
+ * calls queue rather than race.
+ *
+ * Returns a store to pass to wattrouter_memory_free, or NULL IF `path` was NULL
+ * or not UTF-8, IF the horizon failed, or IF the store would not open. No
+ * envelope: with no handle there is nothing to free. */
+typedef struct wattrouter_memory wattrouter_memory;
+wattrouter_memory *wattrouter_memory_open(const char *path, size_t keep);
+
+/* Release a memory store. NULL is accepted and ignored. */
+void wattrouter_memory_free(wattrouter_memory *memory);
+
+/* Put a turn in.
+ *
+ * `ts` is a Unix timestamp in seconds. A turn with no text is refused rather
+ * than stored: nothing indexes it, so it could never be recalled and would still
+ * count against the horizon.
+ *
+ * `ok` is the turn's id. Returns an owned string to release with
+ * wattrouter_string_free, or NULL IF any pointer was NULL or not UTF-8. */
+char *wattrouter_memory_remember(const wattrouter_memory *memory,
+                                 const char *session, const char *speaker,
+                                 const char *text, int64_t ts);
+
 
 #ifdef __cplusplus
 } /* extern "C" */
