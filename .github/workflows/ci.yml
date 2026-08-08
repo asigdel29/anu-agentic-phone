@@ -137,7 +137,7 @@ jobs:
       # clippy locally sees exactly what CI sees.
       - name: clippy
         if: needs.detect.outputs.rust == 'true'
-        run: cargo clippy --manifest-path router/Cargo.toml --all-targets -- -D warnings
+        run: cargo clippy --manifest-path router/Cargo.toml --all-targets --all-features -- -D warnings
 
       - uses: ./.github/actions/python-setup
         if: needs.detect.outputs.python == 'true'
@@ -166,7 +166,7 @@ jobs:
       # that stops compiling is a break, and finding it at release time is worse.
       - name: cargo test
         if: needs.detect.outputs.rust == 'true'
-        run: cargo test --manifest-path router/Cargo.toml --all-targets
+        run: cargo test --manifest-path router/Cargo.toml --all-targets --all-features
 
       - uses: ./.github/actions/python-setup
         if: needs.detect.outputs.python == 'true'
