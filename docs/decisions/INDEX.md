@@ -18,6 +18,7 @@ nothing in a diff records it, so no pull request body can either.
 | Record | The question it answers |
 |---|---|
 | [retiring-the-second-harness.md](retiring-the-second-harness.md) | Why is there one agent rather than two? |
+| [inference-needs-a-phone.md](inference-needs-a-phone.md) | Why is the local tier unmeasured, and why was it built around rather than waited on? |
 
 ## Decisions argued in a pull request
 
