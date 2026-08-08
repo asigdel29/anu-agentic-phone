@@ -63,6 +63,20 @@ targets:
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UILaunchScreen: {}
+        # Shown inside the system's prompt, which is the only place a person
+        # reads them. Both are here rather than only the calendar one because
+        # EventKitAuthorizer can request either entity, and requesting one whose
+        # string is absent terminates the app rather than refusing.
+        #
+        # Written as what the agent does with it, not as what the app would like.
+        # "To provide a better experience" is the register that trains people to
+        # refuse, which #137 is explicitly trying not to do.
+        NSCalendarsFullAccessUsageDescription: >-
+          So the agent can tell you what is on your calendar, and work around it.
+          Full access rather than add-only: reading is the whole point, and
+          add-only access reads an empty calendar rather than refusing.
+        NSRemindersFullAccessUsageDescription: >-
+          So the agent can read your reminders and add to them when you ask.
         # Nothing here talks to anything but the provider, over HTTPS. The
         # default already forbids cleartext; this states it so that relaxing it
         # later has to be a deliberate edit.

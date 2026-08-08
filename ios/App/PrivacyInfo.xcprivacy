@@ -5,6 +5,8 @@
 
   History
     2026-08-07  A. Sigdel  Created.
+    2026-08-08  A. Sigdel  Argued the calendar, which is the first thing read off
+                           the phone rather than out of the conversation.
 
   All four lists are deliberately empty and each will stay that way or not for a
   stated reason.
@@ -13,6 +15,23 @@
   answering it requires, and nowhere else. That is not collection by Apple's
   definition — no data leaves for this developer — so declaring a data type here
   would be wrong rather than cautious.
+
+  The calendar is the first thing that tests that sentence, and it is worth
+  arguing rather than waving through. An event read by `read_calendar` becomes a
+  tool result, a tool result becomes a message, and the next request carries it
+  to the provider. So calendar contents do leave the device.
+
+  They still are not collected. The definition turns on who receives the data for
+  their own purposes, and the recipient here is the model answering the turn the
+  person asked — the same path their typed question already takes, for the same
+  reason, and no copy is kept by or sent to this developer. A person who does not
+  want their calendar in that request declines the permission, and the tool
+  reports the refusal rather than working around it.
+
+  What would change this is a second destination: anything that logs, caches off
+  the device, or analyses a turn for a purpose other than answering it. None
+  exists, and the first one to be proposed is the point at which this list gains
+  an entry rather than this paragraph gaining a sentence.
 
   No accessed-API categories yet. Two are already visible on the way: the file
   tools will read modification dates, which is NSPrivacyAccessedAPICategoryFileTimestamp,
