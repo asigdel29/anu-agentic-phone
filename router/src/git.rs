@@ -365,32 +365,7 @@ impl From<git2::Error> for Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// A directory that removes itself, so a failing case leaves nothing behind.
-    ///
-    /// Named per case as well as per process: the lib tests share one process and
-    /// run in parallel, so a shared path would have two repositories in it.
-    struct Scratch(std::path::PathBuf);
-
-    impl Scratch {
-        fn new(name: &str) -> Self {
-            let path =
-                std::env::temp_dir().join(format!("wattrouter-git-{}-{name}", std::process::id()));
-            let _ = std::fs::remove_dir_all(&path);
-            std::fs::create_dir_all(&path).expect("could not make a scratch directory");
-            Self(path)
-        }
-
-        fn path(&self) -> &Path {
-            &self.0
-        }
-    }
-
-    impl Drop for Scratch {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.0);
-        }
-    }
+    use crate::testenv::Scratch;
 
     /// Give the repository an identity to sign with, as a phone would have to.
     fn identify(repo: &git2::Repository) {

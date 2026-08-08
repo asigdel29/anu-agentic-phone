@@ -20,6 +20,8 @@ true only here.
 | `upstream.rs` | Forwarding a request to the provider. |
 | `metrics.rs` | Counting what the router did. |
 | `ffi.rs` | The C ABI the iOS app calls the core through. |
+| `git.rs` | git operations without a subprocess, behind the `git` feature. |
+| `ffi_git.rs` | Those operations across the ABI, behind the same feature. |
 | `testenv.rs` | The environment, as the crate's tests are allowed to touch it. |
 
 ## Building and testing

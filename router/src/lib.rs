@@ -40,6 +40,8 @@ pub mod config;
 pub mod embed;
 pub mod ffi;
 #[cfg(feature = "git")]
+pub mod ffi_git;
+#[cfg(feature = "git")]
 pub mod git;
 pub mod head;
 pub mod metrics;

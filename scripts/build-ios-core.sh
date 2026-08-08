@@ -3,6 +3,8 @@
 #
 # History
 #   2026-08-06  A. Sigdel  Created.
+#   2026-08-08  A. Sigdel  Turn the git feature on, which the app needs and the
+#                          board does not.
 #
 # Two slices, because the phone and the simulator are different targets and a
 # library built for one will not link against the other. An xcframework is the
@@ -12,6 +14,11 @@
 # --no-default-features: the app calls the decision core and never the server, so
 # the ONNX embedder it would otherwise drag in is 114 MB of archive for code
 # nothing reaches.
+#
+# --features git puts back the one optional half the app does need. The board
+# shells out to git; a phone has no shell, so libgit2 is linked here and only
+# here. Without it the app compiles against a header declaring the git entry
+# points and fails to link, naming a symbol rather than the missing feature.
 #
 # Usage
 #   scripts/build-ios-core.sh [output-dir]
@@ -44,7 +51,7 @@ for target in "$DEVICE" "$SIMULATOR"; do
     fi
     printf 'building %s\n' "$target"
     cargo build --manifest-path "$MANIFEST" --target "$target" \
-        --release --lib --no-default-features
+        --release --lib --no-default-features --features git
 done
 
 # Rebuilt rather than merged into: xcodebuild refuses to write over an existing
