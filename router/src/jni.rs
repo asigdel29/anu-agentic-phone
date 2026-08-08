@@ -4,10 +4,19 @@
 //!   2026-08-08  A. Sigdel  Created.
 //!
 //! Contents
-//!   `Java_..._nativeNew`   Build a router.
-//!   `Java_..._nativeFree`  Release one.
+//!   `Java_..._nativeNew`     Build a router.
+//!   `Java_..._nativeFree`    Release one.
+//!   `Java_..._nativeDecide`  The whole decision path, as one envelope.
 //!
-//! Deciding joins this file next; this is the lifetime it hangs off.
+//! One envelope rather than the four accessors `ffi.rs` offers. Reading a tier
+//! and then walking its chain is four crossings from Kotlin where it is four
+//! function calls from Swift, and a decision arriving in pieces is one a caller
+//! can assemble wrongly. The shape is `ffi_answer.rs`'s, so Android decodes
+//! exactly what Swift decodes.
+//!
+//! A null `jstring` is reachable from Kotlin in a way a null `const char *`
+//! mostly is not, because a nullable Kotlin type compiles to one without
+//! complaint.
 //!
 //! Not the C ABI with different names. `ffi.rs` hands back a struct by value and
 //! borrowed `const char *`; JNI deals in `jstring`, which the JVM owns on both
@@ -22,11 +31,37 @@
 //! somebody runs the app. `the_symbols_match_the_kotlin` holds the two in step,
 //! the way the header parity test does for C.
 
+use crate::backend::Backend;
+use crate::chain::chain_for;
+use crate::config::Config;
 use crate::ffi::Router;
+use crate::tier::Tier;
 use jni::JNIEnv;
-use jni::objects::JClass;
-use jni::sys::jlong;
+use jni::objects::{JClass, JString};
+use jni::sys::{jlong, jstring};
+use serde::Serialize;
 use std::panic::{AssertUnwindSafe, catch_unwind};
+
+/// A decision and the chain behind it, in one crossing.
+#[derive(Serialize)]
+struct Decided {
+    /// The tier's name, as configuration and metrics spell it.
+    tier: String,
+    /// Why that tier.
+    reason: String,
+    /// Difficulty in `[0, 1]`, or absent where nothing scored it.
+    score: Option<f32>,
+    /// What will actually be asked, in order.
+    chain: Vec<Attempt>,
+}
+
+/// One model, and where it runs.
+#[derive(Serialize)]
+struct Attempt {
+    model: String,
+    /// `local` or `remote`.
+    backend: String,
+}
 
 /// Build a router.
 ///
@@ -71,6 +106,125 @@ pub extern "system" fn Java_com_getlora_wattrouter_Core_nativeFree(
     }));
 }
 
+/// Decide which tier serves a request, and say what stands behind it.
+///
+/// # Returns
+/// A JSON envelope: `ok` with the tier, the reason, the score and the chain, or
+/// `error`. A null `jstring` IF the JVM refused to make one, which is an
+/// out-of-memory condition and not something to report as a decision.
+///
+/// # Safety
+/// `handle` must come from `nativeNew`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_getlora_wattrouter_Core_nativeDecide<'a>(
+    mut env: JNIEnv<'a>,
+    _class: JClass<'a>,
+    handle: jlong,
+    body: JString<'a>,
+    session: JString<'a>,
+) -> jstring {
+    let answered = catch_unwind(AssertUnwindSafe(|| {
+        let Some(router) = (unsafe { (handle as *const Router).as_ref() }) else {
+            return Err("no router: it was never built, or it has been freed".to_owned());
+        };
+        // Nullable in Kotlin compiles to a null jstring without complaint, and
+        // `get_string` on one is an exception rather than an error value.
+        let body = read(&mut env, &body).ok_or("the request body was null or not UTF-8")?;
+        let session = read(&mut env, &session).unwrap_or_default();
+
+        decide(router, &body, &session).ok_or_else(|| {
+            "the request could not be decided: it is not an OpenAI-shaped chat completion"
+                .to_owned()
+        })
+    }));
+
+    let envelope = match answered {
+        Ok(Ok(decided)) => serde_json::to_string(&Answer::Ok(decided)),
+        Ok(Err(why)) => serde_json::to_string(&Answer::<Decided>::Error(why)),
+        Err(_) => serde_json::to_string(&Answer::<Decided>::Error(
+            "the routing core failed while deciding".to_owned(),
+        )),
+    };
+
+    // A JVM that will not allocate a string is out of memory, and there is
+    // nothing useful to say to it. Null, which Kotlin sees as null.
+    envelope
+        .ok()
+        .and_then(|json| env.new_string(json).ok())
+        .map_or(std::ptr::null_mut(), jni::objects::JString::into_raw)
+}
+
+/// The same envelope the C half uses, so both phones decode one shape.
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+enum Answer<T: Serialize> {
+    Ok(T),
+    Error(String),
+}
+
+/// One `jstring`, as a Rust `String`.
+///
+/// `None` for null and for anything the JVM will not give back as UTF-8. Clears
+/// the pending exception either way: leaving one set means the next JNI call
+/// from Kotlin fails for a reason that has nothing to do with it.
+fn read(env: &mut JNIEnv<'_>, text: &JString<'_>) -> Option<String> {
+    if text.is_null() {
+        return None;
+    }
+    if let Ok(got) = env.get_string(text) {
+        return Some(got.into());
+    }
+    // Discarded deliberately: there is nothing to do about a failed clear, and
+    // the caller is already returning the absence.
+    let _ = env.exception_clear();
+    None
+}
+
+/// The decision, and the chain standing behind it.
+fn decide(router: &Router, body: &str, session: &str) -> Option<Decided> {
+    let raw = std::ffi::CString::new(body).ok()?;
+    let held = std::ffi::CString::new(session).ok()?;
+    let answer = unsafe {
+        crate::ffi::wattrouter_decide(router, raw.as_ptr(), std::ptr::null(), held.as_ptr())
+    };
+    if answer.tier == u8::MAX {
+        return None;
+    }
+
+    let tier = Tier::ALL.get(answer.tier as usize).copied()?;
+    let config = Config::from_env().ok()?;
+    Some(Decided {
+        tier: name(crate::ffi::wattrouter_tier_name(answer.tier))?,
+        reason: name(crate::ffi::wattrouter_reason_name(answer.reason))?,
+        // Absent rather than -1. A number that means "no number" is a number a
+        // caller compares against a threshold.
+        score: (answer.score >= 0.0).then_some(answer.score),
+        chain: chain_for(&config, tier)
+            .into_iter()
+            .map(|step| Attempt {
+                model: step.model().to_owned(),
+                backend: match step.backend() {
+                    Backend::Local => "local".to_owned(),
+                    Backend::Remote => "remote".to_owned(),
+                },
+            })
+            .collect(),
+    })
+}
+
+/// A borrowed static name, as an owned `String`.
+fn name(raw: *const std::ffi::c_char) -> Option<String> {
+    if raw.is_null() {
+        return None;
+    }
+    Some(
+        unsafe { std::ffi::CStr::from_ptr(raw) }
+            .to_str()
+            .ok()?
+            .to_owned(),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     /// The Kotlin the library has to satisfy.
@@ -111,6 +265,50 @@ mod tests {
                 Some(tail[..end].to_owned())
             })
             .collect()
+    }
+
+    #[test]
+    fn a_decision_carries_its_chain_rather_than_only_a_tier() {
+        // The reason this is one call. A tier is a role; what answers is the
+        // chain, and a Kotlin caller holding only the tier cannot dispatch.
+        crate::testenv::with_env(&[("NEURALWATT_API_KEY", Some("jni-test"))], || {
+            let router = unsafe { crate::ffi::wattrouter_new(std::ptr::null()) };
+            assert!(!router.is_null(), "router builds without a head");
+
+            let decided = super::decide(
+                unsafe { &*router },
+                r#"{"messages":[{"role":"user","content":"hello there"}]}"#,
+                "",
+            )
+            .expect("a well-formed request decides");
+
+            assert_eq!(decided.tier, "mid", "unscored lands in the middle");
+            assert_eq!(decided.reason, "unscored");
+            // Absent rather than -1: a number meaning "no number" is one a caller
+            // compares against a threshold.
+            assert!(decided.score.is_none());
+            assert!(
+                !decided.chain.is_empty(),
+                "a tier with no chain cannot answer"
+            );
+            for attempt in &decided.chain {
+                assert!(!attempt.model.is_empty());
+                assert!(["local", "remote"].contains(&attempt.backend.as_str()));
+            }
+
+            unsafe { crate::ffi::wattrouter_free(router) };
+        });
+    }
+
+    #[test]
+    fn a_request_that_is_not_one_does_not_decide() {
+        // Reported as an error envelope by the entry point above. Here it is the
+        // absence that entry point turns into one.
+        crate::testenv::with_env(&[("NEURALWATT_API_KEY", Some("jni-test"))], || {
+            let router = unsafe { crate::ffi::wattrouter_new(std::ptr::null()) };
+            assert!(super::decide(unsafe { &*router }, "not json", "").is_none());
+            unsafe { crate::ffi::wattrouter_free(router) };
+        });
     }
 
     #[test]

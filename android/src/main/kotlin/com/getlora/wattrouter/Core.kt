@@ -13,8 +13,10 @@
 // `the_symbols_match_the_kotlin` in router/src/jni.rs reads this file and holds
 // the two in step — the way the header parity test does for C.
 //
-// Deciding joins this next. What it will answer with is the envelope Swift
-// already decodes, so Android reads one shape rather than a second.
+// One call rather than the four the C ABI offers. Reading a tier and then
+// walking its chain is four crossings from Kotlin where it is four function
+// calls from Swift, and a decision that arrives in pieces is one a caller can
+// assemble wrongly. What comes back is the envelope Swift already decodes.
 
 package com.getlora.wattrouter
 
@@ -47,6 +49,27 @@ class Core private constructor(private var handle: Long) : AutoCloseable {
 
         @JvmStatic private external fun nativeNew(): Long
         @JvmStatic private external fun nativeFree(handle: Long)
+        @JvmStatic private external fun nativeDecide(
+            handle: Long,
+            body: String?,
+            session: String?,
+        ): String?
+    }
+
+    /**
+     * Decide which tier serves a request, and what stands behind it.
+     *
+     * @param body an OpenAI-shaped chat completion request.
+     * @param session identifies the conversation, so a tier it has already been
+     *   raised to is not dropped partway through. Empty means no stickiness.
+     * @return a JSON envelope — `{"ok": …}` with the tier, the reason, the score
+     *   and the chain, or `{"error": "…"}`. Null only if the runtime could not
+     *   allocate a string, which is an out-of-memory condition rather than an
+     *   answer.
+     */
+    fun decide(body: String, session: String = ""): String? {
+        check(handle != 0L) { "this core has been closed" }
+        return nativeDecide(handle, body, session)
     }
 
     /**
