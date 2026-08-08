@@ -52,7 +52,11 @@ public final class TurnDriver {
         }
     }
 
-    private let agent: Agent
+    /// Internal rather than private: a test asserting what the provider will be
+    /// sent next turn has to read the conversation, and that is a different
+    /// claim from what the transcript shows. The two disagreeing is the bug most
+    /// of those cases are about.
+    let agent: Agent
     private var running: Task<Void, Never>?
     /// Counts turns started. `Task` is a value type, so this rather than identity
     /// is how a finishing turn tells whether it is still the current one.
