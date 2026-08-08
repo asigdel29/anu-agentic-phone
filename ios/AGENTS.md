@@ -55,6 +55,12 @@ never run it needs no setup beyond Xcode and one simulator runtime — it says w
 there is none. `WATTROUTER_SIM_NAME` picks a different device, `WATTROUTER_SIM_UDID` pins an
 exact one and never creates.
 
+It regenerates the project before running, and that is not a convenience. `project.yml` names a
+directory, XcodeGen expands it once, and a test file written since then is not in the project,
+not compiled, and not run — while the suite reports a pass, because everything it knew about
+did pass. If you are reading a test count in a pull request older than #191, it does not
+account for files added in that pull request.
+
 When neither the build nor the suite could run, say so in the pull request and name what you did
 instead. "Six checks in a scratch package, no simulator" is a claim a reviewer can weigh; "tests
 pass" is not.
