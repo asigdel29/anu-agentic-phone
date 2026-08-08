@@ -51,6 +51,11 @@ venv/
 ios/WattRouterFFI.xcframework/
 ios/.build/
 
+# The Android core, built by `just android-core` from the same crate the iOS
+# xcframework comes from. Build output on the same terms, and a 4 MB binary is
+# not something to track.
+android/jniLibs/
+
 # The Xcode project, generated from ios/project.yml by `just ios-project`. A
 # checked-in pbxproj is unreviewable under this repository's size limit: it is
 # generated, it reorders itself between Xcode versions, and it conflicts on every

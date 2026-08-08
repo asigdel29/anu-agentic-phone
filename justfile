@@ -70,6 +70,11 @@ ios-project:
 ios-test:
     scripts/test-ios.sh
 
+# Build the routing core as a library JNI can load. Needs the Android NDK; the
+# script says how to get one if there is none.
+android-core:
+    scripts/build-android-core.sh
+
 # Check the stack end to end. Needs a router; `just up` first.
 verify:
     scripts/verify-stack.sh {{ "http://" + router_addr }}
@@ -133,6 +138,15 @@ toolchain:
             missing=1
         fi
     done
+
+    # Android is optional and reported rather than required: the board and the
+    # phone build without it, and `just toolchain` failing over a milestone
+    # somebody is not working on is a check people learn to ignore.
+    if [ -d "${ANDROID_NDK_HOME:-${ANDROID_HOME:-$HOME/Library/Android/sdk}/ndk}" ]; then
+        printf '  present  %-10s %s\n' "ndk" "build the core for Android"
+    else
+        printf '  absent   %-10s %s\n' "ndk" "build the core for Android (optional)"
+    fi
 
     # Python 3.11+ is Hermes's floor. Checked explicitly because an older
     # interpreter fails deep inside an install rather than here.
