@@ -93,7 +93,8 @@ struct RootView: View {
             let events = EventKitAuthorizer()
             let permission = Permission(
                 ByCapability([
-                    .calendar: events, .reminders: events, .contacts: CNContactsAuthorizer(),
+                    .calendar: events, .reminders: events,
+                    .contacts: CNContactsAuthorizer(), .location: CLLocationAuthorizer(),
                 ]))
             let calendars = EventKitCalendars()
             // A third store, on the same reasoning as the second: EKEventStore
@@ -126,6 +127,7 @@ struct RootView: View {
                 AddReminderTool(reminders: reminders, permission: permission),
                 FindContactTool(contacts: CNContacts(), permission: permission),
                 RunShortcutTool(opener: UIKitOpener()),
+                WhereAmITool(located: CLLocated(), permission: permission),
                 GitStatusTool(repository: git, workspace: workspace),
                 GitAddTool(repository: git, workspace: workspace),
                 GitCommitTool(repository: git, workspace: workspace),

@@ -83,6 +83,12 @@ targets:
           So the agent can look somebody up when you name them. It searches by
           name and reads their numbers and email addresses; it never changes
           anything in your contacts.
+        # When in use only. `always` is a different prompt meaning a different
+        # thing, and nothing here runs in the background or tracks anybody.
+        NSLocationWhenInUseUsageDescription: >-
+          So the agent can answer questions that depend on where you are. It
+          takes one location when a turn asks for one, and never in the
+          background.
         # Nothing here talks to anything but the provider, over HTTPS. The
         # default already forbids cleartext; this states it so that relaxing it
         # later has to be a deliberate edit.
