@@ -89,6 +89,13 @@ struct RootView: View {
             let permission = Permission(EventKitAuthorizer())
             let calendars = EventKitCalendars()
 
+            // Stateless, so one instance and no lifetime to manage. The three git
+            // tools go in together: a git that reads and cannot commit is a half
+            // capability, and the workspace is very often not a repository at all
+            // — which is a refusal at the first call rather than a failure here,
+            // because a phone with no repository on it still has an app to run.
+            let git = CoreRepository()
+
             // `ClarifyTool` is still out. It asks the person a question and waits
             // for the answer, and nothing on this screen can give one — a model
             // that reached for it would stop, correctly, forever. It goes in with
@@ -101,6 +108,9 @@ struct RootView: View {
                 TodoTool(),
                 ReadCalendarTool(calendars: calendars, permission: permission),
                 AddEventTool(calendars: calendars, permission: permission),
+                GitStatusTool(repository: git, workspace: workspace),
+                GitAddTool(repository: git, workspace: workspace),
+                GitCommitTool(repository: git, workspace: workspace),
             ])
 
             driver = TurnDriver(
