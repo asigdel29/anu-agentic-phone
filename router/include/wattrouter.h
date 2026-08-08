@@ -16,6 +16,8 @@
  *   wattrouter_backend_name  The name behind a backend code.
  *   wattrouter_git_head      Where a repository's HEAD points.
  *   wattrouter_git_status    The working tree, against the index and the head.
+ *   wattrouter_git_add       Staging paths.
+ *   wattrouter_git_commit    Writing what is staged.
  *   wattrouter_string_free   Release what the git half returned.
  *
  * The git half is compiled only into a build with the `git` feature, and the
@@ -24,7 +26,7 @@
  * without the feature is a link error naming the symbol, which is the failure
  * worth having. `scripts/build-ios-core.sh` turns it on: a phone has no shell.
  *
- * Hand-written rather than generated: the surface is twelve functions and one
+ * Hand-written rather than generated: the surface is fourteen functions and one
  * struct, and a generator would cost more to keep in the build than it saves.
  * A hand-written header can drift from the library it describes, though, and a
  * mismatch here is a wrong answer rather than a link error — so the test
@@ -177,6 +179,31 @@ char *wattrouter_git_head(const char *path);
  *
  * Returns an owned string, or NULL on the terms above. */
 char *wattrouter_git_status(const char *path);
+
+/* Stage paths, and answer with the status that results.
+ *
+ * paths_json is a JSON array of strings relative to the repository root, where a
+ * directory stages what is under it. JSON rather than a char ** and a count
+ * because the model writes these as JSON and the tool decodes them there;
+ * rebuilding that as a C array only to parse it back is three shapes for one
+ * value. A `paths_json` that is not an array of strings is refused with a message
+ * saying so, and that refusal does not read as a git failure.
+ *
+ * `error` names the missing path IF one is missing, so that a model which
+ * misspelt one of four is told which. Nothing is staged in that case.
+ *
+ * Returns an owned string, or NULL IF either argument was NULL or not UTF-8. */
+char *wattrouter_git_add(const char *path, const char *paths_json);
+
+/* Commit what is staged.
+ *
+ * `ok` is the short id of the commit written. Committing nothing is an error
+ * rather than an empty commit: libgit2 writes a commit whose tree matches its
+ * parent without complaint, and a model doing that in a loop produces a history
+ * of identical trees while believing it is making progress.
+ *
+ * Returns an owned string, or NULL on the terms above. */
+char *wattrouter_git_commit(const char *path, const char *message);
 
 /* Release a string returned by the git half. NULL is accepted and ignored. */
 void wattrouter_string_free(char *text);

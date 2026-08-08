@@ -6,6 +6,8 @@
 //! Contents
 //!   `wattrouter_git_head`     Where `HEAD` points.
 //!   `wattrouter_git_status`   The working tree, against the index and the head.
+//!   `wattrouter_git_add`      Staging paths.
+//!   `wattrouter_git_commit`   Writing what is staged.
 //!   `wattrouter_string_free`  Release what an entry point here returned.
 //!
 //! Separate from `ffi.rs` because what crosses is a different shape, not because
@@ -43,17 +45,30 @@ enum Answer<T: Serialize> {
 }
 
 /// Serialise an outcome into an owned C string.
-///
-/// Returns null IF the answer could not be rendered, which needs a serialisation
-/// failure or an interior NUL — neither reachable from what [`crate::git`]
-/// returns. Written as a value rather than an `expect`, which would abort the
-/// host application over an arm nothing reaches.
 fn rendered<T: Serialize>(outcome: Result<T, git::Error>) -> *mut c_char {
-    let answer = match outcome {
+    emit(&match outcome {
         Ok(value) => Answer::Ok(value),
         Err(why) => Answer::Error(why.to_string()),
-    };
-    serde_json::to_string(&answer)
+    })
+}
+
+/// A refusal this boundary produced rather than [`crate::git`].
+///
+/// An argument that will not decode is not a git failure, and dressing it as one
+/// would send the model looking at the repository. It is still something the
+/// model can fix, so it crosses in the same envelope.
+fn refused(why: &str) -> *mut c_char {
+    emit(&Answer::<()>::Error(why.to_owned()))
+}
+
+/// Write an answer out as an owned C string.
+///
+/// Returns null IF it could not be rendered, which needs a serialisation failure
+/// or an interior NUL — neither reachable from what [`crate::git`] returns.
+/// Written as a value rather than an `expect`, which would abort the host
+/// application over an arm nothing reaches.
+fn emit<T: Serialize>(answer: &Answer<T>) -> *mut c_char {
+    serde_json::to_string(answer)
         .ok()
         .and_then(|json| CString::new(json).ok())
         .map_or(std::ptr::null_mut(), CString::into_raw)
@@ -64,15 +79,15 @@ fn guarded(body: impl FnOnce() -> *mut c_char) -> *mut c_char {
     catch_unwind(AssertUnwindSafe(body)).unwrap_or(std::ptr::null_mut())
 }
 
-/// The path a caller named, or `None` IF it is null or not UTF-8.
+/// What a caller passed, or `None` IF it is null or not UTF-8.
 ///
 /// # Safety
 /// `text` must be null or a valid NUL-terminated string outliving the call.
-unsafe fn borrowed_path<'a>(text: *const c_char) -> Option<&'a Path> {
+unsafe fn borrowed<'a>(text: *const c_char) -> Option<&'a str> {
     if text.is_null() {
         return None;
     }
-    unsafe { CStr::from_ptr(text) }.to_str().ok().map(Path::new)
+    unsafe { CStr::from_ptr(text) }.to_str().ok()
 }
 
 /// Where `HEAD` points: a branch, a commit, or a branch with no commits yet.
@@ -88,9 +103,9 @@ unsafe fn borrowed_path<'a>(text: *const c_char) -> Option<&'a Path> {
 /// `free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wattrouter_git_head(path: *const c_char) -> *mut c_char {
-    guarded(|| match unsafe { borrowed_path(path) } {
+    guarded(|| match unsafe { borrowed(path) } {
         None => std::ptr::null_mut(),
-        Some(path) => rendered(git::open(path).and_then(|repo| git::head(&repo))),
+        Some(path) => rendered(git::open(Path::new(path)).and_then(|repo| git::head(&repo))),
     })
 }
 
@@ -106,9 +121,72 @@ pub unsafe extern "C" fn wattrouter_git_head(path: *const c_char) -> *mut c_char
 /// As [`wattrouter_git_head`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wattrouter_git_status(path: *const c_char) -> *mut c_char {
-    guarded(|| match unsafe { borrowed_path(path) } {
+    guarded(|| match unsafe { borrowed(path) } {
         None => std::ptr::null_mut(),
-        Some(path) => rendered(git::status(path)),
+        Some(path) => rendered(git::status(Path::new(path))),
+    })
+}
+
+/// Stage paths, and answer with the status that results.
+///
+/// # Arguments
+/// * `paths_json` — a JSON array of strings relative to the repository root,
+///   WHERE a directory stages what is under it. JSON rather than a C array
+///   because the model writes these as JSON and the tool decodes them there;
+///   rebuilding that as `char **` only to parse it back is three shapes for one
+///   value.
+///
+/// # Returns
+/// An owned JSON string to pass to [`wattrouter_string_free`], carrying `ok` with
+/// the status after staging, or `error` — which names the missing path IF one is
+/// missing, so a model that misspelt one of four is told which. Null on the terms
+/// [`wattrouter_git_head`] states.
+///
+/// # Safety
+/// As [`wattrouter_git_head`], for both arguments.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wattrouter_git_add(
+    path: *const c_char,
+    paths_json: *const c_char,
+) -> *mut c_char {
+    guarded(|| {
+        let (Some(path), Some(paths_json)) =
+            (unsafe { borrowed(path) }, unsafe { borrowed(paths_json) })
+        else {
+            return std::ptr::null_mut();
+        };
+        match serde_json::from_str::<Vec<String>>(paths_json) {
+            Ok(paths) => rendered(git::add(Path::new(path), &paths)),
+            Err(_) => refused(
+                "paths must be a JSON array of strings, such as [\"src/main.rs\", \"docs\"]",
+            ),
+        }
+    })
+}
+
+/// Commit what is staged.
+///
+/// # Returns
+/// An owned JSON string to pass to [`wattrouter_string_free`], carrying `ok` with
+/// the short id of the commit written, or `error`. Committing nothing is an
+/// error: libgit2 writes a commit whose tree matches its parent without
+/// complaint, and a model doing that in a loop believes it is making progress
+/// while producing a history of identical trees. Null on the terms
+/// [`wattrouter_git_head`] states.
+///
+/// # Safety
+/// As [`wattrouter_git_head`], for both arguments.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wattrouter_git_commit(
+    path: *const c_char,
+    message: *const c_char,
+) -> *mut c_char {
+    guarded(|| {
+        let (Some(path), Some(message)) = (unsafe { borrowed(path) }, unsafe { borrowed(message) })
+        else {
+            return std::ptr::null_mut();
+        };
+        rendered(git::commit(Path::new(path), message))
     })
 }
 
@@ -153,6 +231,36 @@ mod tests {
         serde_json::from_str(&json).expect("the envelope is JSON")
     }
 
+    /// The same, for an entry point taking a second string.
+    fn answer2(
+        entry: unsafe extern "C" fn(*const c_char, *const c_char) -> *mut c_char,
+        path: &Path,
+        second: &str,
+    ) -> Value {
+        let first = CString::new(path.to_str().expect("a UTF-8 scratch path")).unwrap();
+        let second = CString::new(second).unwrap();
+        let returned = unsafe { entry(first.as_ptr(), second.as_ptr()) };
+        assert!(!returned.is_null(), "the call produced no answer at all");
+
+        let json = unsafe { CStr::from_ptr(returned) }
+            .to_str()
+            .expect("the envelope is UTF-8")
+            .to_owned();
+        unsafe { super::wattrouter_string_free(returned) };
+
+        serde_json::from_str(&json).expect("the envelope is JSON")
+    }
+
+    /// A repository with an identity to sign with, as a phone would have to have.
+    fn repository(name: &str) -> (Scratch, git2::Repository) {
+        let scratch = Scratch::new(name);
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        let mut config = repo.config().unwrap();
+        config.set_str("user.name", "Test").unwrap();
+        config.set_str("user.email", "test@example.com").unwrap();
+        (scratch, repo)
+    }
+
     #[test]
     fn a_fresh_repository_crosses_as_unborn_rather_than_as_a_failure() {
         // The state an agent most often finds, and the one libgit2 calls an error.
@@ -188,6 +296,66 @@ mod tests {
     }
 
     #[test]
+    fn staging_then_committing_crosses_as_a_commit() {
+        let (scratch, _repo) = repository("ffi-git-commit");
+        std::fs::write(scratch.path().join("a.txt"), "one").unwrap();
+
+        let staged = answer2(super::wattrouter_git_add, scratch.path(), r#"["a.txt"]"#);
+        assert_eq!(
+            staged["ok"]["staged"],
+            serde_json::json!([{"path": "a.txt", "kind": "added"}]),
+            "crossed as {staged}"
+        );
+
+        let written = answer2(super::wattrouter_git_commit, scratch.path(), "a commit");
+        let id = written["ok"].as_str().unwrap_or_default();
+        assert!(!id.is_empty(), "no commit id came back: {written}");
+
+        // The repository agrees, so the id is a commit and not a rendered string.
+        let head = answer(super::wattrouter_git_head, scratch.path());
+        assert_eq!(head["ok"]["kind"], "branch", "crossed as {head}");
+    }
+
+    #[test]
+    fn staging_something_absent_names_that_path_and_not_the_others() {
+        // The library's own message is about an unspecified pathspec, which a model
+        // holding three paths cannot act on.
+        let (scratch, _repo) = repository("ffi-git-add-missing");
+        std::fs::write(scratch.path().join("here.txt"), "one").unwrap();
+
+        let refusal = answer2(
+            super::wattrouter_git_add,
+            scratch.path(),
+            r#"["here.txt", "gone.txt"]"#,
+        );
+        let text = refusal["error"].as_str().unwrap_or_default();
+        assert!(text.contains("gone.txt"), "did not name it: {refusal}");
+        assert!(!text.contains("here.txt"), "named the wrong one: {refusal}");
+    }
+
+    #[test]
+    fn committing_nothing_is_refused_rather_than_written() {
+        // libgit2 writes a commit whose tree matches its parent without complaint,
+        // and a model doing that in a loop believes it is making progress.
+        let (scratch, _repo) = repository("ffi-git-commit-nothing");
+
+        let refusal = answer2(super::wattrouter_git_commit, scratch.path(), "nothing");
+        let text = refusal["error"].as_str().unwrap_or_default();
+        assert!(text.contains("staged"), "refused unhelpfully: {refusal}");
+    }
+
+    #[test]
+    fn paths_that_are_not_a_json_array_say_what_was_expected() {
+        // Not a git failure, so it must not read as one — a model told "git:"
+        // goes looking at the repository rather than at what it wrote.
+        let (scratch, _repo) = repository("ffi-git-add-bad-json");
+
+        let refusal = answer2(super::wattrouter_git_add, scratch.path(), "a.txt");
+        let text = refusal["error"].as_str().unwrap_or_default();
+        assert!(text.contains("JSON array"), "unhelpful: {refusal}");
+    }
+
+    #[test]
     fn a_refusal_crosses_as_the_message_rather_than_as_an_absence() {
         // The message is what the model acts on. Null here would leave the caller
         // to invent one, and the invented one would not name the path.
@@ -208,6 +376,11 @@ mod tests {
         // A panic across the boundary is undefined behaviour, and so is a bad free.
         for entry in [super::wattrouter_git_head, super::wattrouter_git_status] {
             assert!(unsafe { entry(std::ptr::null()) }.is_null());
+        }
+        for entry in [super::wattrouter_git_add, super::wattrouter_git_commit] {
+            let path = CString::new("/nowhere").unwrap();
+            assert!(unsafe { entry(std::ptr::null(), path.as_ptr()) }.is_null());
+            assert!(unsafe { entry(path.as_ptr(), std::ptr::null()) }.is_null());
         }
         unsafe { super::wattrouter_string_free(std::ptr::null_mut()) };
     }
