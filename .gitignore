@@ -61,3 +61,10 @@ ios/WattRouter.xcodeproj/
 # ios/project.yml. Tracking it would be a second copy of those keys, and the
 # generator overwrites it, so the copy would lose every regeneration.
 ios/App/Info.plist
+ios/Share/Info.plist
+
+# The entitlements, on the same terms: written from the `entitlements:` blocks in
+# ios/project.yml, which is where the App Group identifier is stated once for
+# both targets.
+ios/App/WattRouter.entitlements
+ios/Share/WattRouterShare.entitlements

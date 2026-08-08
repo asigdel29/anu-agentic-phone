@@ -80,11 +80,22 @@ struct RootView: View {
             // PhoneTools.swift for the invariants that assembly holds.
             let tools = PhoneTools.all(workspace: workspace)
 
-            driver = TurnDriver(
+            let runner = TurnDriver(
                 agent: Agent(
                     router: router,
                     inference: NeuralWattInference(apiKey: credential),
                     tools: tools))
+            driver = runner
+
+            // Whatever was shared into the app while it was not running. Drained
+            // once, here, because draining is a read that removes and doing it
+            // anywhere that can run twice loses somebody's text.
+            if let container = Inbox.container {
+                let waiting = Inbox(container: container).drain()
+                if !waiting.isEmpty {
+                    Task { await runner.send(waiting.joined(separator: "\n\n")) }
+                }
+            }
         } catch Startup.Failure.noCredential {
             // A fresh install, which is not a fault. The sign-in stays up.
             refused = false
