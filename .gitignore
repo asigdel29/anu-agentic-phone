@@ -56,3 +56,8 @@ ios/.build/
 # generated, it reorders itself between Xcode versions, and it conflicts on every
 # parallel change. The spec beside it says the same thing in a file people can read.
 ios/WattRouter.xcodeproj/
+
+# The app's Info.plist, written by `just ios-project` from the `info:` block in
+# ios/project.yml. Tracking it would be a second copy of those keys, and the
+# generator overwrites it, so the copy would lose every regeneration.
+ios/App/Info.plist
