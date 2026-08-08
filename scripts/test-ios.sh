@@ -3,6 +3,8 @@
 #
 # History
 #   2026-08-06  A. Sigdel  Created.
+#   2026-08-07  A. Sigdel  Generate the project first, so a test file added since
+#                          the last generation is run rather than silently not.
 #
 # The simulator is shared with another agent, so this takes a lock before booting
 # and hands it back afterwards, including on failure: a run that fails still frees
@@ -132,6 +134,33 @@ EOF
     udid="$(xcrun simctl create "$SIM_NAME" "$devicetype" "$runtime")"
     printf '%s' "$udid"
 }
+
+# Regenerate the project before running anything through it.
+#
+# `project.yml` names a directory and XcodeGen expands it at generation time, so
+# the file list is a snapshot rather than a rule. A test file added since the last
+# generation is not in the project, is not compiled, and is not run — and the
+# suite reports success, because every test it knows about did pass. Measured:
+# adding a file and running this reported 223 passing tests, the same 223 as
+# before, with the new one nowhere in the output.
+#
+# That is the worst shape a gate can have. It is silent, it looks like a pass, and
+# it is most likely exactly when a test matters most — the run right after writing
+# one. Generation takes under a second and is idempotent, so it happens here
+# rather than in a recipe a person has to remember.
+if ! command -v xcodegen >/dev/null 2>&1; then
+    cat >&2 <<'EOF'
+xcodegen is not installed, and the project is generated from ios/project.yml
+rather than checked in. Install it with:
+
+  brew install xcodegen
+
+Running without it would test whichever file list the project was last generated
+with, which is not necessarily the one on disk.
+EOF
+    exit 1
+fi
+(cd "$ROOT/ios" && xcodegen generate --quiet)
 
 UDID="$(resolve_device)"
 readonly UDID
