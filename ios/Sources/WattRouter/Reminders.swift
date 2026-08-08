@@ -98,6 +98,14 @@ public protocol Reminders: Sendable {
     ///   day is kept. Undated reminders are kept either way: a cutoff says which
     ///   deadlines matter, not which work exists.
     func outstanding(dueBefore: Date?) async throws -> [Reminder]
+
+    /// Put one on a list.
+    ///
+    /// - Parameter reminder: its `list` names where to put it, or is empty for
+    ///   wherever new reminders go.
+    /// - Returns: the list it landed on, which is not always the one asked for
+    ///   and is the thing worth saying back.
+    func add(_ reminder: Reminder) async throws -> String
 }
 
 /// Asking what is outstanding.
