@@ -20,6 +20,10 @@ final class StubRepository: Repository, @unchecked Sendable {
     var refusal: GitError?
     /// Every workspace it was asked about, in order.
     private(set) var asked: [URL] = []
+    /// What each call to `add` was given, in order.
+    private(set) var staged: [[String]] = []
+    /// What each call to `commit` was given, in order.
+    private(set) var messages: [String] = []
 
     init(_ state: GitStatus = .empty, refusal: GitError? = nil) {
         self.state = state
@@ -40,13 +44,19 @@ final class StubRepository: Repository, @unchecked Sendable {
 
     func add(_ paths: [String], in workspace: URL) throws(GitError) -> GitStatus {
         asked.append(workspace)
+        // Recorded before the refusal: a tool that reached the repository and was
+        // turned away is a different thing from one that never got there.
+        staged.append(paths)
         if let refusal { throw refusal }
         return state
     }
 
     func commit(_ message: String, in workspace: URL) throws(GitError) -> String {
         asked.append(workspace)
+        messages.append(message)
         if let refusal { throw refusal }
+        // Not derived from the message: a stub echoing its argument cannot tell a
+        // tool reporting the right value from one reporting what it was handed.
         return "a1b2c3d"
     }
 }
