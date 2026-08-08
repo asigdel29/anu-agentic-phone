@@ -4,9 +4,11 @@
 //!   2026-08-08  A. Sigdel  Created.
 //!
 //! Contents
-//!   `Error`  Why an operation could not be done.
-//!   `Head`   Which branch, or which commit, or neither.
-//!   `head`   Opening a repository, and reading where it is.
+//!   `Error`   Why an operation could not be done.
+//!   `Head`    Which branch, or which commit, or neither.
+//!   `head`    Opening a repository, and reading where it is.
+//!   `Change`  One path, and what happened to it.
+//!   `Status`  The working tree, against the index and the head.
 //!
 //! Everything on the board shells out to `git`. A phone has no shell, so these
 //! come from libgit2 — reached as a Rust dependency of this crate, which already
@@ -130,6 +132,106 @@ fn unborn_name(repo: &git2::Repository) -> String {
             || "HEAD".to_owned(),
             |target| target.trim_start_matches("refs/heads/").to_owned(),
         )
+}
+
+/// What happened to one path.
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub struct Change {
+    /// Relative to the repository root, as git reports it.
+    pub path: String,
+    /// `added`, `modified`, `deleted`, `renamed` or `typechange`.
+    pub kind: &'static str,
+}
+
+/// The working tree, against the index and the head.
+#[derive(Debug, Serialize, Default, PartialEq, Eq)]
+pub struct Status {
+    /// Where `HEAD` points.
+    pub head: Option<Head>,
+    /// The index against the head.
+    pub staged: Vec<Change>,
+    /// The working tree against the index.
+    pub unstaged: Vec<Change>,
+    /// Present and not in the index. Directories are listed as directories.
+    pub untracked: Vec<String>,
+    /// Listed on their own rather than among the changes. A conflicted path is
+    /// not something to commit, and a model told it is "modified" commits it.
+    pub conflicted: Vec<String>,
+}
+
+/// The index against the head, and what to call it.
+const STAGED: [(git2::Status, &str); 5] = [
+    (git2::Status::INDEX_NEW, "added"),
+    (git2::Status::INDEX_MODIFIED, "modified"),
+    (git2::Status::INDEX_DELETED, "deleted"),
+    (git2::Status::INDEX_RENAMED, "renamed"),
+    (git2::Status::INDEX_TYPECHANGE, "typechange"),
+];
+
+/// The working tree against the index. `WT_NEW` is absent deliberately: an
+/// untracked file is reported as untracked rather than as an unstaged addition,
+/// which is what git says and what a model expects to act on.
+const UNSTAGED: [(git2::Status, &str); 4] = [
+    (git2::Status::WT_MODIFIED, "modified"),
+    (git2::Status::WT_DELETED, "deleted"),
+    (git2::Status::WT_RENAMED, "renamed"),
+    (git2::Status::WT_TYPECHANGE, "typechange"),
+];
+
+/// The working tree, against the index and the head.
+///
+/// # Errors
+/// [`Error::NotARepository`] IF nothing at `path` can be opened as one, and
+/// [`Error::Refused`] IF the tree cannot be walked.
+pub fn status(path: &Path) -> Result<Status, Error> {
+    let repo = open(path)?;
+
+    let mut options = git2::StatusOptions::new();
+    // Untracked directories are named rather than walked. A fresh clone of
+    // anything large otherwise answers with every file in it, which is a context
+    // window rather than an answer.
+    options
+        .include_untracked(true)
+        .recurse_untracked_dirs(false);
+
+    let entries = repo.statuses(Some(&mut options))?;
+    let mut status = Status {
+        head: Some(head(&repo)?),
+        ..Status::default()
+    };
+
+    for entry in entries.iter() {
+        let path = entry.path().unwrap_or_default().to_owned();
+        let flags = entry.status();
+
+        // Before anything else. A conflicted path also carries change flags, and
+        // reporting it as both is reporting it as committable.
+        if flags.is_conflicted() {
+            status.conflicted.push(path);
+            continue;
+        }
+        if flags.contains(git2::Status::WT_NEW) {
+            status.untracked.push(path.clone());
+        }
+        if let Some(kind) = first_of(flags, &STAGED) {
+            status.staged.push(Change {
+                path: path.clone(),
+                kind,
+            });
+        }
+        if let Some(kind) = first_of(flags, &UNSTAGED) {
+            status.unstaged.push(Change { path, kind });
+        }
+    }
+    Ok(status)
+}
+
+/// The first flag in the table that is set, and what it is called.
+fn first_of(flags: git2::Status, table: &[(git2::Status, &'static str)]) -> Option<&'static str> {
+    table
+        .iter()
+        .find(|(flag, _)| flags.contains(*flag))
+        .map(|(_, name)| *name)
 }
 
 /// Anything the library refused that is not a state this models.
@@ -258,5 +360,123 @@ mod tests {
             }
             other => panic!("a detached head read as {other:?}"),
         }
+    }
+
+    /// Write a file into the repository, creating parents.
+    fn write(repo: &git2::Repository, relative: &str, body: &str) {
+        let path = repo.workdir().unwrap().join(relative);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(path, body).unwrap();
+    }
+
+    /// Stage one path.
+    fn stage(repo: &git2::Repository, relative: &str) {
+        let mut index = repo.index().unwrap();
+        index.add_path(Path::new(relative)).unwrap();
+        index.write().unwrap();
+    }
+
+    #[test]
+    fn an_untracked_file_is_untracked_rather_than_an_unstaged_addition() {
+        // git reports it as untracked, and a model told "unstaged: added" will
+        // try to unstage something that was never staged.
+        let scratch = Scratch::new("untracked");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        write(&repo, "notes.txt", "hello");
+
+        let status = status(scratch.path()).unwrap();
+
+        assert_eq!(status.untracked, vec!["notes.txt".to_owned()]);
+        assert!(status.unstaged.is_empty(), "{:?}", status.unstaged);
+        assert!(status.staged.is_empty(), "{:?}", status.staged);
+    }
+
+    #[test]
+    fn an_untracked_directory_is_named_rather_than_walked() {
+        // A fresh clone of anything large otherwise answers with every file in
+        // it, which is a context window rather than an answer.
+        let scratch = Scratch::new("untracked-dir");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        for name in ["one", "two", "three"] {
+            write(&repo, &format!("build/{name}.o"), "x");
+        }
+
+        let status = status(scratch.path()).unwrap();
+
+        assert_eq!(status.untracked, vec!["build/".to_owned()]);
+    }
+
+    #[test]
+    fn staging_moves_a_file_from_untracked_to_added() {
+        let scratch = Scratch::new("staged");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        write(&repo, "notes.txt", "hello");
+        stage(&repo, "notes.txt");
+
+        let status = status(scratch.path()).unwrap();
+
+        assert_eq!(
+            status.staged,
+            vec![Change {
+                path: "notes.txt".to_owned(),
+                kind: "added"
+            }]
+        );
+        assert!(status.untracked.is_empty(), "{:?}", status.untracked);
+    }
+
+    #[test]
+    fn editing_a_committed_file_is_unstaged_rather_than_staged() {
+        let scratch = Scratch::new("modified");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        write(&repo, "notes.txt", "hello");
+        stage(&repo, "notes.txt");
+        commit(&repo);
+        write(&repo, "notes.txt", "hello again");
+
+        let status = status(scratch.path()).unwrap();
+
+        assert_eq!(
+            status.unstaged,
+            vec![Change {
+                path: "notes.txt".to_owned(),
+                kind: "modified"
+            }]
+        );
+        assert!(status.staged.is_empty(), "{:?}", status.staged);
+    }
+
+    #[test]
+    fn a_status_carries_where_head_is() {
+        // Without it the answer describes changes against something unnamed, and
+        // "two files modified" on a detached head means something else entirely.
+        let scratch = Scratch::new("status-head");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        write(&repo, "notes.txt", "hello");
+        stage(&repo, "notes.txt");
+        commit(&repo);
+
+        let status = status(scratch.path()).unwrap();
+
+        assert!(
+            matches!(status.head, Some(Head::Branch { .. })),
+            "{:?}",
+            status.head
+        );
+    }
+
+    #[test]
+    fn a_status_of_something_that_is_not_a_repository_says_where_it_looked() {
+        let scratch = Scratch::new("status-not-a-repo");
+        let Err(why) = status(scratch.path()) else {
+            panic!("read a status out of a directory that is not a repository")
+        };
+
+        assert!(
+            why.to_string()
+                .contains(&scratch.path().display().to_string())
+        );
     }
 }
