@@ -109,11 +109,27 @@ public enum GitError: LocalizedError, Equatable, Sendable {
     }
 }
 
-/// The envelope every entry point in the core's git half answers with.
+/// What a failed envelope can become.
 ///
-/// Internal: a caller gets a value or a `GitError`, and the shape in between is
+/// The envelope is one shape for every allocating entry point in the core, and
+/// each half of the app has its own error vocabulary to report it in. A protocol
+/// rather than one shared error type, so a caller keeps the words its own layer
+/// uses — see Remembering.swift, which reports the same two failures as memory
+/// rather than as git.
+protocol CoreFailure: Error {
+    /// What the core refused, in the words it chose.
+    static func refused(_ why: String) -> Self
+    /// An answer arrived and could not be read.
+    static func unreadable(_ detail: String) -> Self
+}
+
+extension GitError: CoreFailure {}
+
+/// The envelope every allocating entry point in the core answers with.
+///
+/// Internal: a caller gets a value or its own error, and the shape in between is
 /// the boundary's business.
-enum GitAnswer<Value: Decodable>: Decodable {
+enum CoreAnswer<Value: Decodable>: Decodable {
     case ok(Value)
     case refused(String)
 
@@ -133,18 +149,24 @@ enum GitAnswer<Value: Decodable>: Decodable {
     /// Read one out of what the core returned.
     ///
     /// - Returns: the value the core sent.
-    /// - Throws: `GitError.refused` carrying the core's own message, or
-    ///   `GitError.unreadable` if the envelope did not decode.
-    static func value(from json: Data) throws(GitError) -> Value {
+    /// - Parameter failing: the vocabulary to report in. Named rather than
+    ///   inferred: Swift will not take a typed-throws parameter from the throws
+    ///   clause of the function calling it, and the alternative is an error
+    ///   naming the generic rather than the fix.
+    /// - Throws: `Failure.refused` carrying the core's own message, or
+    ///   `Failure.unreadable` if the envelope did not decode.
+    static func value<Failure: CoreFailure>(
+        from json: Data, failing: Failure.Type
+    ) throws(Failure) -> Value {
         let envelope: Self
         do {
             envelope = try JSONDecoder().decode(Self.self, from: json)
         } catch {
-            throw .unreadable(String(describing: error))
+            throw Failure.unreadable(String(describing: error))
         }
         switch envelope {
         case .ok(let value): return value
-        case .refused(let why): throw .refused(why)
+        case .refused(let why): throw Failure.refused(why)
         }
     }
 }
