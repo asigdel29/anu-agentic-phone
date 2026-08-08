@@ -2,12 +2,14 @@
 //
 // History
 //   2026-08-07  A. Sigdel  Created.
+//   2026-08-07  A. Sigdel  Added Permission, which obtains one.
 //
 // Contents
 //   Capability       Something the system must agree to.
 //   PermissionState  What the system currently says about one.
 //   Authorizer       The seam to whichever framework owns that answer.
 //   PermissionError  Why a tool could not go on, written for the model.
+//   Permission       Obtaining one, at most one prompt per capability per run.
 //
 // #137 states the rule: permission is a turn's problem rather than a launch's.
 // Asking at first launch trains people to refuse, so nothing here runs before a
@@ -121,5 +123,74 @@ public enum PermissionError: LocalizedError, Equatable, Sendable {
             or ask whether to try again later.
             """
         }
+    }
+}
+
+/// Obtaining a capability, at most one prompt per capability per run.
+///
+/// # Atomic
+/// An actor, and the concurrency is the point rather than an afterthought. Two
+/// tools in one round both wanting the calendar must produce one prompt.
+public actor Permission {
+    private let authorizer: any Authorizer
+
+    /// The request in progress for a capability, so a second caller joins it
+    /// rather than starting another.
+    private var inFlight: [Capability: Task<PermissionState, Never>] = [:]
+
+    /// Capabilities whose one chance at a prompt has been spent.
+    ///
+    /// A capability that was already granted lands here too, without ever having
+    /// shown anything. That is imprecise and has no consequence: this only
+    /// suppresses a second request, and a granted capability never makes a first.
+    private var asked: Set<Capability> = []
+
+    public init(_ authorizer: any Authorizer) {
+        self.authorizer = authorizer
+    }
+
+    /// Go ahead, or say why not.
+    ///
+    /// - Throws: [`PermissionError`], which `ToolBox` turns into a result the
+    ///   model can work around rather than an ended turn.
+    public func obtain(_ capability: Capability) async throws {
+        switch await resolve(capability) {
+        case .granted: return
+        case .refused: throw PermissionError.refused(capability)
+        case .unavailable: throw PermissionError.unavailable(capability)
+        case .unasked: throw PermissionError.unanswered(capability)
+        }
+    }
+
+    /// Read the state, asking once if nobody has been asked.
+    ///
+    /// The read happens *inside* the task rather than before it, and that is
+    /// what makes this right under concurrency. A caller that suspended on an
+    /// earlier read would otherwise resume holding an answer from before the
+    /// prompt and ask a second time. Here a late caller either joins the task in
+    /// flight or starts one that reads afresh.
+    ///
+    /// Nothing is cached. A person who goes to Settings and relents tells the
+    /// app nothing, so the only way to find out is to look again.
+    private func resolve(_ capability: Capability) async -> PermissionState {
+        if let running = inFlight[capability] { return await running.value }
+
+        let spent = asked.contains(capability)
+        let authorizer = self.authorizer
+        let task = Task<PermissionState, Never> {
+            let known = await authorizer.state(of: capability)
+            // Still unasked having already asked means the prompt was dismissed.
+            // Asking again shows nothing, so report it rather than hang on it.
+            guard known == .unasked, !spent else { return known }
+            return await authorizer.request(capability)
+        }
+
+        inFlight[capability] = task
+        asked.insert(capability)
+        let state = await task.value
+        // Safe to clear unconditionally: nothing can install a newer task while
+        // this one is in flight, because it would have joined this one instead.
+        inFlight[capability] = nil
+        return state
     }
 }
