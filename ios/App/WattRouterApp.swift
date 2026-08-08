@@ -125,6 +125,7 @@ struct RootView: View {
                 ReadRemindersTool(reminders: reminders, permission: permission),
                 AddReminderTool(reminders: reminders, permission: permission),
                 FindContactTool(contacts: CNContacts(), permission: permission),
+                RunShortcutTool(opener: UIKitOpener()),
                 GitStatusTool(repository: git, workspace: workspace),
                 GitAddTool(repository: git, workspace: workspace),
                 GitCommitTool(repository: git, workspace: workspace),
