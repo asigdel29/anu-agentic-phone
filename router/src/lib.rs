@@ -44,6 +44,8 @@ pub mod ffi_git;
 #[cfg(feature = "git")]
 pub mod git;
 pub mod head;
+#[cfg(feature = "memory")]
+pub mod memory;
 pub mod metrics;
 pub mod policy;
 pub mod tier;
