@@ -5,6 +5,7 @@
 //!
 //! Contents
 //!   `wattrouter_git_head`     Where `HEAD` points.
+//!   `wattrouter_git_status`   The working tree, against the index and the head.
 //!   `wattrouter_string_free`  Release what an entry point here returned.
 //!
 //! Separate from `ffi.rs` because what crosses is a different shape, not because
@@ -93,6 +94,24 @@ pub unsafe extern "C" fn wattrouter_git_head(path: *const c_char) -> *mut c_char
     })
 }
 
+/// The working tree, against the index and the head.
+///
+/// # Returns
+/// An owned JSON string to pass to [`wattrouter_string_free`], carrying `ok` with
+/// the head, `staged` and `unstaged` as `{path, kind}`, and `untracked` and
+/// `conflicted` as paths — or `error` with the reason. Null on the terms
+/// [`wattrouter_git_head`] states.
+///
+/// # Safety
+/// As [`wattrouter_git_head`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wattrouter_git_status(path: *const c_char) -> *mut c_char {
+    guarded(|| match unsafe { borrowed_path(path) } {
+        None => std::ptr::null_mut(),
+        Some(path) => rendered(git::status(path)),
+    })
+}
+
 /// Release a string this module returned.
 ///
 /// # Safety
@@ -146,23 +165,50 @@ mod tests {
     }
 
     #[test]
+    fn a_status_crosses_with_each_of_its_lists_whole() {
+        let scratch = Scratch::new("ffi-git-status");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        std::fs::write(scratch.path().join("staged.txt"), "one").unwrap();
+        std::fs::write(scratch.path().join("loose.txt"), "two").unwrap();
+
+        let mut index = repo.index().unwrap();
+        index.add_path(Path::new("staged.txt")).unwrap();
+        index.write().unwrap();
+
+        // Whole lists rather than lengths: a crossing that dropped the path or the
+        // kind would still count one entry and pass.
+        let status = answer(super::wattrouter_git_status, scratch.path());
+        assert_eq!(
+            status["ok"]["staged"],
+            serde_json::json!([{"path": "staged.txt", "kind": "added"}]),
+            "crossed as {status}"
+        );
+        assert_eq!(status["ok"]["untracked"], serde_json::json!(["loose.txt"]));
+        assert_eq!(status["ok"]["conflicted"], serde_json::json!([]));
+    }
+
+    #[test]
     fn a_refusal_crosses_as_the_message_rather_than_as_an_absence() {
         // The message is what the model acts on. Null here would leave the caller
         // to invent one, and the invented one would not name the path.
         let scratch = Scratch::new("ffi-git-not-a-repo");
 
-        let refusal = answer(super::wattrouter_git_head, scratch.path());
-        let text = refusal["error"].as_str().unwrap_or_default();
-        assert!(
-            text.contains(&scratch.path().display().to_string()),
-            "the refusal did not say where it looked: {refusal}"
-        );
+        for entry in [super::wattrouter_git_head, super::wattrouter_git_status] {
+            let refusal = answer(entry, scratch.path());
+            let text = refusal["error"].as_str().unwrap_or_default();
+            assert!(
+                text.contains(&scratch.path().display().to_string()),
+                "the refusal did not say where it looked: {refusal}"
+            );
+        }
     }
 
     #[test]
     fn hostile_input_returns_a_value_rather_than_unwinding() {
         // A panic across the boundary is undefined behaviour, and so is a bad free.
-        assert!(unsafe { super::wattrouter_git_head(std::ptr::null()) }.is_null());
+        for entry in [super::wattrouter_git_head, super::wattrouter_git_status] {
+            assert!(unsafe { entry(std::ptr::null()) }.is_null());
+        }
         unsafe { super::wattrouter_string_free(std::ptr::null_mut()) };
     }
 }

@@ -15,6 +15,7 @@
  *   wattrouter_reason_name  The name behind a reason code.
  *   wattrouter_backend_name  The name behind a backend code.
  *   wattrouter_git_head      Where a repository's HEAD points.
+ *   wattrouter_git_status    The working tree, against the index and the head.
  *   wattrouter_string_free   Release what the git half returned.
  *
  * The git half is compiled only into a build with the `git` feature, and the
@@ -23,7 +24,7 @@
  * without the feature is a link error naming the symbol, which is the failure
  * worth having. `scripts/build-ios-core.sh` turns it on: a phone has no shell.
  *
- * Hand-written rather than generated: the surface is eleven functions and one
+ * Hand-written rather than generated: the surface is twelve functions and one
  * struct, and a generator would cost more to keep in the build than it saves.
  * A hand-written header can drift from the library it describes, though, and a
  * mismatch here is a wrong answer rather than a link error — so the test
@@ -165,6 +166,17 @@ const char *wattrouter_backend_name(uint8_t backend);
  *
  * Returns an owned string, or NULL IF `path` was NULL or not UTF-8. */
 char *wattrouter_git_head(const char *path);
+
+/* The working tree, against the index and the head.
+ *
+ * `ok` carries the head as above, plus `staged` and `unstaged` as lists of
+ * {path, kind}, and `untracked` and `conflicted` as lists of paths. An untracked
+ * directory is named rather than walked, so a large clone answers with the
+ * directory instead of everything under it. A conflicted path appears only in
+ * `conflicted`, because it is not something to commit.
+ *
+ * Returns an owned string, or NULL on the terms above. */
+char *wattrouter_git_status(const char *path);
 
 /* Release a string returned by the git half. NULL is accepted and ignored. */
 void wattrouter_string_free(char *text);
