@@ -2,23 +2,67 @@
 //
 // History
 //   2026-08-07  A. Sigdel  Created.
+//   2026-08-07  A. Sigdel  Show the conversation once the core comes up.
 //
 // Contents
 //   WattRouterApp  The entry point.
 //
-// Deliberately almost empty. What this target is for right now is proving that
-// the routing core links and runs on a phone: the library builds on a Mac and
-// cross-compiles in CI, and neither of those loads the static archive into a
-// running iOS process. Everything else — the credential, the turn loop, the
-// interface — arrives on top of a target that already launches.
+// What this target was for was proving that the routing core links and runs on a
+// phone, which `CoreCheck` does and still does. It is now also where a turn
+// happens, so the screen is the conversation whenever there is a core to run one
+// with.
+//
+// The fallback is `CoreCheck` rather than an error, and that is deliberate.
+// `Startup.router` fails when nobody has signed in, which is the ordinary state
+// of a fresh install rather than a fault — and the screen that proves the core
+// links is a more useful thing to show somebody in that state than a message
+// about a credential they have not been asked for yet. Asking for it is item 6's
+// business.
 
 import SwiftUI
+import WattRouter
 
 @main
 struct WattRouterApp: App {
     var body: some Scene {
         WindowGroup {
-            CoreCheck()
+            if let driver = Self.driver {
+                ConversationView(driver: driver)
+            } else {
+                CoreCheck()
+            }
         }
     }
+
+    /// A turn runner, or `nil` when the core will not come up.
+    ///
+    /// Built once at launch, because `Router` holds the decision cache and one
+    /// per process is what keeps a session's tier from being dropped between
+    /// turns. The same argument applies to `NeuralWattInference`, which owns the
+    /// connection pool.
+    @MainActor
+    private static let driver: TurnDriver? = {
+        guard let router = try? Startup.router(),
+            let credential = Keychain.read(Startup.account),
+            let workspace = try? Workspace(root: URL.documentsDirectory)
+        else { return nil }
+
+        // Five of the six. `ClarifyTool` asks the person a question and waits for
+        // the answer, and nothing on this screen can give one — a model that
+        // reached for it would stop, correctly, forever. It goes in with the
+        // affordance that answers it, not before.
+        let tools = ToolBox([
+            ReadFileTool(workspace: workspace),
+            WriteFileTool(workspace: workspace),
+            SearchFilesTool(workspace: workspace),
+            PatchTool(workspace: workspace),
+            TodoTool(),
+        ])
+
+        return TurnDriver(
+            agent: Agent(
+                router: router,
+                inference: NeuralWattInference(apiKey: credential),
+                tools: tools))
+    }()
 }
