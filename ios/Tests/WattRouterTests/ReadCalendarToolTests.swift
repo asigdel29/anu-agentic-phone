@@ -13,26 +13,6 @@ import XCTest
 
 @testable import WattRouter
 
-private actor StubCalendars: Calendars {
-    private(set) var asked = 0
-    private let answer: [CalendarEvent]
-
-    init(_ answer: [CalendarEvent] = []) {
-        self.answer = answer
-    }
-
-    func events(in range: TimeRange) async throws -> [CalendarEvent] {
-        asked += 1
-        return answer
-    }
-}
-
-private struct FixedAuthorizer: Authorizer {
-    let says: PermissionState
-    func state(of capability: Capability) async -> PermissionState { says }
-    func request(_ capability: Capability) async -> PermissionState { says }
-}
-
 final class ReadCalendarToolTests: XCTestCase {
     private let zone = TimeZone(identifier: "UTC")!
     /// 2026-08-07 09:30 UTC.
@@ -114,8 +94,8 @@ final class ReadCalendarToolTests: XCTestCase {
             XCTAssertEqual(error as? TimeRangeError, .unreadable("next tuesday"))
         }
 
-        let asked = await calendars.asked
-        XCTAssertEqual(asked, 0, "went to the calendar after failing to read the span")
+        let reads = await calendars.reads
+        XCTAssertEqual(reads, 0, "went to the calendar after failing to read the span")
     }
 
     func testARefusalNeverReachesTheCalendar() async throws {
@@ -129,8 +109,8 @@ final class ReadCalendarToolTests: XCTestCase {
             XCTAssertEqual(error as? PermissionError, .refused(.calendar))
         }
 
-        let asked = await calendars.asked
-        XCTAssertEqual(asked, 0, "read the calendar anyway")
+        let reads = await calendars.reads
+        XCTAssertEqual(reads, 0, "read the calendar anyway")
     }
 
     func testACappedListSaysHowManyItLeftOut() async throws {

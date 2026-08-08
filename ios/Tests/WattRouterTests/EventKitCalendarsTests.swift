@@ -71,6 +71,24 @@ final class EventKitCalendarsTests: XCTestCase {
         XCTAssertEqual(read.starts, event.startDate)
     }
 
+    func testAnUnmatchedCalendarOffersTheOnesThatWouldWork() {
+        // The alternatives, not just the mistake — the same contract `ToolBox`
+        // keeps when a tool name does not match one it knows. A refusal the
+        // model cannot act on costs the same turn twice.
+        let said = EventKitError.noSuchCalendar(asked: "Wrok", available: ["Work", "Personal"])
+            .localizedDescription
+
+        XCTAssertTrue(said.contains(#""Wrok""#), said)
+        XCTAssertTrue(said.contains("Work, Personal"), said)
+    }
+
+    func testNowhereToWriteSaysNothingHappened() {
+        // A failure that does not say whether it half-succeeded leaves the model
+        // to guess, and it guesses that it worked.
+        let said = EventKitError.nowhereToWrite.localizedDescription
+        XCTAssertTrue(said.contains("Nothing was added"), said)
+    }
+
     func testABlankLocationIsAnAbsenceRatherThanAnEmptyLine() {
         // The framework spells "no location" both ways, and only one of them is
         // nil. The other renders as ", at " with nothing after it.
