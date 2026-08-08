@@ -30,19 +30,39 @@ final class PhoneToolsTests: XCTestCase {
         PhoneTools.all(workspace: try Workspace(root: root))
     }
 
+    /// Every tool that is there whatever the device does.
+    ///
+    /// Written out rather than counted. A count passes when one tool is swapped
+    /// for another, which is the change worth noticing.
+    private static let unconditional: Set<String> = [
+        "read_file", "write_file", "search_files", "patch", "todo",
+        "read_calendar", "add_event", "read_reminders", "add_reminder",
+        "find_contact", "run_shortcut", "where_am_i",
+        "git_status", "git_add", "git_commit",
+    ]
+
     func testEveryToolTheAppOffersIsThere() throws {
-        // Written out rather than counted. A count passes when one tool is
-        // swapped for another, which is the change worth noticing.
+        let names = Set(try tools().tools.map(\.name))
+
+        XCTAssertTrue(
+            names.isSuperset(of: Self.unconditional),
+            "missing: \(Self.unconditional.subtracting(names))")
+        // Nothing beyond the unconditional set and the two memory tools, which
+        // are the only conditional ones.
+        XCTAssertTrue(
+            names.subtracting(Self.unconditional).isSubset(of: ["remember", "recall"]),
+            "unexpected: \(names.subtracting(Self.unconditional))")
+    }
+
+    func testTheMemoryToolsArriveTogetherOrNotAtAll() throws {
+        // The store may not open, and then the app runs without memory rather
+        // than not running. What must not happen is one of the two appearing: a
+        // model that can remember and not recall fills a store it cannot read.
         let names = Set(try tools().tools.map(\.name))
 
         XCTAssertEqual(
-            names,
-            [
-                "read_file", "write_file", "search_files", "patch", "todo",
-                "read_calendar", "add_event", "read_reminders", "add_reminder",
-                "find_contact", "run_shortcut", "where_am_i",
-                "git_status", "git_add", "git_commit",
-            ])
+            names.contains("remember"), names.contains("recall"),
+            "one memory tool without the other")
     }
 
     func testClarifyIsDeliberatelyAbsent() throws {

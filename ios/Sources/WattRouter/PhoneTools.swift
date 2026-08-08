@@ -46,7 +46,17 @@ public enum PhoneTools {
     /// # Rely
     /// Called once per process. Calling it twice yields a second `Permission`,
     /// and a capability may then be prompted for twice.
-    public static func all(workspace: Workspace) -> ToolBox {
+    /// Where the memory store lives.
+    ///
+    /// Application Support, deliberately not the workspace. `Workspace` is what
+    /// the file tools may touch, and a database inside it is one `read_file`
+    /// away from the model reading its own memory as bytes and one `write_file`
+    /// away from corrupting it.
+    public static var store: URL {
+        URL.applicationSupportDirectory.appending(path: "memory/memory.db")
+    }
+
+    public static func all(workspace: Workspace, session: String = "phone") -> ToolBox {
         let events = EventKitAuthorizer()
         let permission = Permission(
             ByCapability([
@@ -60,6 +70,11 @@ public enum PhoneTools {
         // is not a repository is a refusal at the first call rather than a
         // failure here: a phone with no repository on it still has an app to run.
         let git = CoreRepository()
+        // A store that will not open leaves the app running without memory
+        // rather than not running. The two tools go in only when there is one
+        // behind them, because a tool that always refuses is worse than a tool
+        // the model was never offered.
+        let memory = CoreMemory(path: store)
 
         return ToolBox([
             ReadFileTool(workspace: workspace),
@@ -77,6 +92,6 @@ public enum PhoneTools {
             GitStatusTool(repository: git, workspace: workspace),
             GitAddTool(repository: git, workspace: workspace),
             GitCommitTool(repository: git, workspace: workspace),
-        ])
+        ] + (memory.map { [RememberTool(memory: $0, session: session), RecallTool(memory: $0)] } ?? []))
     }
 }
