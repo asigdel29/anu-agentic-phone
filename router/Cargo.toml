@@ -23,6 +23,11 @@ path = "src/main.rs"
 # that only ever hashes, which is the right build for a memory-tight board.
 default = ["onnx"]
 onnx = ["dep:fastembed"]
+# Off by default: the board shells out to git and does not need libgit2 linked
+# into a process that would never call it. The iOS build turns it on, because a
+# phone has no shell — see docs/decisions/git-without-a-subprocess.md. CI tests
+# it through --all-features rather than through the default set.
+git = ["dep:git2"]
 
 [dependencies]
 # rustls throughout, and default features off. The defaults are
@@ -37,6 +42,11 @@ fastembed = { version = "5.17.4", optional = true, default-features = false, fea
 # needs body streaming both ways, and axum's Body is hyper's, so the routing
 # convenience costs nothing.
 axum = "0.8"
+# default-features off drops https and ssh, which pull openssl and libssh2 and
+# are the half this does not do — see the decision record. What is left vendors
+# libgit2's C and builds it with cc, which is the toolchain the cross-build
+# already uses.
+git2 = { version = "0.19", optional = true, default-features = false }
 futures-util = { version = "0.3", default-features = false }
 # rustls rather than the system OpenSSL: the router cross-compiles to aarch64,
 # and vendoring the TLS stack keeps that a pure Rust build.
