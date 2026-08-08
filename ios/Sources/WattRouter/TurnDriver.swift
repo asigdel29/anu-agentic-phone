@@ -30,6 +30,11 @@ public final class TurnDriver {
     /// their rounds, and the model is sent a transcript that never happened.
     public private(set) var isRunning = false
 
+    /// How the current round was routed, or `nil` before the first one. Kept
+    /// rather than folded into the transcript: it is replaced each round, and a
+    /// row that rewrote itself would be a strange thing to scroll back through.
+    public private(set) var routing: (decision: Decision, chain: [Step])?
+
     private let agent: Agent
 
     public init(agent: Agent) {
@@ -57,6 +62,9 @@ public final class TurnDriver {
 
         do {
             for try await event in await agent.send(text) {
+                if case .decided(let decision, let chain) = event {
+                    routing = (decision, chain)
+                }
                 transcript.apply(event)
             }
         } catch {

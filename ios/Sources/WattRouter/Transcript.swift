@@ -96,6 +96,12 @@ public struct Transcript: Equatable, Sendable {
             openAnswer = nil
             rows.append(.used(id: take(), tool: call.name, result: nil))
 
+        case .decided:
+            // Not a row. How a turn was routed is the app describing itself, and
+            // belongs beside the transcript rather than inside it — a person
+            // reading back through what was said should not have to step over it.
+            break
+
         case .toolResult(let result):
             // Fills in the earliest call still waiting. Tools run in order, so
             // the earliest unanswered call is the one this answers.

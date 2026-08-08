@@ -42,6 +42,14 @@ public enum TurnEvent: Equatable, Sendable {
     /// What a tool produced. Never from a walk: the loop above yields this, and
     /// shares the type so an interface has one stream rather than two.
     case toolResult(ToolResult)
+    /// How the round was routed, and the chain standing behind it. Never from a
+    /// walk either — the turn loop decides and yields this before the walk
+    /// starts, so an interface can say which tier is answering while it answers.
+    ///
+    /// Carried here rather than re-derived, because `Router.decide` mutates the
+    /// session cache: asking a second time is not a free observation, and the
+    /// answer it gives is not necessarily the one the turn ran on.
+    case decided(Decision, chain: [Step])
 }
 
 /// The loop over a tier's models.
