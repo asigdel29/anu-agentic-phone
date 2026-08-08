@@ -1,10 +1,11 @@
 # anu-agentic-stack
 
-A personal agent stack that runs on a small aarch64 board: [Hermes
-Agent](https://github.com/NousResearch/hermes-agent) as the harness,
-[zeromem](https://github.com/ptaranat/zeromem) for memory that costs no tokens, and a local
-router that picks the cheapest model on [NeuralWatt](https://neuralwatt.com) that can still do
-the job.
+A personal agent stack. One routing core, in three places: a small aarch64 board, an iPhone,
+and — next — an Android phone. The board runs [Hermes
+Agent](https://github.com/NousResearch/hermes-agent) as the harness with
+[zeromem](https://github.com/ptaranat/zeromem) for memory that costs no tokens; the phones
+run their own turn loop over the same core. All three route to the cheapest model on
+[NeuralWatt](https://neuralwatt.com) that can still do the job.
 
 ```
   you ── CLI / chat ──►  Hermes Agent   (conversation, tools, coding)
@@ -19,20 +20,72 @@ the job.
                            api.neuralwatt.com/v1
 ```
 
-## The three pieces
+On a phone the middle of that picture collapses: there is one address space, so the router
+is linked as a static library and called through its C ABI rather than proxied over a
+socket. `router/src/ffi.rs` says why.
 
-**Hermes Agent** is the thing you talk to, and the only agent here. It holds the conversation,
-keeps long-term memory, and does the coding itself. It used to delegate that to a second
-harness; `docs/decisions/retiring-the-second-harness.md` records why it no longer does.
+## The pieces
+
+**Hermes Agent** is the thing you talk to on the board, and the only agent there. It holds
+the conversation, keeps long-term memory, and does the coding itself. It used to delegate
+that to a second harness; `docs/decisions/retiring-the-second-harness.md` records why it no
+longer does.
 
 **zeromem** is the memory provider. Its point is in the name: indexing and retrieval are
 deterministic, so remembering something costs zero tokens. It keeps raw conversation turns
 with provenance rather than LLM-written summaries, which means recall returns what was
 actually said, not a paraphrase of it.
 
-**wattrouter** is a local proxy that scores each prompt for difficulty and routes it to the
-cheapest tier that can handle it. It speaks the OpenAI wire protocol in both directions, so
-anything that can talk to OpenAI can sit in front of it.
+**wattrouter** is the core, and the one thing every deployment shares. It scores each prompt
+for difficulty and routes it to the cheapest tier that can handle it. On the board it is a
+local proxy speaking the OpenAI wire protocol in both directions, so anything that can talk
+to OpenAI can sit in front of it. On a phone it is the same crate as a static library.
+
+## Where it runs
+
+Three deployments, one core. What differs is everything above it.
+
+### The board
+
+`deploy/` bootstraps it and `hermes/` configures it. Hermes holds the conversation, zeromem
+holds the memory, and the router is a service on `127.0.0.1`. This is the deployment the
+rest of this README describes.
+
+### iOS — `ios/`
+
+A Swift app with its own turn loop, linking the router as an xcframework. It does not use
+Hermes: a phone has no shell, so the tools are written rather than shelled out to, and the
+loop is `Agent.swift` rather than a harness.
+
+What exists: the turn loop with atomic rounds, streaming, interruption and resumption; six
+file and todo tools over a workspace boundary; calendar reading and writing over EventKit
+behind a permission seam; the transcript; the routing panel. `ios/AGENTS.md` has the layout
+and, more usefully, what can and cannot be verified without Xcode.
+
+What is blocked: local inference, permanently until a physical device exists —
+`docs/decisions/inference-needs-a-phone.md` records why the simulator gives no signal at all.
+
+### Android — `android/`, next
+
+Not built yet. `docs/decisions/what-android-allows.md` is written first, because Android
+permits most of what iOS forbids and the constraints on each are not the ones you would
+guess.
+
+### What the two phones do not share
+
+| | iOS | Android |
+|---|---|---|
+| Read and drive other apps | Not possible for a third party, at all | `AccessibilityService`: node tree, gestures, screenshots |
+| What stops it | The API does not exist | Play policy, not the API. A sideloaded build is unaffected |
+| Floating chat | No | Bubbles (sanctioned) or an overlay window (flexible) |
+| Long turns in the background | Seconds, so the app warns and stops | A foreground service, for as long as it is useful |
+| A shell | No | Yes, if the tools ship as native libraries — an app cannot `exec` its own data directory |
+| Driving a browser | An embedded web view only | An embedded web view, or the person's own browser through accessibility |
+| Content handed in | Share extension, App Intents, Siri and Shortcuts | Intents and the share sheet |
+
+The routing core is identical on both. A second routing policy written in Kotlin would agree
+with the first until the day it did not, which is the argument
+`retiring-the-second-harness.md` already made about a second harness.
 
 ## Routing
 
@@ -77,6 +130,8 @@ never a tracked file. See `.env.example`.
 
 ## Getting started
 
+### The board
+
 ```sh
 just toolchain                        # are the required tools present
 cargo build --release --manifest-path router/Cargo.toml
@@ -96,6 +151,20 @@ cargo run --release --manifest-path router/Cargo.toml --bin train-head \
 
 The head carries thresholds calibrated against its own score distribution, so
 they cannot drift apart from the weights that produced them.
+
+### iOS
+
+Needs Xcode and one simulator runtime; nothing else has to be installed by hand.
+
+```sh
+just ios-core                         # the routing core as an xcframework
+just ios-test                         # the suite, on a simulator it creates if absent
+just ios-project                      # regenerate the Xcode project from project.yml
+```
+
+The project and the xcframework are both build output and neither is checked in.
+`ios/AGENTS.md` says what a pull request may claim to have verified on a machine without
+Xcode, which is less than it looks.
 
 ## Credits
 
