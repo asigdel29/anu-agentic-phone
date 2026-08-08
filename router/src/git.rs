@@ -9,6 +9,8 @@
 //!   `head`    Opening a repository, and reading where it is.
 //!   `Change`  One path, and what happened to it.
 //!   `Status`  The working tree, against the index and the head.
+//!   `add`     Staging paths.
+//!   `commit`  Writing what is staged, and refusing to write nothing.
 //!
 //! Everything on the board shells out to `git`. A phone has no shell, so these
 //! come from libgit2 — reached as a Rust dependency of this crate, which already
@@ -44,6 +46,18 @@ pub enum Error {
     /// The library refused for some other reason.
     #[error("git: {0}")]
     Refused(String),
+    /// A path was named that is not there.
+    #[error("nothing at {0} to stage")]
+    NoSuchPath(String),
+    /// Nothing is staged, so there is nothing to commit.
+    #[error("nothing is staged, so there is nothing to commit. Stage what should go in first")]
+    NothingStaged,
+    /// No identity to sign a commit with.
+    #[error(
+        "no name and email are configured for git, so a commit cannot be signed. \
+         Set user.name and user.email"
+    )]
+    NoIdentity,
 }
 
 /// Where `HEAD` points.
@@ -234,6 +248,110 @@ fn first_of(flags: git2::Status, table: &[(git2::Status, &'static str)]) -> Opti
         .map(|(_, name)| *name)
 }
 
+/// Stage paths.
+///
+/// # Arguments
+/// * `paths` — relative to the repository root, WHERE a directory stages what is
+///   under it.
+///
+/// # Errors
+/// [`Error::NoSuchPath`] naming the one that is missing, IF any is. Four paths
+/// with one misspelt otherwise fail as a whole with the library's message about
+/// an unspecified pathspec, and the model has to guess which.
+///
+/// # Atomic
+/// Not atomic across paths. The check runs over all of them first, so the common
+/// failure stages nothing — but a path removed between the check and the write
+/// leaves the earlier ones staged.
+pub fn add(path: &Path, paths: &[String]) -> Result<Status, Error> {
+    let repo = open(path)?;
+    let root = repo
+        .workdir()
+        .ok_or_else(|| Error::Refused("bare repository".to_owned()))?;
+
+    for relative in paths {
+        if !root.join(relative).exists() {
+            return Err(Error::NoSuchPath(relative.clone()));
+        }
+    }
+
+    let mut index = repo.index()?;
+    for relative in paths {
+        if root.join(relative).is_dir() {
+            index.add_all([relative], git2::IndexAddOption::DEFAULT, None)?;
+        } else {
+            index.add_path(Path::new(relative))?;
+        }
+    }
+    index.write()?;
+    drop(index);
+
+    status(path)
+}
+
+/// Commit what is staged.
+///
+/// # Returns
+/// The short id of the commit written.
+///
+/// # Errors
+/// [`Error::NothingStaged`] IF the tree matches the parent, [`Error::NoIdentity`]
+/// IF nothing configures a name and an email, and [`Error::NotARepository`] as
+/// elsewhere.
+pub fn commit(path: &Path, message: &str) -> Result<String, Error> {
+    let repo = open(path)?;
+    let who = git2::Signature::now(&name(&repo)?, &email(&repo)?)?;
+
+    let tree = {
+        let mut index = repo.index()?;
+        let oid = index.write_tree()?;
+        repo.find_tree(oid)?
+    };
+
+    // The first commit has no parent, which is the unborn state `head` models.
+    let parent = repo.head().ok().and_then(|head| head.peel_to_commit().ok());
+
+    // libgit2 writes a commit whose tree matches its parent without complaint,
+    // and a model doing that in a loop produces a history of identical trees
+    // while believing it is making progress. `git commit` stops here and says so.
+    if let Some(parent) = &parent {
+        if parent.tree_id() == tree.id() {
+            return Err(Error::NothingStaged);
+        }
+    } else if tree.iter().count() == 0 {
+        return Err(Error::NothingStaged);
+    }
+
+    let parents: Vec<&git2::Commit> = parent.iter().collect();
+    let oid = repo.commit(Some("HEAD"), &who, &who, message, &tree, &parents)?;
+    let commit = repo.find_commit(oid)?;
+    Ok(commit
+        .as_object()
+        .short_id()?
+        .as_str()
+        .unwrap_or_default()
+        .to_owned())
+}
+
+/// The committer name, or a refusal naming what is missing.
+///
+/// The library reports an absent identity as "config value not found", which
+/// says nothing about which value or where it goes.
+fn name(repo: &git2::Repository) -> Result<String, Error> {
+    configured(repo, "user.name")
+}
+
+/// The committer email, on the same terms.
+fn email(repo: &git2::Repository) -> Result<String, Error> {
+    configured(repo, "user.email")
+}
+
+fn configured(repo: &git2::Repository, key: &str) -> Result<String, Error> {
+    repo.config()
+        .and_then(|config| config.get_string(key))
+        .map_err(|_| Error::NoIdentity)
+}
+
 /// Anything the library refused that is not a state this models.
 ///
 /// A conversion rather than a helper, so the call sites are `?` and a new one
@@ -274,8 +392,15 @@ mod tests {
         }
     }
 
+    /// Give the repository an identity to sign with, as a phone would have to.
+    fn identify(repo: &git2::Repository) {
+        let mut config = repo.config().unwrap();
+        config.set_str("user.name", "Test").unwrap();
+        config.set_str("user.email", "test@example.com").unwrap();
+    }
+
     /// Commit whatever is in the index, with no parent unless there is one.
-    fn commit(repo: &git2::Repository) -> git2::Oid {
+    fn commit_directly(repo: &git2::Repository) -> git2::Oid {
         let who = git2::Signature::now("Test", "test@example.com").unwrap();
         let tree = {
             let mut index = repo.index().unwrap();
@@ -333,7 +458,7 @@ mod tests {
     fn a_repository_with_a_commit_is_on_its_branch() {
         let scratch = Scratch::new("on-a-branch");
         let repo = git2::Repository::init(scratch.path()).unwrap();
-        commit(&repo);
+        commit_directly(&repo);
 
         match head(&repo).unwrap() {
             Head::Branch { name } => assert!(!name.is_empty() && !name.starts_with("refs/")),
@@ -347,7 +472,7 @@ mod tests {
         // which reads as a branch called HEAD rather than as no branch at all.
         let scratch = Scratch::new("detached");
         let repo = git2::Repository::init(scratch.path()).unwrap();
-        let oid = commit(&repo);
+        let oid = commit_directly(&repo);
         repo.set_head_detached(oid).unwrap();
 
         match head(&repo).unwrap() {
@@ -433,7 +558,7 @@ mod tests {
         let repo = git2::Repository::init(scratch.path()).unwrap();
         write(&repo, "notes.txt", "hello");
         stage(&repo, "notes.txt");
-        commit(&repo);
+        commit_directly(&repo);
         write(&repo, "notes.txt", "hello again");
 
         let status = status(scratch.path()).unwrap();
@@ -456,7 +581,7 @@ mod tests {
         let repo = git2::Repository::init(scratch.path()).unwrap();
         write(&repo, "notes.txt", "hello");
         stage(&repo, "notes.txt");
-        commit(&repo);
+        commit_directly(&repo);
 
         let status = status(scratch.path()).unwrap();
 
@@ -478,5 +603,92 @@ mod tests {
             why.to_string()
                 .contains(&scratch.path().display().to_string())
         );
+    }
+
+    #[test]
+    fn staging_a_path_that_is_not_there_names_it() {
+        // Four paths with one misspelt otherwise fail as a whole with the
+        // library's message about an unspecified pathspec, and the model has to
+        // guess which one it got wrong.
+        let scratch = Scratch::new("add-missing");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        write(&repo, "here.txt", "x");
+
+        let paths = ["here.txt".to_owned(), "not-here.txt".to_owned()];
+        let Err(why) = add(scratch.path(), &paths) else {
+            panic!("staged a path that does not exist")
+        };
+
+        assert!(why.to_string().contains("not-here.txt"), "{why}");
+        assert!(
+            status(scratch.path()).unwrap().staged.is_empty(),
+            "the check ran after the write"
+        );
+    }
+
+    #[test]
+    fn staging_a_directory_stages_what_is_under_it() {
+        let scratch = Scratch::new("add-dir");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        write(&repo, "src/one.txt", "x");
+        write(&repo, "src/two.txt", "y");
+
+        let staged = add(scratch.path(), &["src".to_owned()]).unwrap().staged;
+
+        assert_eq!(staged.len(), 2, "{staged:?}");
+        assert!(staged.iter().all(|change| change.kind == "added"));
+    }
+
+    #[test]
+    fn committing_nothing_is_refused_rather_than_written() {
+        // libgit2 writes a commit whose tree matches its parent without
+        // complaint, and a model doing that in a loop produces a history of
+        // identical trees while believing it is making progress.
+        let scratch = Scratch::new("empty-commit");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        identify(&repo);
+        write(&repo, "notes.txt", "hello");
+        add(scratch.path(), &["notes.txt".to_owned()]).unwrap();
+        commit(scratch.path(), "the first").unwrap();
+
+        let Err(why) = commit(scratch.path(), "the same again") else {
+            panic!("wrote a commit with nothing in it")
+        };
+        assert!(matches!(why, Error::NothingStaged), "{why}");
+    }
+
+    #[test]
+    fn the_first_commit_has_no_parent_and_ends_the_unborn_state() {
+        let scratch = Scratch::new("first-commit");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        identify(&repo);
+        assert!(matches!(head(&repo).unwrap(), Head::Unborn { .. }));
+
+        write(&repo, "notes.txt", "hello");
+        add(scratch.path(), &["notes.txt".to_owned()]).unwrap();
+        let short = commit(scratch.path(), "the first").unwrap();
+
+        assert!(!short.is_empty());
+        assert!(matches!(head(&repo).unwrap(), Head::Branch { .. }));
+        assert!(status(scratch.path()).unwrap().staged.is_empty());
+    }
+
+    #[test]
+    fn a_missing_setting_says_which_settings_are_missing() {
+        // Through `configured` rather than through `commit`. Isolating a
+        // repository from a global gitconfig means moving libgit2's search path,
+        // which is process-wide, and the machine running these tests very likely
+        // has an identity while the phone this is for does not. The mapping is
+        // what is under test either way: the library reports an absent key as
+        // "config value not found", which says nothing about which key or where
+        // it goes.
+        let scratch = Scratch::new("no-identity");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+
+        let Err(why) = configured(&repo, "wattrouter.definitely-not-set") else {
+            panic!("read a setting that was never written")
+        };
+        assert!(matches!(why, Error::NoIdentity), "{why}");
+        assert!(why.to_string().contains("user.email"), "{why}");
     }
 }
