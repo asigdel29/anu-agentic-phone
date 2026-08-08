@@ -39,6 +39,8 @@ pub mod classify;
 pub mod config;
 pub mod embed;
 pub mod ffi;
+#[cfg(any(feature = "git", feature = "memory"))]
+pub mod ffi_answer;
 #[cfg(feature = "git")]
 pub mod ffi_git;
 #[cfg(feature = "git")]

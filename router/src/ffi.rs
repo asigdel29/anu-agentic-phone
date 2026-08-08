@@ -647,12 +647,16 @@ mod tests {
             declared.contains("wattrouter_decide"),
             "the scan found nothing, which would make agreement vacuous"
         );
-        // Both FFI files, because there is one header over the two of them.
-        // Read as text rather than as symbols, so the git half counts here even
-        // in a build that did not compile it — which is the build this test
-        // usually runs in, and the one that would otherwise report the header as
-        // describing functions that do not exist.
-        let library = concat!(include_str!("ffi.rs"), include_str!("ffi_git.rs"));
+        // Every FFI source, because there is one header over all of them. Read
+        // as text rather than as symbols, so the feature-gated halves count here
+        // even in a build that did not compile them — which is the build this
+        // test usually runs in, and the one that would otherwise report the
+        // header as describing functions that do not exist.
+        let library = concat!(
+            include_str!("ffi.rs"),
+            include_str!("ffi_answer.rs"),
+            include_str!("ffi_git.rs"),
+        );
         assert_eq!(
             declared,
             entry_points(library),

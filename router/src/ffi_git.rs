@@ -8,7 +8,9 @@
 //!   `wattrouter_git_status`   The working tree, against the index and the head.
 //!   `wattrouter_git_add`      Staging paths.
 //!   `wattrouter_git_commit`   Writing what is staged.
-//!   `wattrouter_string_free`  Release what an entry point here returned.
+//!
+//! The envelope, the panic guard and `wattrouter_string_free` moved to
+//! `ffi_answer.rs` when memory became the second caller of them.
 //!
 //! Separate from `ffi.rs` because what crosses is a different shape, not because
 //! that file was full. A decision is three fixed-width fields and crosses by
@@ -24,71 +26,10 @@
 //! No panic may cross this boundary — that is undefined behaviour, so every entry
 //! point catches and reports failure as a value, as `ffi.rs` does.
 
+use crate::ffi_answer::{borrowed, guarded, refused, rendered};
 use crate::git;
-use serde::Serialize;
-use std::ffi::{CStr, CString, c_char};
-use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::ffi::c_char;
 use std::path::Path;
-
-/// What every entry point here answers with.
-///
-/// Externally tagged, which is serde's default and is also the point: the tag is
-/// what a caller switches on, and a flattened shape would need a separate success
-/// flag that could disagree with the payload.
-#[derive(Serialize)]
-#[serde(rename_all = "snake_case")]
-enum Answer<T: Serialize> {
-    /// The operation's own result.
-    Ok(T),
-    /// Why it could not be done, in the words the model reads.
-    Error(String),
-}
-
-/// Serialise an outcome into an owned C string.
-fn rendered<T: Serialize>(outcome: Result<T, git::Error>) -> *mut c_char {
-    emit(&match outcome {
-        Ok(value) => Answer::Ok(value),
-        Err(why) => Answer::Error(why.to_string()),
-    })
-}
-
-/// A refusal this boundary produced rather than [`crate::git`].
-///
-/// An argument that will not decode is not a git failure, and dressing it as one
-/// would send the model looking at the repository. It is still something the
-/// model can fix, so it crosses in the same envelope.
-fn refused(why: &str) -> *mut c_char {
-    emit(&Answer::<()>::Error(why.to_owned()))
-}
-
-/// Write an answer out as an owned C string.
-///
-/// Returns null IF it could not be rendered, which needs a serialisation failure
-/// or an interior NUL — neither reachable from what [`crate::git`] returns.
-/// Written as a value rather than an `expect`, which would abort the host
-/// application over an arm nothing reaches.
-fn emit<T: Serialize>(answer: &Answer<T>) -> *mut c_char {
-    serde_json::to_string(answer)
-        .ok()
-        .and_then(|json| CString::new(json).ok())
-        .map_or(std::ptr::null_mut(), CString::into_raw)
-}
-
-/// Run `body`, turning a panic into null rather than into undefined behaviour.
-fn guarded(body: impl FnOnce() -> *mut c_char) -> *mut c_char {
-    catch_unwind(AssertUnwindSafe(body)).unwrap_or(std::ptr::null_mut())
-}
-
-/// What a caller passed, or `None` IF it is null or not UTF-8.
-///
-/// # Safety
-/// `text` must be null or a valid NUL-terminated string outliving the call.
-unsafe fn borrowed<'a>(text: *const c_char) -> Option<&'a str> {
-    if text.is_null() {
-        return None;
-    }
-    unsafe { CStr::from_ptr(text) }.to_str().ok()
-}
 
 /// Where `HEAD` points: a branch, a commit, or a branch with no commits yet.
 ///
@@ -190,24 +131,6 @@ pub unsafe extern "C" fn wattrouter_git_commit(
     })
 }
 
-/// Release a string this module returned.
-///
-/// # Safety
-/// `text` must come from an entry point in this module and not already be freed.
-/// Null is accepted and ignored, so a caller that checked for it need not check
-/// again.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn wattrouter_string_free(text: *mut c_char) {
-    if text.is_null() {
-        return;
-    }
-    // Discarded deliberately: a caller freeing a string has nowhere to report a
-    // failure to, and there is nothing it could do about one.
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        drop(unsafe { CString::from_raw(text) });
-    }));
-}
-
 #[cfg(test)]
 mod tests {
     use crate::testenv::Scratch;
@@ -226,7 +149,7 @@ mod tests {
             .to_str()
             .expect("the envelope is UTF-8")
             .to_owned();
-        unsafe { super::wattrouter_string_free(returned) };
+        unsafe { crate::ffi_answer::wattrouter_string_free(returned) };
 
         serde_json::from_str(&json).expect("the envelope is JSON")
     }
@@ -246,7 +169,7 @@ mod tests {
             .to_str()
             .expect("the envelope is UTF-8")
             .to_owned();
-        unsafe { super::wattrouter_string_free(returned) };
+        unsafe { crate::ffi_answer::wattrouter_string_free(returned) };
 
         serde_json::from_str(&json).expect("the envelope is JSON")
     }
@@ -382,6 +305,6 @@ mod tests {
             assert!(unsafe { entry(std::ptr::null(), path.as_ptr()) }.is_null());
             assert!(unsafe { entry(path.as_ptr(), std::ptr::null()) }.is_null());
         }
-        unsafe { super::wattrouter_string_free(std::ptr::null_mut()) };
+        unsafe { crate::ffi_answer::wattrouter_string_free(std::ptr::null_mut()) };
     }
 }
