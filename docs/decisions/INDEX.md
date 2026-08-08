@@ -20,6 +20,7 @@ nothing in a diff records it, so no pull request body can either.
 | [retiring-the-second-harness.md](retiring-the-second-harness.md) | Why is there one agent rather than two? |
 | [inference-needs-a-phone.md](inference-needs-a-phone.md) | Why is the local tier unmeasured, and why was it built around rather than waited on? |
 | [git-without-a-subprocess.md](git-without-a-subprocess.md) | What does a phone give up by using a library instead of `git`, and why is libgit2 a Rust dependency? |
+| [what-android-allows.md](what-android-allows.md) | What can an Android agent do that an iOS one cannot, and what stops each of those things? |
 
 ## Decisions argued in a pull request
 
