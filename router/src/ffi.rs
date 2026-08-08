@@ -656,6 +656,7 @@ mod tests {
             include_str!("ffi.rs"),
             include_str!("ffi_answer.rs"),
             include_str!("ffi_git.rs"),
+            include_str!("ffi_memory.rs"),
         );
         assert_eq!(
             declared,

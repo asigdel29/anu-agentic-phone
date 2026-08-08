@@ -43,6 +43,8 @@ pub mod ffi;
 pub mod ffi_answer;
 #[cfg(feature = "git")]
 pub mod ffi_git;
+#[cfg(feature = "memory")]
+pub mod ffi_memory;
 #[cfg(feature = "git")]
 pub mod git;
 pub mod head;
