@@ -75,63 +75,10 @@ struct RootView: View {
                 return
             }
 
-            // One `Permission` for the whole app, not one per tool. It holds the
-            // record of what has already been asked, so a second instance means a
-            // second prompt for one capability — the failure #193 exists to
-            // prevent, reintroduced by building the thing that prevents it twice.
-            //
-            // The two EventKit actors deliberately do *not* share a store.
-            // `EKEventStore` is not `Sendable`, so one handed to both would be a
-            // value living in two isolation domains, which is what actor
-            // isolation is being used here to rule out. The cost is a second
-            // connection to the calendar database, which is cheaper than a claim
-            // the compiler cannot check.
-            // Two frameworks behind one Permission, routed by capability. A
-            // second Permission would be a second prompt for one capability,
-            // and a fall-through between authorizers would ask the wrong
-            // framework on a phone with a device policy — see #262.
-            let events = EventKitAuthorizer()
-            let permission = Permission(
-                ByCapability([
-                    .calendar: events, .reminders: events,
-                    .contacts: CNContactsAuthorizer(), .location: CLLocationAuthorizer(),
-                ]))
-            let calendars = EventKitCalendars()
-            // A third store, on the same reasoning as the second: EKEventStore
-            // is not Sendable, and one shared between two actors is a value in
-            // two isolation domains. Reminders and events are separate
-            // capabilities anyway, so a person may grant one and refuse the
-            // other, and each connection is scoped to what was granted.
-            let reminders = EventKitReminders()
-
-            // Stateless, so one instance and no lifetime to manage. The three git
-            // tools go in together: a git that reads and cannot commit is a half
-            // capability, and the workspace is very often not a repository at all
-            // — which is a refusal at the first call rather than a failure here,
-            // because a phone with no repository on it still has an app to run.
-            let git = CoreRepository()
-
-            // `ClarifyTool` is still out. It asks the person a question and waits
-            // for the answer, and nothing on this screen can give one — a model
-            // that reached for it would stop, correctly, forever. It goes in with
-            // the affordance that answers it, not before.
-            let tools = ToolBox([
-                ReadFileTool(workspace: workspace),
-                WriteFileTool(workspace: workspace),
-                SearchFilesTool(workspace: workspace),
-                PatchTool(workspace: workspace),
-                TodoTool(),
-                ReadCalendarTool(calendars: calendars, permission: permission),
-                AddEventTool(calendars: calendars, permission: permission),
-                ReadRemindersTool(reminders: reminders, permission: permission),
-                AddReminderTool(reminders: reminders, permission: permission),
-                FindContactTool(contacts: CNContacts(), permission: permission),
-                RunShortcutTool(opener: UIKitOpener()),
-                WhereAmITool(located: CLLocated(), permission: permission),
-                GitStatusTool(repository: git, workspace: workspace),
-                GitAddTool(repository: git, workspace: workspace),
-                GitCommitTool(repository: git, workspace: workspace),
-            ])
+            // Every tool, over one permission, assembled in the library so an
+            // App Intent gets the same set rather than a copy of it — see
+            // PhoneTools.swift for the invariants that assembly holds.
+            let tools = PhoneTools.all(workspace: workspace)
 
             driver = TurnDriver(
                 agent: Agent(
