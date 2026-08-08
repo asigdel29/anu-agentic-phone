@@ -86,7 +86,15 @@ struct RootView: View {
             // isolation is being used here to rule out. The cost is a second
             // connection to the calendar database, which is cheaper than a claim
             // the compiler cannot check.
-            let permission = Permission(EventKitAuthorizer())
+            // Two frameworks behind one Permission, routed by capability. A
+            // second Permission would be a second prompt for one capability,
+            // and a fall-through between authorizers would ask the wrong
+            // framework on a phone with a device policy — see #262.
+            let events = EventKitAuthorizer()
+            let permission = Permission(
+                ByCapability([
+                    .calendar: events, .reminders: events, .contacts: CNContactsAuthorizer(),
+                ]))
             let calendars = EventKitCalendars()
             // A third store, on the same reasoning as the second: EKEventStore
             // is not Sendable, and one shared between two actors is a value in
@@ -116,6 +124,7 @@ struct RootView: View {
                 AddEventTool(calendars: calendars, permission: permission),
                 ReadRemindersTool(reminders: reminders, permission: permission),
                 AddReminderTool(reminders: reminders, permission: permission),
+                FindContactTool(contacts: CNContacts(), permission: permission),
                 GitStatusTool(repository: git, workspace: workspace),
                 GitAddTool(repository: git, workspace: workspace),
                 GitCommitTool(repository: git, workspace: workspace),
