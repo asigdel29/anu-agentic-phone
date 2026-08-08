@@ -31,7 +31,7 @@ git = ["dep:git2"]
 # Off by default: only a phone needs the memory store bounded, and the board's
 # build should not carry SQLite for a table it never opens. The iOS build turns
 # it on. CI tests it through --all-features.
-memory = ["dep:rusqlite"]
+memory = ["dep:rusqlite", "dep:zeromem"]
 
 [dependencies]
 # rustls throughout, and default features off. The defaults are
@@ -57,6 +57,14 @@ git2 = { version = "0.19", optional = true, default-features = false }
 # reason the cross-build needs it — the system SQLite is not there to link
 # against on an iOS slice.
 rusqlite = { version = "0.32", optional = true, features = ["bundled"] }
+# Pinned by revision rather than by tag: the crate is new and single-author, and
+# an unpinned dependency means the memory layer can change under a rebuild with
+# no signal. The same revision deploy/install-zeromem.sh puts on the board.
+#
+# default-features off drops fastembed and the ONNX runtime behind it, which is
+# the half that cannot come to a phone at all — see
+# docs/decisions/memory-on-a-phone-forgets.md.
+zeromem = { git = "https://github.com/ptaranat/zeromem.git", rev = "32ac538", optional = true, default-features = false }
 futures-util = { version = "0.3", default-features = false }
 # rustls rather than the system OpenSSL: the router cross-compiles to aarch64,
 # and vendoring the TLS stack keeps that a pure Rust build.

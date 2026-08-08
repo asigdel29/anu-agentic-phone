@@ -278,4 +278,91 @@ mod tests {
         assert_eq!(count(&path, "turns"), 0);
         assert_eq!(count(&path, "archived_turns"), 3);
     }
+
+    #[test]
+    fn applying_it_twice_moves_nothing_the_second_time() {
+        // Every launch after the first, and it must be a no-op.
+        let scratch = Scratch::new("memory-again");
+        let path = store(&scratch, 10);
+
+        apply(&path, 4).unwrap();
+        assert_eq!(apply(&path, 4).unwrap(), Moved::default());
+        assert_eq!(count(&path, "archived_turns"), 6);
+    }
+
+    #[test]
+    fn what_was_archived_is_still_there_to_read() {
+        // The history stays on disk, or this is a delete with a longer name.
+        let scratch = Scratch::new("memory-kept");
+        let path = store(&scratch, 10);
+        apply(&path, 4).unwrap();
+
+        let text: String = Connection::open(&path)
+            .unwrap()
+            .query_row("SELECT text FROM archived_turns WHERE id = 1", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(text, "turn 1");
+    }
+
+    /// A store zeromem itself made, with `turns` ingested through its own path.
+    ///
+    /// The hand-written schema above is a claim about what zeromem writes; this
+    /// is the same claim checked against the crate. Both are here because the
+    /// first is fast and the second is true.
+    fn ingested(scratch: &Scratch, turns: i64) -> PathBuf {
+        let path = scratch.path().join("real.db");
+        let mut memory = zeromem::ZeroMem::open(
+            &path,
+            zeromem::config::Config::default(),
+            Box::new(zeromem::embed::HashEmbedder::default()),
+        )
+        .expect("zeromem opens a fresh store");
+
+        for turn in 1..=turns {
+            memory
+                .ingest_turn("s", "user", &format!("turn {turn}"), turn)
+                .expect("zeromem takes a turn");
+        }
+        drop(memory);
+        path
+    }
+
+    #[test]
+    fn the_schema_written_out_above_is_the_one_zeromem_makes() {
+        // #284 built the horizon against a hand-written schema, which was the
+        // only way to test it before the dependency existed. This is what turns
+        // that from an assumption into a check.
+        let scratch = Scratch::new("memory-real-schema");
+        let path = ingested(&scratch, 10);
+
+        assert_eq!(
+            apply(&path, 4).unwrap(),
+            Moved {
+                turns: 6,
+                embeddings: 6
+            }
+        );
+        assert_eq!(count(&path, "turns"), 4);
+        assert_eq!(count(&path, "archived_turns"), 6);
+    }
+
+    #[test]
+    fn zeromem_still_opens_a_store_the_horizon_has_been_through() {
+        // The whole claim of the approach, and it needs both halves in one case:
+        // ingest, bound, reopen. A horizon that left the file in a state zeromem
+        // refused would be worse than no horizon at all.
+        let scratch = Scratch::new("memory-real-reopen");
+        let path = ingested(&scratch, 8);
+        apply(&path, 3).unwrap();
+
+        let memory = zeromem::ZeroMem::open(
+            &path,
+            zeromem::config::Config::default(),
+            Box::new(zeromem::embed::HashEmbedder::default()),
+        );
+        assert!(memory.is_ok(), "zeromem refused a bounded store");
+        assert_eq!(count(&path, "turns"), 3);
+    }
 }
