@@ -77,6 +77,12 @@ targets:
           add-only access reads an empty calendar rather than refusing.
         NSRemindersFullAccessUsageDescription: >-
           So the agent can read your reminders and add to them when you ask.
+        # Read only. Nothing in this app writes to the address book, and the
+        # sentence says so rather than reserving room for something that might.
+        NSContactsUsageDescription: >-
+          So the agent can look somebody up when you name them. It searches by
+          name and reads their numbers and email addresses; it never changes
+          anything in your contacts.
         # Nothing here talks to anything but the provider, over HTTPS. The
         # default already forbids cleartext; this states it so that relaxing it
         # later has to be a deliberate edit.
