@@ -115,6 +115,7 @@ struct RootView: View {
                 ReadCalendarTool(calendars: calendars, permission: permission),
                 AddEventTool(calendars: calendars, permission: permission),
                 ReadRemindersTool(reminders: reminders, permission: permission),
+                AddReminderTool(reminders: reminders, permission: permission),
                 GitStatusTool(repository: git, workspace: workspace),
                 GitAddTool(repository: git, workspace: workspace),
                 GitCommitTool(repository: git, workspace: workspace),
