@@ -63,6 +63,18 @@ sealed interface Done {
 /** The screen, as a tool reaches it. */
 interface Phone {
     /**
+     * Why nothing on the screen may be acted on or read, or null.
+     *
+     * Separate from [read] because a refusal needs words and a reading has
+     * nowhere to put them: answering null from [read] would be reported as the
+     * service being off, which is a different problem with a different fix.
+     *
+     * # Rely
+     * As [read]. Cheap — it compares a package and an activity against a list.
+     */
+    suspend fun barredNow(): String?
+
+    /**
      * What is on screen now.
      *
      * # Rely
@@ -264,7 +276,13 @@ class ReadScreenTool(private val phone: Phone) : Tool {
      *  Obtains no capability. The accessibility service is granted once, from
      *  Settings, rather than asked for per turn — so there is no dialog here
      *  and nothing to validate before one. */
-    override suspend fun run(arguments: String): String = describe(phone.read())
+    override suspend fun run(arguments: String): String {
+        // Before the read, not after. read_screen on the permissions page tells
+        // the model exactly which button says Allow, and the refusal it would
+        // then get from tap is a refusal it can plan around.
+        phone.barredNow()?.let { return it }
+        return describe(phone.read())
+    }
 
     companion object {
         /** Most lines shown. Past this a model is reading a layout dump. */
@@ -620,6 +638,7 @@ class FindOnScreenTool(private val phone: Phone) : Tool {
         // and on a long screen it is read_screen without the limit.
         if (wanted.isEmpty()) return "no words were given, so nothing was looked for"
 
+        phone.barredNow()?.let { return it }
         val reading = phone.read() ?: return ReadScreenTool.describe(null)
 
         // The whole reading, not the printed part. The handles past

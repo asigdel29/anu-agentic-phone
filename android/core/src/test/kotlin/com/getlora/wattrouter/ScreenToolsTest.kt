@@ -15,7 +15,9 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-private class Showing(private val reading: Reading?) : Phone {
+private class Showing(private val reading: Reading?, private val why: String? = null) : Phone {
+    override suspend fun barredNow() = why
+
     override suspend fun read() = reading
 
     override suspend fun tap(at: Handle, from: Generation): Done? = null
@@ -154,6 +156,9 @@ private class Tapping(private val done: Done?, private val reading: Reading? = n
     var moved: Onward? = null
     var opened: String? = null
     var installed: List<Launchable>? = emptyList()
+    var why: String? = null
+
+    override suspend fun barredNow() = why
 
     override suspend fun read() = reading
 
@@ -550,8 +555,10 @@ class OpenAppToolTest {
     }
 }
 
-private class Changing(private val readings: List<Reading?>) : Phone {
+private class Changing(private val readings: List<Reading?>, private val why: String? = null) : Phone {
     var looks = 0
+
+    override suspend fun barredNow() = why
 
     override suspend fun read(): Reading? =
         readings[minOf(looks++, readings.size - 1)]
@@ -722,5 +729,50 @@ class FindOnScreenToolTest {
         val said = FindOnScreenTool(Changing(listOf(null))).run("""{"text":"Bluetooth"}""")
 
         assertEquals(ReadScreenTool.describe(null), said)
+    }
+}
+
+class BarredScreenTest {
+    private val generation = Generation("k3f9", 4)
+    private val row = Sighting(Handle("row", "text", "Allow", null, 0), "text", "Allow", isClickable = true)
+    private val why = Barred.PERMISSIONS.why
+
+    @Test
+    fun readingIsRefusedBeforeItHappens() = runTest {
+        // The tempting exception. read_screen on the permissions page tells
+        // the model exactly which button says Allow, and the refusal it would
+        // then get from tap is one it can plan around.
+        val said = ReadScreenTool(Showing(Reading(generation, listOf(row)), why)).run("{}")
+
+        assertEquals(why, said)
+        assertTrue(said, !said.contains("Allow"))
+    }
+
+    @Test
+    fun searchingIsRefusedTheSameWay() = runTest {
+        // Otherwise find_on_screen is read_screen with a filter, and the one
+        // that was barred is the one nobody would think to bar.
+        val said = FindOnScreenTool(Changing(listOf(Reading(generation, listOf(row))), why))
+            .run("""{"text":"Allow"}""")
+
+        assertEquals(why, said)
+    }
+
+    @Test
+    fun aRefusalIsNotTheSameAsAScreenThatCannotBeRead() = runTest {
+        // Different problems with different fixes: one is the service being
+        // off, the other is the agent declining to look.
+        val barred = ReadScreenTool(Showing(null, why)).run("{}")
+
+        assertEquals(why, barred)
+        assertTrue(barred, !barred.contains("Settings > Accessibility"))
+    }
+
+    @Test
+    fun everyBarredScreenSaysWhoCanActInstead() {
+        // A refusal a model can only apologise for teaches it to stop asking.
+        assertTrue(Barred.PERMISSIONS.why, Barred.PERMISSIONS.why.contains("Ask the person"))
+        assertTrue(Barred.CONTROLS.why, Barred.CONTROLS.why.contains("Ask the person"))
+        assertTrue(Barred.LOCKED.why, Barred.LOCKED.why.contains("unlock"))
     }
 }

@@ -5,16 +5,25 @@
 //   2026-08-09  A. Sigdel  Acts as well as reads.
 //   2026-08-09  A. Sigdel  Types, and refuses a password field here rather than
 //                          in the tool, so a later one cannot route around it.
+//   2026-08-09  A. Sigdel  Refuses to act where #440 says not to, which is why
+//                          it now consumes exactly one event.
 //
-// It listens to nothing, which is the decision worth reading twice. The obvious
-// shape for an accessibility service is event-driven: track
-// TYPE_WINDOW_CONTENT_CHANGED, keep a model of the screen, answer from it. That
-// is what how-the-agent-drives.md rules out. Events arrive faster than a screen
-// changes meaningfully and out of order with the tree they describe, and a
-// cached model is the "remembered rather than re-read" failure #233 opens by
-// warning about. So onAccessibilityEvent does nothing and every read fetches the
-// tree; the event types in the config are there because a service must declare
-// some to be listed at all.
+// It keeps no model of the screen, which is the decision worth reading twice.
+// The obvious shape for an accessibility service is event-driven: track
+// TYPE_WINDOW_CONTENT_CHANGED, keep a model, answer from it. That is what
+// how-the-agent-drives.md rules out. Events arrive faster than a screen changes
+// meaningfully and out of order with the tree they describe, and a cached model
+// is the "remembered rather than re-read" failure #233 opens by warning about.
+// So every read fetches the tree.
+//
+// It does consume one event, and this header used to say it consumed none. The
+// activity's class name is what tells the accessibility settings page from the
+// display settings page, #440 bars the first and not the second, and that name
+// arrives only on TYPE_WINDOW_STATE_CHANGED — rootInActiveWindow gives a package
+// and no more. So one string is recorded, compared against a deny list, and used
+// for nothing else. The argument above is about keeping a model of the screen in
+// step; this is not that, and leaving the header claiming otherwise would be
+// worse than amending it.
 //
 // One Viewing per connection, built in onServiceConnected. A service the system
 // restarts gets a fresh epoch, which is the whole mechanism by which a handle
@@ -24,10 +33,13 @@
 package com.getlora.wattrouter.app
 
 import android.accessibilityservice.AccessibilityService
+import android.app.KeyguardManager
 import android.os.Bundle
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.getlora.wattrouter.Aim
+import com.getlora.wattrouter.Barred
+import com.getlora.wattrouter.barred
 import com.getlora.wattrouter.Done
 import com.getlora.wattrouter.Generation
 import com.getlora.wattrouter.Generations
@@ -47,6 +59,15 @@ class DrivingService : AccessibilityService() {
      */
     private var viewing: Viewing? = null
 
+    /**
+     * The foreground activity's class, or null before the first window change.
+     *
+     * Volatile for [connected]'s reason: written on the service's thread and
+     * read from a turn on another.
+     */
+    @Volatile
+    private var inFront: String? = null
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         viewing = Viewing(Generations.fresh())
@@ -54,10 +75,16 @@ class DrivingService : AccessibilityService() {
     }
 
     /**
-     * Nothing. See the header: a screen is read when it is needed, and a model
-     * kept in step by events is a model that disagrees with the tree.
+     * Which window is in front, and nothing else.
+     *
+     * Not a model of the screen — one string, compared against #440's deny
+     * list. Everything about what is *on* the screen is still read when it is
+     * needed, for the reason the header gives.
      */
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        inFront = event.className?.toString()
+    }
 
     /** Nothing to abandon: no work is held between calls. */
     override fun onInterrupt() = Unit
@@ -81,6 +108,24 @@ class DrivingService : AccessibilityService() {
     }
 
     /**
+     * Why the agent may not act on what is showing, or null.
+     *
+     * Reading goes through this too, which is where the tempting exception is:
+     * looking at a screen sounds harmless, and read_screen on the permissions
+     * page tells the model exactly which button says Allow. The refusal it
+     * would then get from tap is one it can plan around.
+     *
+     * The keyguard is read now rather than remembered — a phone locks while a
+     * turn is running, which is the case this is for.
+     */
+    fun barredNow(): Barred? = barred(
+        packageName = rootInActiveWindow?.packageName?.toString(),
+        activity = inFront,
+        own = packageName,
+        locked = getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true,
+    )
+
+    /**
      * Aim at a handle, against the screen as it is now.
      *
      * @return null on the terms [read] states. Everything else is an [Aim],
@@ -100,6 +145,7 @@ class DrivingService : AccessibilityService() {
      * node the copy was made from — and needs it only until the click lands.
      */
     fun tap(at: Handle, from: Generation): Done? {
+        barredNow()?.let { return Done.Refused(it.why) }
         val viewing = viewing ?: return null
         val live = snapshot(rootInActiveWindow, retain = true) ?: return null
 
@@ -123,6 +169,7 @@ class DrivingService : AccessibilityService() {
      * how-the-agent-drives.md promised, and worth keeping.
      */
     fun scroll(at: Handle, from: Generation, onward: Onward): Done? {
+        barredNow()?.let { return Done.Refused(it.why) }
         val viewing = viewing ?: return null
         val live = snapshot(rootInActiveWindow, retain = true) ?: return null
 
@@ -174,6 +221,9 @@ class DrivingService : AccessibilityService() {
      * node, so there is nothing to resolve and nothing to give back.
      */
     fun navigate(way: Way): Done? {
+        // Barred here too, and the locked case is why: back and home on a
+        // locked phone are somebody else's presses.
+        barredNow()?.let { return Done.Refused(it.why) }
         if (viewing == null) return null
 
         val pressed = performGlobalAction(
@@ -198,6 +248,7 @@ class DrivingService : AccessibilityService() {
      * it needs the node rather than the copy of it.
      */
     fun type(at: Handle, from: Generation, text: String): Done? {
+        barredNow()?.let { return Done.Refused(it.why) }
         val viewing = viewing ?: return null
         val live = snapshot(rootInActiveWindow, retain = true) ?: return null
 

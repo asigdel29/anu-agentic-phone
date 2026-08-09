@@ -31,6 +31,10 @@ import kotlinx.coroutines.withContext
 /** The screen of the phone this is running on. */
 class AndroidPhone(private val context: Context) : Phone {
 
+    override suspend fun barredNow(): String? = withContext(Dispatchers.Default) {
+        DrivingService.connected?.barredNow()?.why
+    }
+
     override suspend fun read(): Reading? = withContext(Dispatchers.Default) {
         DrivingService.connected?.read()
     }
