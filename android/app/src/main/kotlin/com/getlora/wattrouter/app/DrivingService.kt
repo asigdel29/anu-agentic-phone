@@ -35,6 +35,7 @@ import com.getlora.wattrouter.Handle
 import com.getlora.wattrouter.Node
 import com.getlora.wattrouter.Reading
 import com.getlora.wattrouter.Viewing
+import com.getlora.wattrouter.Way
 
 /** The screen, when somebody has allowed it to be read. */
 class DrivingService : AccessibilityService() {
@@ -110,6 +111,30 @@ class DrivingService : AccessibilityService() {
         } finally {
             release(live)
         }
+    }
+
+    /**
+     * Press one of the system's own buttons.
+     *
+     * No tree is fetched first and none is retained: a global action names no
+     * node, so there is nothing to resolve and nothing to give back.
+     */
+    fun navigate(way: Way): Done? {
+        if (viewing == null) return null
+
+        val pressed = performGlobalAction(
+            when (way) {
+                Way.BACK -> GLOBAL_ACTION_BACK
+                Way.HOME -> GLOBAL_ACTION_HOME
+                Way.RECENTS -> GLOBAL_ACTION_RECENTS
+                Way.NOTIFICATIONS -> GLOBAL_ACTION_NOTIFICATIONS
+            },
+        )
+
+        // The screen is read after the press rather than before, and it is the
+        // only way to say where that ended up — what back does depends on where
+        // it was pressed.
+        return if (pressed) Done.Did(read()) else Done.Refused("the system would not do that here")
     }
 
     /**

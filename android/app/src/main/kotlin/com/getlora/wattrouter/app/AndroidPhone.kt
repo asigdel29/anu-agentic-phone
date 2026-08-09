@@ -20,6 +20,7 @@ import com.getlora.wattrouter.Generation
 import com.getlora.wattrouter.Handle
 import com.getlora.wattrouter.Phone
 import com.getlora.wattrouter.Reading
+import com.getlora.wattrouter.Way
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -39,4 +40,8 @@ class AndroidPhone : Phone {
         withContext(Dispatchers.Default) {
             DrivingService.connected?.type(at, from, text)
         }
+
+    override suspend fun navigate(way: Way): Done? = withContext(Dispatchers.Default) {
+        DrivingService.connected?.navigate(way)
+    }
 }

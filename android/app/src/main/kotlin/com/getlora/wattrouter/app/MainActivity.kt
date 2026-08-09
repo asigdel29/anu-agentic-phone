@@ -51,6 +51,7 @@ import com.getlora.wattrouter.GitCommitTool
 import com.getlora.wattrouter.GitStatusTool
 import com.getlora.wattrouter.LocationTool
 import com.getlora.wattrouter.Memory
+import com.getlora.wattrouter.NavigateTool
 import com.getlora.wattrouter.Permission
 import com.getlora.wattrouter.Tool
 import com.getlora.wattrouter.ReadScreenTool
@@ -228,7 +229,12 @@ class MainActivity : ComponentActivity() {
      */
     private fun driving(): List<Tool> {
         val screen = AndroidPhone()
-        return listOf(ReadScreenTool(screen), TapTool(screen), TypeTextTool(screen))
+        return listOf(
+            ReadScreenTool(screen),
+            TapTool(screen),
+            TypeTextTool(screen),
+            NavigateTool(screen),
+        )
     }
 
     override fun onDestroy() {
