@@ -50,6 +50,10 @@ pub mod git;
 pub mod head;
 #[cfg(feature = "android")]
 pub mod jni;
+// Both features: it is the memory store reached from Kotlin, and either half
+// missing leaves entry points calling something that is not compiled.
+#[cfg(all(feature = "android", feature = "memory"))]
+pub mod jni_memory;
 #[cfg(feature = "memory")]
 pub mod memory;
 pub mod metrics;
