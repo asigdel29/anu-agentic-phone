@@ -281,6 +281,9 @@ mod tests {
         /// One name known to be there, so a scan that finds nothing fails
         /// rather than agreeing vacuously with an empty set.
         anchor: &'static str,
+        /// Whether the Kotlin owns a native handle it must release. `Repository`
+        /// does not: `git::open` runs inside every call and holds nothing.
+        handle: bool,
     }
 
     const BINDINGS: &[Binding] = &[
@@ -291,6 +294,7 @@ mod tests {
             ),
             rust: include_str!("jni.rs"),
             anchor: "nativeNew",
+            handle: true,
         },
         #[cfg(feature = "memory")]
         Binding {
@@ -300,6 +304,17 @@ mod tests {
             ),
             rust: include_str!("jni_memory.rs"),
             anchor: "nativeOpen",
+            handle: true,
+        },
+        #[cfg(feature = "git")]
+        Binding {
+            class: "Repository",
+            kotlin: include_str!(
+                "../../android/core/src/main/kotlin/com/getlora/wattrouter/Repository.kt"
+            ),
+            rust: include_str!("jni_git.rs"),
+            anchor: "nativeHead",
+            handle: false,
         },
     ];
 
@@ -400,6 +415,16 @@ mod tests {
         // being idempotent, which is worth asserting is still written that way —
         // for every class that owns a handle, not only the first one to.
         for binding in BINDINGS {
+            if !binding.handle {
+                // Asserted rather than skipped: a binding that grew a handle and
+                // left the flag alone would stop being checked silently.
+                assert!(
+                    !binding.kotlin.contains("private var handle"),
+                    "{} is listed as owning no handle and declares one",
+                    binding.class
+                );
+                continue;
+            }
             assert!(
                 binding.kotlin.contains("if (handle == 0L) return"),
                 "{}.close is not idempotent",
