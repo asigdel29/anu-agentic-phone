@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  driving.xml — what the accessibility service is allowed to do.
+
+  History
+    2026-08-09  A. Sigdel  Created.
+
+  canRetrieveWindowContent is the one that fails silently. Without it the
+  service binds, appears enabled, and answers null from rootInActiveWindow for
+  the life of the install, with nothing in the log to point at.
+
+  The event types are declared because a service with none is not listed in
+  Settings at all. Nothing consumes them: DrivingService reads the tree when it
+  needs it, for the reason its header gives.
+
+  No canPerformGestures yet. It is what dispatchGesture needs, and asking for a
+  capability before the code that uses it is the thing AndroidManifest.xml
+  already says not to do.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:canRetrieveWindowContent="true"
+    android:description="@string/driving_description"
+    android:notificationTimeout="100" />
