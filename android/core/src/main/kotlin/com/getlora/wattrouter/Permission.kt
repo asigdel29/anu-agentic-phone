@@ -2,6 +2,8 @@
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
+//   2026-08-09  A. Sigdel  A refusal is asked about again, which the prose had
+//                          been promising and the code had not been doing.
 //
 // Contents
 //   Capability       Something a tool needs before it can work.
@@ -156,10 +158,19 @@ class Permission(private val asking: Asking) {
             // Read first, never from a cache: somebody who relents in Settings
             // tells the app nothing, so looking is the only way to notice.
             val known = asking.state(capability)
-            val answer = if (known == PermissionState.UNASKED) {
-                asking.request(capability)
-            } else {
-                known
+            // REFUSED as well as UNASKED. It is the state documented above as
+            // the one where a dialog would still be shown, and on Android the
+            // system says so directly; declining to show one would make
+            // Refused's "ask me again and I will request it" a promise nothing
+            // keeps, which is iOS's one-prompt rule arriving by the back door.
+            //
+            // Not nagging either: obtain is only reached because a tool ran,
+            // and a tool only ran because somebody asked for something that
+            // needs this.
+            val answer = when (known) {
+                PermissionState.UNASKED, PermissionState.REFUSED ->
+                    asking.request(capability)
+                else -> known
             }
             waiting.complete(answer)
             answer

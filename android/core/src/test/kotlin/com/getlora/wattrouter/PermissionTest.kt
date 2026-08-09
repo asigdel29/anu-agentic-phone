@@ -2,6 +2,9 @@
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
+//   2026-08-09  A. Sigdel  The re-ask case counts dialogs as well as reads. It
+//                          had asserted only that a second attempt looked, and
+//                          looking is not what its name claims.
 //
 // On the JVM against a scripted Asking. Every case is one #229 named, or one
 // that copying Permission.swift would have got wrong.
@@ -69,6 +72,24 @@ class PermissionTest {
         runCatching { permission.obtain(Capability.CALENDAR) }
 
         assertEquals("the second attempt should have looked again", 2, asking.reads)
+        // And asked. Looking alone leaves Refused's "ask me again and I will
+        // request it" a sentence nothing behind it performs.
+        assertEquals("a refusal is not a spent prompt", 2, asking.dialogs)
+    }
+
+    @Test
+    fun aPermanentDenialIsNotAskedAboutAgain() = runTest {
+        // The line between the two states. A refusal is re-asked because the
+        // system would still show a dialog; a permanent denial is not, because
+        // it would not, and asking anyway is a call that reports nothing.
+        val asking = Scripted(PermissionState.PERMANENTLY_DENIED)
+        val permission = Permission(asking)
+
+        runCatching { permission.obtain(Capability.LOCATION) }
+        runCatching { permission.obtain(Capability.LOCATION) }
+
+        assertEquals(2, asking.reads)
+        assertEquals(0, asking.dialogs)
     }
 
     @Test
