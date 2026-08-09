@@ -5,6 +5,8 @@
 //   2026-08-08  A. Sigdel  Signs in, so it reports which of Startup's three
 //                          states it reached instead.
 //   2026-08-09  A. Sigdel  Holds a conversation once it is signed in.
+//   2026-08-09  A. Sigdel  Reads the calendar, which is the first tool needing
+//                          a permission and so the first needing an Activity.
 //
 // The core and the driver are built once and held for the process. The core
 // owns a native pointer and a decision cache, and a second one is a second
@@ -35,9 +37,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.getlora.wattrouter.Agent
+import com.getlora.wattrouter.CalendarTool
 import com.getlora.wattrouter.ChainWalk
 import com.getlora.wattrouter.Credential
 import com.getlora.wattrouter.Memory
+import com.getlora.wattrouter.Permission
+import com.getlora.wattrouter.Tool
 import com.getlora.wattrouter.RecallTool
 import com.getlora.wattrouter.RememberTool
 import com.getlora.wattrouter.NeuralWattInference
@@ -50,10 +55,17 @@ import com.getlora.wattrouter.routing
 class MainActivity : ComponentActivity() {
     private var started: Startup? = null
     private var memory: Memory? = null
+    private lateinit var permission: Permission
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val credential = Credential(this)
+
+        // Here rather than in the composition. AndroidAsking registers an
+        // activity-result launcher, which has to happen before this Activity is
+        // STARTED, and setContent's first composition is not before it — built
+        // there it throws about a lifecycle state rather than about the line.
+        permission = Permission(AndroidAsking(this))
 
         setContent {
             var state by remember { mutableStateOf(started ?: Startup.begin(this)) }
@@ -95,7 +107,7 @@ class MainActivity : ComponentActivity() {
                 Agent(
                     router = ready.core.routing(),
                     walk = ChainWalk(NeuralWattInference(credential.read().orEmpty())),
-                    tools = ToolBox(remembering()),
+                    tools = ToolBox(remembering() + phone()),
                 ),
                 scope,
             )
@@ -113,13 +125,24 @@ class MainActivity : ComponentActivity() {
      * is the system's to delete when space is short, and this is the one file
      * here nobody can reconstruct.
      */
-    private fun remembering(): List<com.getlora.wattrouter.Tool> {
+    private fun remembering(): List<Tool> {
         val where = java.io.File(filesDir, "memory").apply { mkdirs() }
         val store = Memory.open(java.io.File(where, "memory.db").absolutePath)
             ?: return emptyList()
         memory = store
         return listOf(RememberTool(store, session = "phone"), RecallTool(store))
     }
+
+    /**
+     * The tools that read the phone rather than the app's own store.
+     *
+     * One [Permission] for all of them, so two asking in a round produce one
+     * dialog. Contacts and location join this list; each brings a seam of its
+     * own and none brings a second way of asking.
+     */
+    private fun phone(): List<Tool> = listOf(
+        CalendarTool(AndroidCalendars(this), permission),
+    )
 
     override fun onDestroy() {
         (started as? Startup.Ready)?.core?.close()
