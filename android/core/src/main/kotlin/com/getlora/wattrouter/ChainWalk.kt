@@ -31,8 +31,7 @@ import kotlinx.coroutines.flow.flow
  * What a turn produces.
  *
  * Wider than [StreamEvent] because a transcript needs what a model does not
- * say: which model is answering, and what was decided. It grows a case for a
- * tool's result when there is a tool layer to produce one.
+ * say: which model is answering, what a tool returned, and what was decided.
  */
 sealed interface TurnEvent {
     /** A model has been reached and is about to speak. */
@@ -43,6 +42,9 @@ sealed interface TurnEvent {
 
     /** A tool the model wants run. */
     data class Call(val call: ToolCall) : TurnEvent
+
+    /** What a tool answered. Never from a walk; the Agent yields it. */
+    data class Result(val result: ToolResult) : TurnEvent
 
     /**
      * The tier, and the chain behind it. Never from a walk — the Agent yields
