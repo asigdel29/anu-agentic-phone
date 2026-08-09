@@ -39,11 +39,16 @@ android {
         // arm64-v8a only, matching scripts/build-android-core.sh. A second ABI
         // here without a second .so is an AAR that installs and cannot load.
         ndk { abiFilters += "arm64-v8a" }
+
+        // Instrumented tests are the only ones that can load the library: it is
+        // built for aarch64-linux-android and a JVM test runs on the host.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     sourceSets["main"].java.srcDirs("src/main/kotlin")
     sourceSets["main"].jniLibs.srcDirs("jniLibs")
     sourceSets["test"].java.srcDirs("src/test/kotlin")
+    sourceSets["androidTest"].java.srcDirs("src/androidTest/kotlin")
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -63,6 +68,9 @@ dependencies {
     // Kotlin and does not expose its version to that helper, so the helper
     // resolves to nothing and every @Test is an unresolved reference.
     testImplementation("junit:junit:4.13.2")
+
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
 }
 
 
