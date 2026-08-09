@@ -4,6 +4,7 @@
 //   2026-08-09  A. Sigdel  Created.
 //   2026-08-09  A. Sigdel  Taps as well, which is the only path that retains
 //                          framework nodes and has to give them back.
+//   2026-08-09  A. Sigdel  Checks the service asked for the summon button.
 //
 // Two settings here fail silently and neither logs anything useful: a service
 // without BIND_ACCESSIBILITY_SERVICE is never bound, and one whose config omits
@@ -24,6 +25,7 @@
 
 package com.getlora.wattrouter.app
 
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.UiAutomation
 import android.os.ParcelFileDescriptor
 import android.provider.Settings
@@ -155,6 +157,33 @@ class DrivingServiceDeviceTest {
         )
 
         assertTrue("$done", done is Done.Moved)
+    }
+
+    @Test
+    fun theServiceAsksForTheSummonButton() {
+        // What can be checked from here: that the flag in driving.xml survived
+        // into the service the system bound. Whether pressing the button opens
+        // the app needs a finger on a navigation bar, and that belongs with
+        // the run on a phone.
+        val service = waitForConnection()
+        assertNotNull(service)
+
+        val flags = service!!.serviceInfo.flags
+        assertTrue(
+            "the service did not request the accessibility button: $flags",
+            flags and AccessibilityServiceInfo.FLAG_REQUEST_ACCESSIBILITY_BUTTON != 0,
+        )
+    }
+
+    @Test
+    fun andTheControllerIsThereToAnswerIt() {
+        // Available is about the phone rather than the app — a device with no
+        // navigation bar and no floating button would answer false — so this
+        // asserts the controller exists rather than what it says.
+        val service = waitForConnection()
+        assertNotNull(service)
+
+        assertNotNull(service!!.accessibilityButtonController)
     }
 
     @Test

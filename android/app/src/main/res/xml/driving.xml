@@ -13,12 +13,18 @@
   Settings at all. Nothing consumes them: DrivingService reads the tree when it
   needs it, for the reason its header gives.
 
-  No canPerformGestures yet. It is what dispatchGesture needs, and asking for a
-  capability before the code that uses it is the thing AndroidManifest.xml
-  already says not to do.
+  No canPerformGestures, and none is coming. Every action turned out to be a
+  node action — click, set text, scroll forward — so no coordinate enters the
+  app at all, which is stronger than how-the-agent-drives.md promised.
+
+  flagRequestAccessibilityButton is the summon. It puts a control in the
+  navigation bar, or a floating one where there is no bar, and it is the
+  service's own — the assistant role was declined in the design review because
+  AssistStructure is read-only and would displace the person's real assistant.
 -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+    android:accessibilityFlags="flagDefault|flagRequestAccessibilityButton"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:canRetrieveWindowContent="true"
     android:description="@string/driving_description"
