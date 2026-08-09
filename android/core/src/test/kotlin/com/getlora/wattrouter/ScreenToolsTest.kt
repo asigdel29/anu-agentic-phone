@@ -549,3 +549,103 @@ class OpenAppToolTest {
         assertTrue(OpenAppTool(phone).run("""{"name":"Gmail"}""").contains("could not be read"))
     }
 }
+
+private class Changing(private val readings: List<Reading?>) : Phone {
+    var looks = 0
+
+    override suspend fun read(): Reading? =
+        readings[minOf(looks++, readings.size - 1)]
+
+    override suspend fun tap(at: Handle, from: Generation): Done? = null
+
+    override suspend fun type(at: Handle, from: Generation, text: String): Done? = null
+
+    override suspend fun navigate(way: Way): Done? = null
+
+    override suspend fun scroll(at: Handle, from: Generation, onward: Onward): Done? = null
+
+    override suspend fun apps(): List<Launchable>? = null
+
+    override suspend fun open(packageName: String): Done? = null
+}
+
+class WaitForChangeToolTest {
+    private val before = Generation("k3f9", 4)
+    private val row = Sighting(Handle("row", "text", "Rent is due", null, 0), "text", "Rent is due")
+
+    private fun reading(counter: Long) = Reading(Generation("k3f9", counter), listOf(row))
+
+    private fun tool(phone: Phone) = WaitForChangeTool(phone) { }
+
+    @Test
+    fun itStopsAtTheFirstChange() = runTest {
+        val phone = Changing(listOf(reading(4), reading(4), reading(5), reading(6)))
+
+        val said = tool(phone).run("""{"screen":"k3f9.4"}""")
+
+        assertEquals(3, phone.looks)
+        assertTrue(said, said.startsWith("the screen changed."))
+        assertTrue(said, said.contains("screen k3f9.5"))
+    }
+
+    @Test
+    fun aScreenAlreadyDifferentIsAnswerdOnTheFirstLook() = runTest {
+        val phone = Changing(listOf(reading(9)))
+
+        tool(phone).run("""{"screen":"k3f9.4"}""")
+
+        assertEquals(1, phone.looks)
+    }
+
+    @Test
+    fun notChangingIsAnAnswerRatherThanAnError() = runTest {
+        // What somebody asks when they want to know whether a tap did
+        // anything. Reported as a failure, a model retries the tap.
+        val phone = Changing(listOf(reading(4)))
+
+        val said = tool(phone).run("""{"screen":"k3f9.4","seconds":1}""")
+
+        assertTrue(said, said.contains("has not changed in 1 seconds"))
+        assertTrue(said, said.contains("screen k3f9.4"))
+    }
+
+    @Test
+    fun theWaitIsBoundedByWhatItWasAsked() = runTest {
+        val phone = Changing(listOf(reading(4)))
+
+        tool(phone).run("""{"screen":"k3f9.4","seconds":2}""")
+
+        assertEquals(2 * 1000 / WaitForChangeTool.INTERVAL, phone.looks)
+    }
+
+    @Test
+    fun aWaitLongerThanSomebodyWouldSitThroughIsRefused() = runTest {
+        // A turn is a person waiting, and a tool that can block one for a
+        // minute will.
+        val phone = Changing(listOf(reading(4)))
+
+        val said = tool(phone).run("""{"screen":"k3f9.4","seconds":60}""")
+
+        assertTrue(said, said.contains("between 1 and ${WaitForChangeTool.LONGEST}"))
+        assertEquals(0, phone.looks)
+    }
+
+    @Test
+    fun aScreenIdThisBuildDidNotWriteIsRefusedBeforeWaiting() = runTest {
+        val phone = Changing(listOf(reading(4)))
+
+        assertTrue(tool(phone).run("""{"screen":"last"}""").startsWith("that is not a screen id"))
+        assertEquals(0, phone.looks)
+    }
+
+    @Test
+    fun aScreenThatStopsBeingReadableSaysSo() = runTest {
+        // Rather than waiting out the whole timeout against nothing.
+        val phone = Changing(listOf(reading(4), null))
+
+        val said = tool(phone).run("""{"screen":"k3f9.4"}""")
+
+        assertEquals(ReadScreenTool.describe(null), said)
+        assertEquals(2, phone.looks)
+    }
+}
