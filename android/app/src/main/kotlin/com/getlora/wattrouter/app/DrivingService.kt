@@ -7,6 +7,7 @@
 //                          in the tool, so a later one cannot route around it.
 //   2026-08-09  A. Sigdel  Refuses to act where #440 says not to, which is why
 //                          it now consumes exactly one event.
+//   2026-08-09  A. Sigdel  Shows a banner while a turn is driving.
 //
 // It keeps no model of the screen, which is the decision worth reading twice.
 // The obvious shape for an accessibility service is event-driven: track
@@ -35,6 +36,8 @@ package com.getlora.wattrouter.app
 import android.accessibilityservice.AccessibilityService
 import android.app.KeyguardManager
 import android.os.Bundle
+import android.view.Gravity
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.getlora.wattrouter.Aim
@@ -68,6 +71,13 @@ class DrivingService : AccessibilityService() {
     @Volatile
     private var inFront: String? = null
 
+    /** The banner, while a turn is driving. */
+    private var banner: Banner? = null
+    private var shown = false
+
+    /** What the stop button does. Set by whoever started the turn. */
+    var onStop: (() -> Unit)? = null
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         viewing = Viewing(Generations.fresh())
@@ -89,7 +99,67 @@ class DrivingService : AccessibilityService() {
     /** Nothing to abandon: no work is held between calls. */
     override fun onInterrupt() = Unit
 
+    /**
+     * Show what the agent is doing, over whatever it is doing it to.
+     *
+     * @param what the person's own words. Null takes the banner away, which is
+     *   what the end of a turn does — however it ended.
+     */
+    fun showing(what: String?) {
+        if (what == null) {
+            hide()
+            return
+        }
+        val showing = banner ?: Banner(this) { onStop?.invoke() }.also { banner = it }
+        showing.say(what)
+        if (!shown) attach(showing)
+    }
+
+    /**
+     * Put it on the display.
+     *
+     * TYPE_ACCESSIBILITY_OVERLAY, which needs no permission on any release
+     * this app runs on — it is available to an accessibility service and to
+     * nothing else, which is exactly what this is. #446 planned for
+     * SYSTEM_ALERT_WINDOW below API 34 on the belief that the free route was
+     * attachAccessibilityOverlayToDisplay and so new; that call takes a
+     * SurfaceControl there is no public way to build, and this window type has
+     * been here since API 22. So the permission is gone and so is the choice.
+     */
+    private fun attach(showing: Banner) {
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            // NOT_FOCUSABLE so the app underneath keeps the keyboard, and
+            // NOT_TOUCH_MODAL so a tap outside the banner reaches the app the
+            // agent is aiming at. An overlay that swallows a tap makes the
+            // agent's own actions fail as though the app refused them.
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+            android.graphics.PixelFormat.TRANSLUCENT,
+        ).apply { gravity = Gravity.TOP }
+
+        // Answering false rather than throwing: a turn that cannot show a
+        // banner is still a turn, and the service is not the place to decide
+        // that a missing overlay ends one.
+        shown = runCatching {
+            getSystemService(WindowManager::class.java).addView(showing.view, params)
+            true
+        }.getOrDefault(false)
+    }
+
+    private fun hide() {
+        val showing = banner ?: return
+        if (shown) {
+            runCatching { getSystemService(WindowManager::class.java).removeView(showing.view) }
+        }
+        banner = null
+        shown = false
+    }
+
     override fun onDestroy() {
+        hide()
         connected = null
         viewing = null
         super.onDestroy()

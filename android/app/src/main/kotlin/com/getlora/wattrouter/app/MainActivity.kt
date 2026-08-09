@@ -287,10 +287,20 @@ private fun Conversation(driver: TurnDriver, handed: MutableState<String?>) {
     // isRunning, and a notification left behind by one of them is a turn the
     // person believes is still running.
     LaunchedEffect(isRunning) {
+        val about = rows.filterIsInstance<Row.Said>().lastOrNull()?.text.orEmpty()
         if (isRunning) {
-            TurnService.begin(context, rows.filterIsInstance<Row.Said>().lastOrNull()?.text.orEmpty())
+            TurnService.begin(context, about)
         } else {
             TurnService.end(context)
+        }
+
+        // The banner follows the same signal rather than a second lifecycle
+        // that can disagree with it. Every way a turn ends goes through
+        // isRunning, and an overlay left behind by one of them says the agent
+        // is still driving something.
+        DrivingService.connected?.let {
+            it.onStop = driver::interrupt
+            it.showing(if (isRunning) about else null)
         }
     }
 
