@@ -15,6 +15,8 @@
 //   TypeTextTool    Filling something in.
 //   Way             A button the system owns.
 //   NavigateTool    Pressing one.
+//   Onward          Which way through a list.
+//   ScrollTool      Moving one.
 //
 // The seam is why this is in core/ at all. DrivingService is an app-module
 // class holding framework types, and everything here is prose, rendering and
@@ -104,6 +106,35 @@ interface Phone {
      * is nothing about it that can go stale.
      */
     suspend fun navigate(way: Way): Done?
+
+    /**
+     * Move a list through its content.
+     *
+     * # Rely
+     * As [tap]. A node action rather than a gesture, so no coordinate is
+     * involved anywhere on this path.
+     */
+    suspend fun scroll(at: Handle, from: Generation, onward: Onward): Done?
+}
+
+/**
+ * Which way through a list.
+ *
+ * Forward and back rather than down and up. A horizontal carousel scrolls
+ * sideways and a vertical list scrolls down, and both are the same action —
+ * naming it "down" would be right for most lists and wrong for the rest, and a
+ * model told "down" on a carousel would be surprised by what moved.
+ */
+enum class Onward(val word: String) {
+    FORWARD("forward"),
+    BACK("back"),
+    ;
+
+    companion object {
+        fun of(word: String?): Onward? = entries.firstOrNull { it.word == word?.trim() }
+
+        val words: String get() = entries.joinToString(", ") { it.word }
+    }
 }
 
 /**
@@ -359,5 +390,38 @@ class NavigateTool(private val phone: Phone) : Tool {
             ?: return "there is no button called that. Try one of: ${Way.words}."
 
         return TapTool.say(phone.navigate(way))
+    }
+}
+
+/** Move a list through its content. */
+class ScrollTool(private val phone: Phone) : Tool {
+    override val name = "scroll"
+
+    override val purpose =
+        "Scroll a list, page or carousel. Give the handle from a read_screen " +
+            "line marked `scroll`. Forward means onward through the content — " +
+            "down a list, or sideways through a carousel. If it is already at " +
+            "the end you are told so rather than it failing."
+
+    override val schema = """
+        {"type":"object","properties":{
+        "handle":{"type":"string","description":"A handle from a line marked `scroll`."},
+        "screen":{"type":"string","description":"The screen id it was printed under."},
+        "direction":{"type":"string","enum":["forward","back"],
+        "description":"Onward through the content, or back towards the start."}},
+        "required":["handle","screen","direction"]}
+    """.trimIndent().replace("\n", "")
+
+    /** # Rely
+     *  Obtains no capability, as [TapTool]. */
+    override suspend fun run(arguments: String): String {
+        val handle = decode(Tools.field(arguments, "handle"))
+            ?: return "that is not a handle. Use one exactly as read_screen printed it."
+        val seen = decodeSeen(Tools.field(arguments, "screen"))
+            ?: return "that is not a screen id. Use the one at the top of a read_screen answer."
+        val onward = Onward.of(Tools.field(arguments, "direction"))
+            ?: return "there is no direction called that. Try one of: ${Onward.words}."
+
+        return TapTool.say(phone.scroll(handle, seen, onward))
     }
 }

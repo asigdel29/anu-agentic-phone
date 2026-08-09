@@ -33,6 +33,7 @@ import com.getlora.wattrouter.Generation
 import com.getlora.wattrouter.Generations
 import com.getlora.wattrouter.Handle
 import com.getlora.wattrouter.Node
+import com.getlora.wattrouter.Onward
 import com.getlora.wattrouter.Reading
 import com.getlora.wattrouter.Viewing
 import com.getlora.wattrouter.Way
@@ -110,6 +111,59 @@ class DrivingService : AccessibilityService() {
             }
         } finally {
             release(live)
+        }
+    }
+
+    /**
+     * Move a list through its content.
+     *
+     * The same retain-and-release as [tap]. A node action rather than a
+     * gesture, so canPerformGestures stays out of driving.xml and no
+     * coordinate is involved anywhere on this path — which is stronger than
+     * how-the-agent-drives.md promised, and worth keeping.
+     */
+    fun scroll(at: Handle, from: Generation, onward: Onward): Done? {
+        val viewing = viewing ?: return null
+        val live = snapshot(rootInActiveWindow, retain = true) ?: return null
+
+        return try {
+            when (val aim = viewing.aim(live, at, from)) {
+                is Aim.Moved -> Done.Moved(aim.now)
+                is Aim.Lost -> Done.Lost(aim.resolution)
+                is Aim.At -> shift(aim.node, onward)
+            }
+        } finally {
+            release(live)
+        }
+    }
+
+    /**
+     * Scroll a node, or say why not.
+     *
+     * A list already at its end answers false, and that is the answer to "is
+     * there any more" rather than a failure. Told it failed, a model retries;
+     * told the list is at its end, it stops.
+     */
+    private fun shift(node: Node, onward: Onward): Done {
+        if (!node.isScrollable) {
+            return Done.Refused(
+                "that does not scroll. read_screen marks the lines that do",
+            )
+        }
+        val source = (node as? Copied)?.source
+            ?: return Done.Refused("it could not be reached on the screen any more")
+
+        val action = when (onward) {
+            Onward.FORWARD -> AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
+            Onward.BACK -> AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+        }
+        return if (source.performAction(action)) {
+            Done.Did(read())
+        } else {
+            Done.Refused(
+                "it is already at the ${if (onward == Onward.FORWARD) "end" else "start"}, " +
+                    "so nothing moved",
+            )
         }
     }
 

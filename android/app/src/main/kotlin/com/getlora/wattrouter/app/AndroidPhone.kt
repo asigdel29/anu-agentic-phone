@@ -18,6 +18,7 @@ package com.getlora.wattrouter.app
 import com.getlora.wattrouter.Done
 import com.getlora.wattrouter.Generation
 import com.getlora.wattrouter.Handle
+import com.getlora.wattrouter.Onward
 import com.getlora.wattrouter.Phone
 import com.getlora.wattrouter.Reading
 import com.getlora.wattrouter.Way
@@ -44,4 +45,9 @@ class AndroidPhone : Phone {
     override suspend fun navigate(way: Way): Done? = withContext(Dispatchers.Default) {
         DrivingService.connected?.navigate(way)
     }
+
+    override suspend fun scroll(at: Handle, from: Generation, onward: Onward): Done? =
+        withContext(Dispatchers.Default) {
+            DrivingService.connected?.scroll(at, from, onward)
+        }
 }
