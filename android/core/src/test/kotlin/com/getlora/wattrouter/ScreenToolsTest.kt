@@ -19,6 +19,8 @@ private class Showing(private val reading: Reading?) : Phone {
     override suspend fun read() = reading
 
     override suspend fun tap(at: Handle, from: Generation): Done? = null
+
+    override suspend fun type(at: Handle, from: Generation, text: String): Done? = null
 }
 
 class ScreenToolsTest {
@@ -139,10 +141,14 @@ class ScreenToolsTest {
 
 private class Tapping(private val done: Done?, private val reading: Reading? = null) : Phone {
     var asked: Pair<Handle, Generation>? = null
+    var typed: String? = null
 
     override suspend fun read() = reading
 
     override suspend fun tap(at: Handle, from: Generation) = done.also { asked = at to from }
+
+    override suspend fun type(at: Handle, from: Generation, text: String) =
+        done.also { asked = at to from; typed = text }
 }
 
 class TapToolTest {
@@ -228,5 +234,63 @@ class TapToolTest {
         val said = TapTool(Tapping(null)).run(call())
 
         assertEquals(ReadScreenTool.describe(null), said)
+    }
+}
+
+class TypeTextToolTest {
+    private val generation = Generation("k3f9", 4)
+    private val field = Handle("message", "field", "Message", null, 1)
+
+    private fun call(text: String = "hello", handle: String = encode(field), screen: String = "k3f9.4") =
+        """{"handle":"$handle","screen":"$screen","text":"$text"}"""
+
+    @Test
+    fun theTextReachesThePhoneAsWritten() = runTest {
+        val phone = Tapping(Done.Did(null))
+
+        TypeTextTool(phone).run(call(text = "meet at six"))
+
+        assertEquals(field to generation, phone.asked)
+        assertEquals("meet at six", phone.typed)
+    }
+
+    @Test
+    fun thePurposeSaysItReplacesRatherThanAppends() {
+        // The only documentation a model gets. Without it, a correction is
+        // typed onto the end and the field reads "LondonLondon".
+        val said = TypeTextTool(Tapping(null)).purpose
+
+        assertTrue(said, said.contains("REPLACES"))
+    }
+
+    @Test
+    fun anEmptyStringClearsAFieldAndAMissingOneDoesNot() = runTest {
+        // Absent is a call that forgot half of itself, and answering it by
+        // emptying the field would be doing something nobody asked for.
+        val clearing = Tapping(Done.Did(null))
+        TypeTextTool(clearing).run(call(text = ""))
+        assertEquals("", clearing.typed)
+
+        val forgot = Tapping(Done.Did(null))
+        val said = TypeTextTool(forgot).run("""{"handle":"${encode(field)}","screen":"k3f9.4"}""")
+        assertTrue(said, said.startsWith("no text was given"))
+        assertNull(forgot.typed)
+    }
+
+    @Test
+    fun aBadHandleOrScreenIsRefusedBeforeAnythingIsTyped() = runTest {
+        val phone = Tapping(Done.Did(null))
+
+        assertTrue(TypeTextTool(phone).run(call(handle = "the field")).startsWith("that is not a handle"))
+        assertTrue(TypeTextTool(phone).run(call(screen = "last")).startsWith("that is not a screen id"))
+        assertNull(phone.typed)
+    }
+
+    @Test
+    fun everyOutcomeIsWordedTheWayATapIs() {
+        // One vocabulary for both. Two tools describing a moved screen
+        // differently is two things for a model to learn about one event.
+        assertEquals(TapTool.say(Done.Lost(Resolution.Missing)), TapTool.say(Done.Lost(Resolution.Missing)))
+        assertTrue(TapTool.say(Done.Refused("that is a password field")).contains("password field"))
     }
 }

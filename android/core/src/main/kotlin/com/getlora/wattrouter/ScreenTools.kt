@@ -12,6 +12,7 @@
 //   decodeSeen      One back, or nothing.
 //   ReadScreenTool  Looking.
 //   TapTool         Touching.
+//   TypeTextTool    Filling something in.
 //
 // The seam is why this is in core/ at all. DrivingService is an app-module
 // class holding framework types, and everything here is prose, rendering and
@@ -80,6 +81,18 @@ interface Phone {
      *   same as a tap that did not land.
      */
     suspend fun tap(at: Handle, from: Generation): Done?
+
+    /**
+     * Put text in what a handle names, replacing what is there.
+     *
+     * # Rely
+     * As [tap]. A password field is refused on the far side of this seam rather
+     * than here, so a later tool that also types cannot route around it.
+     *
+     * @param text what the field should say afterwards. Empty clears it, which
+     *   is a thing somebody asks for.
+     */
+    suspend fun type(at: Handle, from: Generation, text: String): Done?
 }
 
 /** A generation as the model reads one: `k3f9.4`. */
@@ -240,5 +253,44 @@ class TapTool(private val phone: Phone) : Tool {
                 "that is still the screen and the thing that handle names is not " +
                     "on it any more. Read it again."
         }
+    }
+}
+
+/** Fill something in. */
+class TypeTextTool(private val phone: Phone) : Tool {
+    override val name = "type_text"
+
+    override val purpose =
+        "Put text into a field on the screen. Give the handle from a read_screen " +
+            "line marked `type` and the screen id it was printed under. This " +
+            "REPLACES whatever the field already contains rather than adding to " +
+            "the end, so to change part of it, write out the whole new value."
+
+    override val schema = """
+        {"type":"object","properties":{
+        "handle":{"type":"string","description":"A handle from a line marked `type`."},
+        "screen":{"type":"string","description":"The screen id it was printed under."},
+        "text":{"type":"string","description":"What the field should say afterwards."}},
+        "required":["handle","screen","text"]}
+    """.trimIndent().replace("\n", "")
+
+    /** # Rely
+     *  Obtains no capability, as [TapTool]. May take as long as the framework
+     *  takes to set text and read the screen again. */
+    override suspend fun run(arguments: String): String {
+        val handle = decode(Tools.field(arguments, "handle"))
+            ?: return "that is not a handle. Use one exactly as read_screen printed it."
+        val seen = decodeSeen(Tools.field(arguments, "screen"))
+            ?: return "that is not a screen id. Use the one at the top of a read_screen answer."
+
+        // Absent and empty are told apart. Empty is somebody clearing a field;
+        // absent is a call that forgot half of itself, and answering it by
+        // clearing the field would be doing something nobody asked for.
+        val text = Tools.field(arguments, "text")
+        if (text.isEmpty() && !arguments.contains("\"text\"")) {
+            return "no text was given. To empty the field, pass an empty string."
+        }
+
+        return TapTool.say(phone.type(handle, seen, text))
     }
 }
