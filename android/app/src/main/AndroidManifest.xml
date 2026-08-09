@@ -4,11 +4,14 @@
 
   History
     2026-08-08  A. Sigdel  Created with one permission and one activity.
+    2026-08-09  A. Sigdel  The three AndroidAsking asks for.
 
-  INTERNET is the only permission here, and the only one the app can grant
-  itself. Everything else it will need — the calendar, contacts, location, an
-  overlay, the accessibility service — is asked for where it is used, because a
-  permission declared before the code that explains it is one nobody can weigh.
+  INTERNET is the only permission the app can grant itself. Everything else
+  arrives with the code that explains it, because a permission declared ahead of
+  its reason is one nobody can weigh — and, less obviously, one declared behind
+  its reason cannot be asked for at all: checkSelfPermission refuses it, the
+  dialog does not appear, and the app reports a permanent denial naming a
+  Settings row that is not there.
 
   allowBackup is false rather than unset: the store this app is about to hold is
   somebody's conversations, and cloud backup would copy it somewhere none of the
@@ -28,6 +31,20 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
+      What AndroidAsking spells the three capabilities as. Read-only: nothing
+      here writes to a calendar or a contact yet, and a permission asked for
+      ahead of the tool that needs it is a dialog somebody answers no to.
+
+      Coarse location rather than fine, and AndroidAsking says why: asking for
+      fine from API 31 obliges an app to ask for coarse beside it and adds a
+      precise/approximate choice to the dialog, for an accuracy nothing here
+      wants.
+    -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <application
         android:allowBackup="false"
