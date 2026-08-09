@@ -103,6 +103,26 @@ android:
 #
 # --rerun-tasks is not optional. Gradle reports a cached test task as UP-TO-DATE
 # and exits zero without running anything, which reads exactly like a pass.
+# Build the release APK, which is a different program: R8 renames and removes.
+#
+# The keystore is the person's own and is never tracked. Without it in the
+# environment this assembles unsigned, which is what CI and a contributor
+# without the key can do — and an unsigned APK cannot be installed, so the
+# recipe says which one came out.
+android-release:
+    scripts/build-android-core.sh >/dev/null
+    cd android && ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}" \
+        gradle :app:assembleRelease
+    @printf '\n'
+    @if [ -n "${WATTROUTER_KEYSTORE:-}" ]; then \
+        printf 'signed with %s\n' "$WATTROUTER_KEYSTORE"; \
+    else \
+        printf 'UNSIGNED: set WATTROUTER_KEYSTORE, WATTROUTER_KEYSTORE_PASSWORD,\n'; \
+        printf 'WATTROUTER_KEY_ALIAS and WATTROUTER_KEY_PASSWORD to sign it.\n'; \
+        printf 'An unsigned APK cannot be installed.\n'; \
+    fi
+    @ls -lh android/app/build/outputs/apk/release/*.apk
+
 android-test:
     cd android && ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}" \
         gradle test --rerun-tasks --console=plain

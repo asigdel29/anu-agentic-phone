@@ -84,3 +84,7 @@ ios/Share/Info.plist
 # both targets.
 ios/App/WattRouter.entitlements
 ios/Share/WattRouterShare.entitlements
+
+# Heap dumps. R8 writes one when it runs out of memory, which is how
+# android/gradle.properties came to exist.
+*.hprof

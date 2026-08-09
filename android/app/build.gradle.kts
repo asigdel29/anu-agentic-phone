@@ -3,6 +3,8 @@
 // History
 //   2026-08-08  A. Sigdel  Created, empty of everything but a screen. The
 //                          credential, the turn loop and the tools follow.
+//   2026-08-09  A. Sigdel  A release build, and the one R8 rule without which
+//                          it installs and dies at the first native call.
 //
 // The two SDK levels below are decisions, not defaults, and both are the kind
 // somebody tidies up. Each carries its reason at the line.
@@ -41,6 +43,37 @@ android {
         // arm64-v8a only, matching the core. A second ABI without a second .so
         // is an APK that installs and cannot load.
         ndk { abiFilters += "arm64-v8a" }
+    }
+
+    // From the environment, and the keystore is never tracked. A repository
+    // that will not track a Gradle wrapper jar is not going to track a signing
+    // key. Absent the environment there is no config, the release build
+    // assembles unsigned, and `just android-release` says which happened.
+    val store = System.getenv("WATTROUTER_KEYSTORE")
+    if (store != null) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(store)
+                storePassword = System.getenv("WATTROUTER_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("WATTROUTER_KEY_ALIAS")
+                keyPassword = System.getenv("WATTROUTER_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // On, which is the point of this build type: it is what makes the
+            // JNI keep rule in proguard-rules.pro load-bearing rather than
+            // decorative.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+            signingConfig = signingConfigs.findByName("release")
+        }
     }
 
     buildFeatures {
