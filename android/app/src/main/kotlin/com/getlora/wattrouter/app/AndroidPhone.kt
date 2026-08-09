@@ -34,4 +34,9 @@ class AndroidPhone : Phone {
         withContext(Dispatchers.Default) {
             DrivingService.connected?.tap(at, from)
         }
+
+    override suspend fun type(at: Handle, from: Generation, text: String): Done? =
+        withContext(Dispatchers.Default) {
+            DrivingService.connected?.type(at, from, text)
+        }
 }

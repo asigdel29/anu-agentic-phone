@@ -3,6 +3,8 @@
 // History
 //   2026-08-09  A. Sigdel  Created.
 //   2026-08-09  A. Sigdel  Acts as well as reads.
+//   2026-08-09  A. Sigdel  Types, and refuses a password field here rather than
+//                          in the tool, so a later one cannot route around it.
 //
 // It listens to nothing, which is the decision worth reading twice. The obvious
 // shape for an accessibility service is event-driven: track
@@ -22,6 +24,7 @@
 package com.getlora.wattrouter.app
 
 import android.accessibilityservice.AccessibilityService
+import android.os.Bundle
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.getlora.wattrouter.Aim
@@ -106,6 +109,64 @@ class DrivingService : AccessibilityService() {
             }
         } finally {
             release(live)
+        }
+    }
+
+    /**
+     * Put text in what a handle names, replacing what is there.
+     *
+     * The same retain-and-release as [tap]: setting text is a node action, so
+     * it needs the node rather than the copy of it.
+     */
+    fun type(at: Handle, from: Generation, text: String): Done? {
+        val viewing = viewing ?: return null
+        val live = snapshot(rootInActiveWindow, retain = true) ?: return null
+
+        return try {
+            when (val aim = viewing.aim(live, at, from)) {
+                is Aim.Moved -> Done.Moved(aim.now)
+                is Aim.Lost -> Done.Lost(aim.resolution)
+                is Aim.At -> write(aim.node, text)
+            }
+        } finally {
+            release(live)
+        }
+    }
+
+    /**
+     * Set a node's text, or say why not.
+     *
+     * The password refusal is here rather than in the tool, which is
+     * how-the-agent-drives.md's rule about where safety lives: a second tool
+     * that also types would otherwise have to remember this one, and the ninth
+     * one would not. prune never carries a password's value out, so a model
+     * asked to fill one in is typing something it invented or something the
+     * person said out loud — and the person can type their own password.
+     */
+    private fun write(node: Node, text: String): Done {
+        if (node.isPassword) {
+            return Done.Refused(
+                "that is a password field and the assistant does not type into " +
+                    "those. Ask the person to fill it in",
+            )
+        }
+        if (!node.isEditable) {
+            return Done.Refused(
+                "there is nowhere to type there. read_screen marks the lines that " +
+                    "take text, and this is not one of them",
+            )
+        }
+
+        val source = (node as? Copied)?.source
+            ?: return Done.Refused("it could not be reached on the screen any more")
+
+        val arguments = Bundle().apply {
+            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
+        }
+        return if (source.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)) {
+            Done.Did(read())
+        } else {
+            Done.Refused("the app would not take text there")
         }
     }
 

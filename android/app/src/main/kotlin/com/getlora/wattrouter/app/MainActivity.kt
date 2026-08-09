@@ -62,6 +62,7 @@ import com.getlora.wattrouter.Row
 import com.getlora.wattrouter.Startup
 import com.getlora.wattrouter.TapTool
 import com.getlora.wattrouter.ToolBox
+import com.getlora.wattrouter.TypeTextTool
 import com.getlora.wattrouter.TurnDriver
 import com.getlora.wattrouter.routing
 
@@ -227,7 +228,7 @@ class MainActivity : ComponentActivity() {
      */
     private fun driving(): List<Tool> {
         val screen = AndroidPhone()
-        return listOf(ReadScreenTool(screen), TapTool(screen))
+        return listOf(ReadScreenTool(screen), TapTool(screen), TypeTextTool(screen))
     }
 
     override fun onDestroy() {
