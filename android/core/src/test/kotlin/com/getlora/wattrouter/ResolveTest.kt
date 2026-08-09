@@ -100,10 +100,9 @@ class ResolveTest {
     }
 
     @Test
-    fun aWeakerFieldThatDisagreesIsSkippedRatherThanEmptying() {
-        // The candidates already agree on the id, so a moved row means the node
-        // changed rather than left. Applying the index here would refuse a node
-        // that is plainly there.
+    fun oneCandidateIsNotSecondGuessedByAnythingWeaker() {
+        // What forgives a relabelled button, and a moved one: with a single
+        // candidate the narrowing stops before it is consulted at all.
         val node = found(
             resolve(
                 screen(cancel, send),
@@ -112,6 +111,40 @@ class ResolveTest {
         )
 
         assertEquals("Send", node.text)
+    }
+
+    @Test
+    fun aRecycledListDoesNotResolveToWhateverScrolledIn() {
+        // RecyclerView reuses view objects: the ids and the shape survive a
+        // scroll and the text does not. Ignoring text because it matches none
+        // of the rows, then falling through to the sibling index, taps a
+        // message the model never saw. #405.
+        val scrolled = List(4) { at ->
+            Seen(viewId = "app:id/row", role = "text", text = "message ${at + 90}")
+        }
+
+        val resolution = resolve(
+            screen(*scrolled.toTypedArray()),
+            Handle(viewId = "row", role = "text", text = "Rent is due", siblingIndex = 2),
+        )
+
+        assertEquals(Resolution.Missing, resolution)
+    }
+
+    @Test
+    fun theRowThatIsStillThereIsStillFound() {
+        // The other side of it: a list that has not moved resolves as before,
+        // so the refusal above is not a refusal of lists.
+        val rows = List(4) { at -> Seen(viewId = "app:id/row", role = "text", text = "message $at") }
+
+        val node = found(
+            resolve(
+                screen(*rows.toTypedArray()),
+                Handle(viewId = "row", role = "text", text = "message 2", siblingIndex = 2),
+            ),
+        )
+
+        assertEquals("message 2", node.text)
     }
 
     @Test

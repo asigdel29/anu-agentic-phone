@@ -2,6 +2,8 @@
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
+//   2026-08-09  A. Sigdel  Narrowing that empties refuses instead of skipping.
+//                          Skipping tapped the wrong row of a recycled list.
 //
 // Contents
 //   Resolution  What looking found.
@@ -16,9 +18,13 @@
 // this design exists to prevent.
 //
 // So the most durable field the handle has is a hard requirement, and the rest
-// narrow only while more than one candidate is left — a filter that would empty
-// the set is skipped, because by then the set has matched on something durable
-// and a weaker field disagreeing means the node changed rather than left.
+// narrow only while more than one candidate is left. The relabelled button is
+// answered by *stopping* at one candidate rather than by tolerating a field that
+// disagrees: once there is one, nothing weaker is consulted.
+//
+// Where more than one survives and the field that would separate them matches
+// none, that is a refusal. It was a skip, and the skip tapped the wrong row of a
+// recycled list — see the history line above and #405.
 
 package com.getlora.wattrouter
 
@@ -74,12 +80,19 @@ fun resolve(root: Node, handle: Handle): Resolution {
 
     // Then the rest, in the same order, while there is anything to settle.
     for (narrow in narrowing(handle)) {
+        // Stopping here is what forgives a relabelled button: with one
+        // candidate left, nothing weaker is consulted and a changed label
+        // cannot lose it.
         if (candidates.size <= 1) break
+
         val fewer = candidates.filter(narrow)
-        // Skipped rather than applied when it empties the set: the candidates
-        // already agree on something durable, so a weaker field disagreeing
-        // says the node changed, not that it went away.
-        if (fewer.isNotEmpty()) candidates = fewer
+        // But with several left, a field matching none of them is not a field
+        // to ignore — it is the evidence that would have told them apart,
+        // saying none of them is the one. A recycled list keeps its ids and
+        // its shape and replaces its text, so ignoring this and falling
+        // through to the sibling index taps whatever scrolled into that row.
+        if (fewer.isEmpty()) return Resolution.Missing
+        candidates = fewer
     }
 
     return when (candidates.size) {
