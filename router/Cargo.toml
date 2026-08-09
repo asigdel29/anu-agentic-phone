@@ -54,7 +54,17 @@ axum = "0.8"
 # are the half this does not do — see the decision record. What is left vendors
 # libgit2's C and builds it with cc, which is the toolchain the cross-build
 # already uses.
-git2 = { version = "0.19", optional = true, default-features = false }
+#
+# 0.20.4 rather than 0.19: below it, GHSA-j39j-6gw9-jw6h dereferences a Buf
+# whose pointer is null, which is undefined behaviour even for a zero-length
+# slice. Nothing here names Buf, so this was answering an advisory rather than
+# fixing a call — and an argument that nothing calls it goes stale the first
+# time somebody adds a diff.
+#
+# Not 0.21, which is published. The bump above is the smallest one that clears
+# the advisory, and a version chosen for a reason is worth more than the newest
+# when what it vendors is a C library on three targets.
+git2 = { version = "0.20.4", optional = true, default-features = false }
 # Pinned to the version zeromem uses. Two versions means two libsqlite3-sys,
 # which is two copies of SQLite in one binary: it sometimes links, and when it
 # does the two hold separate page caches over one file. `bundled` for the same
