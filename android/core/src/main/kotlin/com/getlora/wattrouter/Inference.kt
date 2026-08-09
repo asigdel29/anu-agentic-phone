@@ -112,10 +112,15 @@ interface Inference {
      * has seen one event treats the attempt as delivered and will not retry it
      * against another model, so an event emitted early forecloses the retry
      * that would have worked.
+     *
+     * @param tools the provider's `tools` array, already JSON, or null for
+     *   none. A parameter rather than something the conversation carries: #319
+     *   records what happens when sending it is left to a later change.
      */
     fun complete(
         conversation: Conversation,
         model: String,
+        tools: String? = null,
         maxTokens: Int? = null,
     ): Flow<StreamEvent>
 }
@@ -140,6 +145,7 @@ class ScriptedInference(
     override fun complete(
         conversation: Conversation,
         model: String,
+        tools: String?,
         maxTokens: Int?,
     ): Flow<StreamEvent> = flow {
         // Recorded inside the flow, not outside it, because the flow is cold:
