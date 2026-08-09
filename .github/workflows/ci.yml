@@ -314,12 +314,15 @@ jobs:
 
       # There is no wrapper here — a wrapper is a jar, and this repository does
       # not track binaries it cannot review — so the version is named rather
-      # than read out of a properties file. setup-gradle installs it and caches
-      # the dependency downloads; its wrapper-validation sibling has nothing to
-      # validate and is not used.
+      # than read out of a properties file, and it is the full release name:
+      # `9.7` is not a version this resolves, `9.7.0` is.
+      #
+      # The action's wrapper validation stays on and passes over nothing, which
+      # is the right way round. Turning it off would mean a wrapper jar arriving
+      # later goes unchecked as well as unwanted.
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '9.7'
+          gradle-version: '9.7.0'
 
       # --rerun-tasks is not optional. Gradle reports a cached test task as
       # UP-TO-DATE and exits zero having run nothing, which here would be a
