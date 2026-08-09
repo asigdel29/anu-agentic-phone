@@ -2,6 +2,7 @@
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
+//   2026-08-09  A. Sigdel  Moved the store calls off the caller's thread.
 //
 // Contents
 //   RememberTool  Putting something in memory.
@@ -19,6 +20,9 @@
 // a fact the model states as though somebody said it.
 
 package com.getlora.wattrouter
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 import java.time.Instant
 import java.time.ZoneOffset
@@ -54,7 +58,12 @@ class RememberTool(
         val text = Tools.field(arguments, "text").trim()
         if (text.isEmpty()) return "there was nothing to remember, so nothing was stored"
 
-        memory.remember(text, speaker = "assistant", session = session, at = now())
+        // Dispatchers.IO, for the reason #474 records: SQLite across JNI, and
+        // the loop above runs wherever its collector does — which on a phone
+        // is the main thread.
+        withContext(Dispatchers.IO) {
+            memory.remember(text, speaker = "assistant", session = session, at = now())
+        }
         // Said back rather than "done". A model that cannot see what landed
         // writes it again next turn.
         return "remembered: $text"
@@ -83,8 +92,9 @@ class RecallTool(private val memory: Memory) : Tool {
         val query = Tools.field(arguments, "query").trim()
         if (query.isEmpty()) return "no question was given, so nothing was looked up"
 
-        val found = Recollection.from(memory.recall(query, most = LIMIT))
-            ?: return "the store could not be searched"
+        val found = withContext(Dispatchers.IO) {
+            Recollection.from(memory.recall(query, most = LIMIT))
+        } ?: return "the store could not be searched"
         return describe(found)
     }
 
