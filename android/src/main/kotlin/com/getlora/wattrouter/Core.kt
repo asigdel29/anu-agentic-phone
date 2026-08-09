@@ -35,18 +35,23 @@ class Core private constructor(private var handle: Long) : AutoCloseable {
         }
 
         /**
-         * Build a router, configured from the environment as the server is.
+         * Build a router.
          *
-         * @return a core, or null if configuration was rejected. Null covers a
-         *   missing credential and an unparseable setting alike — the native
-         *   side cannot say which, and pretending otherwise would invent a
-         *   reason.
+         * @param credential the provider key. The core reads it from the
+         *   environment, which Kotlin cannot write, so it is handed across and
+         *   installed there — the same thing Startup.install does on iOS.
+         * @return a core, or null if the credential was refused or the
+         *   configuration was. Null covers both, because the native side reports
+         *   every configuration fault the same way and inventing a distinction
+         *   here would be inventing a reason.
          */
-        fun open(): Core? {
+        fun open(credential: String): Core? {
+            if (!nativeConfigure(credential)) return null
             val handle = nativeNew()
             return if (handle == 0L) null else Core(handle)
         }
 
+        @JvmStatic private external fun nativeConfigure(credential: String?): Boolean
         @JvmStatic private external fun nativeNew(): Long
         @JvmStatic private external fun nativeFree(handle: Long)
         @JvmStatic private external fun nativeDecide(

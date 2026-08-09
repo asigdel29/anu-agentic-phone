@@ -4,6 +4,7 @@
 //!   2026-08-08  A. Sigdel  Created.
 //!
 //! Contents
+//!   `Java_..._nativeConfigure`  The credential the core reads from.
 //!   `Java_..._nativeNew`     Build a router.
 //!   `Java_..._nativeFree`    Release one.
 //!   `Java_..._nativeDecide`  The whole decision path, as one envelope.
@@ -38,7 +39,7 @@ use crate::ffi::Router;
 use crate::tier::Tier;
 use jni::JNIEnv;
 use jni::objects::{JClass, JString};
-use jni::sys::{jlong, jstring};
+use jni::sys::{jboolean, jlong, jstring};
 use serde::Serialize;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
@@ -50,6 +51,12 @@ struct Decided {
     /// Why that tier.
     reason: String,
     /// Difficulty in `[0, 1]`, or absent where nothing scored it.
+    ///
+    /// Absent rather than null. `null` is a value a caller has to know to skip,
+    /// and the rule everywhere else in this boundary — `Message`'s empty
+    /// `tool_calls`, `ffi_answer`'s envelope — is that a key that means nothing
+    /// is not written. A test on the emulator is what noticed the difference.
+    #[serde(skip_serializing_if = "Option::is_none")]
     score: Option<f32>,
     /// What will actually be asked, in order.
     chain: Vec<Attempt>,
@@ -61,6 +68,42 @@ struct Attempt {
     model: String,
     /// `local` or `remote`.
     backend: String,
+}
+
+/// Put the provider credential where the core reads it.
+///
+/// `Config::from_env` reads the environment, and Kotlin has no `setenv` — so
+/// without this `nativeNew` returns zero on every Android device and the reason
+/// is invisible. iOS solves it the same way, in `Startup.install`.
+///
+/// # Safety
+/// The environment is process-global and this writes it. Call before
+/// [`Java_com_getlora_wattrouter_Core_nativeNew`] and from one thread, which is
+/// what `Core.open` does — the same rely `config.rs` states and `Startup.swift`
+/// keeps by confining every write to one actor.
+///
+/// # Returns
+/// Whether the credential was taken. `false` for null or non-UTF-8, and for an
+/// empty one — which reaches the provider as a 401 rather than as a refusal
+/// here, and is the failure people spend an afternoon on.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_getlora_wattrouter_Core_nativeConfigure<'a>(
+    mut env: JNIEnv<'a>,
+    _class: JClass<'a>,
+    credential: JString<'a>,
+) -> jboolean {
+    catch_unwind(AssertUnwindSafe(|| {
+        let Some(credential) = read(&mut env, &credential) else {
+            return u8::from(false);
+        };
+        if credential.trim().is_empty() {
+            return u8::from(false);
+        }
+        // Safe under the rely above: one thread, before anything reads it.
+        unsafe { std::env::set_var("NEURALWATT_API_KEY", credential) };
+        u8::from(true)
+    }))
+    .unwrap_or(u8::from(false))
 }
 
 /// Build a router.

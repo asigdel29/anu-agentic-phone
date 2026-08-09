@@ -100,9 +100,18 @@ android:
 
 # Run the Kotlin tests. On the JVM, so no emulator and no core build: what they
 # check is the request a turn becomes, which touches nothing Android.
+#
+# --rerun-tasks is not optional. Gradle reports a cached test task as UP-TO-DATE
+# and exits zero without running anything, which reads exactly like a pass.
 android-test:
     cd android && ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}" \
-        gradle test --console=plain
+        gradle test --rerun-tasks --console=plain
+
+# Run the instrumented tests on the shared emulator, booting one if none is up.
+# These are the only ones that can load the library, so they are the only ones
+# that can say the binding works.
+android-device-test:
+    scripts/test-android.sh
 
 # Check the stack end to end. Needs a router; `just up` first.
 verify:

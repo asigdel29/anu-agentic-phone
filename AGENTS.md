@@ -45,6 +45,11 @@ There is no Gradle wrapper. A wrapper is a jar, and this repository does not tra
 cannot review; the recipe says how to install Gradle instead, the way `scripts/test-ios.sh` does
 for xcodegen.
 
+Android has two test recipes and the difference matters. `just android-test` runs on the JVM and
+covers everything that touches nothing Android. `just android-device-test` boots an emulator,
+and it is the only one that can load the library — the `.so` is built for
+`aarch64-linux-android` and will not load on the host at all.
+
 ## What will reject a change
 
 Two workflows, and they check different things.
