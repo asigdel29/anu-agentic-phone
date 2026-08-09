@@ -21,6 +21,7 @@
 //   matching        Which one a name means.
 //   OpenAppTool     Starting it.
 //   WaitForChangeTool  Letting the screen finish moving.
+//   FindOnScreenTool   Asking about the part that was not printed.
 //
 // The seam is why this is in core/ at all. DrivingService is an app-module
 // class holding framework types, and everything here is prose, rendering and
@@ -594,5 +595,49 @@ class WaitForChangeTool(
 
         /** The ceiling. Past this somebody would rather be told nothing happened. */
         const val LONGEST = 15
+    }
+}
+
+/** Search the screen for something by what it says. */
+class FindOnScreenTool(private val phone: Phone) : Tool {
+    override val name = "find_on_screen"
+
+    override val purpose =
+        "Search the screen for something by the words on it. Use it when " +
+            "read_screen said it left lines out, or when the screen is long — " +
+            "this searches all of it rather than the part that was printed."
+
+    override val schema = """
+        {"type":"object","properties":{"text":{"type":"string",
+        "description":"Words to look for, as they appear on screen."}},"required":["text"]}
+    """.trimIndent().replace("\n", "")
+
+    /** # Rely
+     *  Obtains no capability. Reads the screen once. */
+    override suspend fun run(arguments: String): String {
+        val wanted = Tools.field(arguments, "text").trim()
+        // A blank search matching every line is read_screen with extra steps,
+        // and on a long screen it is read_screen without the limit.
+        if (wanted.isEmpty()) return "no words were given, so nothing was looked for"
+
+        val reading = phone.read() ?: return ReadScreenTool.describe(null)
+
+        // The whole reading, not the printed part. The handles past
+        // read_screen's limit exist; they are only not on the page.
+        val found = reading.seen.filter {
+            it.label?.contains(wanted, ignoreCase = true) == true
+        }
+
+        // Not the same as a screen that could not be read, which the line
+        // above already answers differently.
+        if (found.isEmpty()) {
+            return "nothing on this screen says \"$wanted\". It has " +
+                "${reading.seen.size} things on it; read_screen shows the first " +
+                "${ReadScreenTool.LIMIT}."
+        }
+
+        // With the screen id: a handle without one cannot be acted on, and a
+        // list to look at rather than use would be a worse answer than none.
+        return ReadScreenTool.describe(Reading(reading.generation, found))
     }
 }

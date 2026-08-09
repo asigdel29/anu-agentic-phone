@@ -46,6 +46,7 @@ import com.getlora.wattrouter.CalendarTool
 import com.getlora.wattrouter.ChainWalk
 import com.getlora.wattrouter.ContactsTool
 import com.getlora.wattrouter.Credential
+import com.getlora.wattrouter.FindOnScreenTool
 import com.getlora.wattrouter.GitAddTool
 import com.getlora.wattrouter.GitCommitTool
 import com.getlora.wattrouter.GitStatusTool
@@ -240,6 +241,7 @@ class MainActivity : ComponentActivity() {
             ScrollTool(screen),
             OpenAppTool(screen),
             WaitForChangeTool(screen),
+            FindOnScreenTool(screen),
         )
     }
 
