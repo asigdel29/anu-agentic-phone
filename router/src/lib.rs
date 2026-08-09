@@ -50,6 +50,10 @@ pub mod git;
 pub mod head;
 #[cfg(feature = "android")]
 pub mod jni;
+// Either of the two below being on, the way `ffi_answer` is gated: it is what
+// they share, and it is nothing without one of them.
+#[cfg(all(feature = "android", any(feature = "git", feature = "memory")))]
+pub mod jni_answer;
 // Both features, here and below: it is the store, or the repository, reached
 // from Kotlin, and either half missing leaves entry points calling something
 // that is not compiled.

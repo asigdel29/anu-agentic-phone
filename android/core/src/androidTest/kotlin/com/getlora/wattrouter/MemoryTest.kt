@@ -103,6 +103,29 @@ class MemoryTest {
     }
 
     @Test
+    fun textOutsideTheBasicPlaneSurvivesTheCrossing() {
+        // A JVM is permitted to hand a string over as modified UTF-8, where
+        // anything above U+FFFF arrives as a surrogate pair rather than as one
+        // four-byte sequence — and read as the standard encoding, every
+        // character below would become U+FFFD.
+        //
+        // This passed before `owned` was changed to decode the documented way,
+        // which is the finding rather than the failure: ART does not use that
+        // permission, so the old route worked by grace of one runtime. The test
+        // is here to say which runtime, and to fail if that stops being true.
+        //
+        // Nothing on the host can ask the question at all: it needs a real JVM
+        // writing the bytes, which is this suite and only this suite.
+        requireNotNull(Memory.open(path())).use { store ->
+            assertNotNull(store.remember(BEYOND, "user", "s", NOW))
+
+            val found = requireNotNull(store.recall(BEYOND, most = 5))
+            assertTrue(found, found.contains(BEYOND))
+            assertTrue(found, !found.contains("�"))
+        }
+    }
+
+    @Test
     fun closingTwiceIsNotADoubleFree() {
         // The property the parity test asserts is still written; this is it
         // actually happening on a device.
@@ -123,5 +146,12 @@ class MemoryTest {
     private companion object {
         /** Fixed rather than now(): a turn's age is data, not the clock. */
         const val NOW = 1_786_000_000L
+
+        /**
+         * Three characters above U+FFFF: an emoji, a CJK extension B ideograph,
+         * and a mathematical letter. Each is one code point and two UTF-16 code
+         * units, which is exactly the shape the old decode lost.
+         */
+        const val BEYOND = "keys 🔑 𠀋 𝒜"
     }
 }
