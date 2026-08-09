@@ -167,10 +167,71 @@ board — they are the sizes the model and the runtime are documented to want.
 The router and zeromem share one model cache directory, so the model is downloaded once rather
 than once per process.
 
-## Credentials
+## Configuration
 
-One: `NEURALWATT_API_KEY`. Supply it through the environment or a systemd `EnvironmentFile` —
-never a tracked file. See `.env.example`.
+One credential: `NEURALWATT_API_KEY`. Supply it through the environment or a systemd
+`EnvironmentFile` — never a tracked file. `.env.example` carries the names and no values.
+
+Everything else has a default that works, and these are the ones worth knowing about.
+
+| Variable | Default | What it decides |
+|---|---|---|
+| `NEURALWATT_API_KEY` | — | The one credential. Required. |
+| `WATTROUTER_ADDR` | `127.0.0.1:8080` | Where the router listens. Loopback on purpose; see below. |
+| `WATTROUTER_UPSTREAM` | `https://api.neuralwatt.com/v1` | Where requests go. |
+| `WATTROUTER_MODEL_<TIER>` | the six names in the table above | Overrides one tier's model. |
+| `WATTROUTER_BACKEND_<TIER>` | `remote` | `local` or `remote`, per tier. An unrecognised value refuses to start rather than quietly sending work off the machine. |
+| `WATTROUTER_EMBEDDER` | hashing | `hash` or `onnx`. Changing it means refitting the head — a head is only readable by the embedder that produced its training vectors, and it is checked at load. |
+| `WATTROUTER_MODEL_CACHE` | `~/.hermes/memory/zeromem-models` | Shared with zeromem, so the model is fetched once. |
+| `WATTROUTER_HEAD` | `<model cache>/head.json` | The scoring head. Absent is not an error; the policy has an unscored path. |
+| `HERMES_HOME` | `~/.hermes` | Hermes state: config, plugins, memory, skills. |
+
+### What it serves
+
+| Route | |
+|---|---|
+| `POST /v1/chat/completions` | The one that matters. OpenAI-shaped, streaming both ways. |
+| `GET /v1/models` | The tiers, as models. |
+| `GET /healthz` | |
+| `GET /metrics` | Prometheus. |
+
+**None of them is authenticated**, which is why the default binds loopback. `SECURITY.md` says
+what follows from that.
+
+Set `x-wattrouter-tier` on a request to override the routing decision entirely.
+
+### Cargo features, which change what you get
+
+| Feature | Default | |
+|---|---|---|
+| `onnx` | **on** | The ONNX embedder. Off gives a router that only ever hashes, which is the right build for a memory-tight board. |
+| `git` | off | libgit2, for the phones. A board has a shell and does not need it linked in. |
+| `memory` | off | The bounded memory store. Only a phone needs one. |
+| `android` | off | The JNI entry points. |
+
+So `cargo build --release` gives you ONNX and **neither git nor memory** — while `just ios-core`
+and CI build `--no-default-features --features git`. The same asymmetry applies to the tests:
+`cargo test --all-targets` does not compile `git2`, `rusqlite` or the JNI layer at all, so a
+change to any of them wants `--all-features` before it is called tested.
+
+## What you need
+
+Every floor below is pinned in a file; this is the one place they are all together.
+
+| | |
+|---|---|
+| **Rust** | 1.95, edition 2024 |
+| **Targets** | `aarch64-unknown-linux-gnu` for the board, `aarch64-apple-ios` for the phone. Those two, cross-built and gated in CI. |
+| **Python** | 3.11, which is Hermes's floor. Only `train/` and the Hermes plugins need it. |
+| **Xcode** | 26 and one simulator runtime, for `ios/`. |
+| **Java** | 21, for `android/`. |
+| **Gradle** | 9.7. No wrapper — a wrapper is a jar, and this repository does not track binaries it cannot review, so it is installed rather than checked in. |
+| **Android SDK** | `compileSdk 37.1`, `targetSdk 35`, `minSdk 29` — so Android 10 and up. |
+| **Android ABI** | **`arm64-v8a` only.** The APK carries no other, which is every phone since about 2017 and no emulator image that is not arm64. |
+
+`just toolchain` reports which of these are present and exits non-zero if one is missing or too
+old. It treats the Android and iOS toolchains as optional rather than failing over them: a check
+that fails over a milestone nobody is working on is a check people learn to ignore.
 
 ## Getting started
 
