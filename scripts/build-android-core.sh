@@ -3,6 +3,8 @@
 #
 # History
 #   2026-08-08  A. Sigdel  Created.
+#   2026-08-08  A. Sigdel  Asserts the page alignment, which held by the NDK's
+#                          default rather than by anything here saying so.
 #
 # The iOS counterpart's shape, with the three differences Android forces.
 #
@@ -110,5 +112,53 @@ cargo rustc --manifest-path "$MANIFEST" --target "$TARGET" \
 mkdir -p "$OUT/$ABI"
 cp "$ROOT/router/target/$TARGET/release/libwattrouter.so" "$OUT/$ABI/"
 
+# Devices shipping with Android 15 and later may use 16 KB memory pages, and a
+# library laid out for 4 KB will not load on one at all. The failure is an
+# UnsatisfiedLinkError naming the library and nothing else, on a class of device
+# nobody here owns yet, so it would be found by somebody else.
+#
+# NDK r28 and later align to 16 KB by default, so this holds today by default
+# rather than by intent — which is the reason to check it. An older NDK found by
+# resolve_ndk on another machine would quietly undo it, and the build would look
+# exactly the same.
+assert_page_alignment() {
+    local so="$1" want=16384
+    local worst="" align
+
+    # The Align column of every LOAD segment. p_align is the maximum page size a
+    # segment is laid out for, so the smallest one decides. $NF rather than a
+    # fixed column because Flg is "R E" on one line and "RW" on the next, and
+    # counting fields from the left gets a different answer for each.
+    #
+    # The hex is converted by the shell rather than by awk: strtonum is a gawk
+    # extension and the awk macOS ships is not gawk.
+    while read -r align; do
+        align=$((align))
+        if [ -z "$worst" ] || [ "$align" -lt "$worst" ]; then
+            worst="$align"
+        fi
+    done < <("$BIN/llvm-readelf" -l "$so" | awk '$1 == "LOAD" { print $NF }')
+
+    if [ -z "$worst" ]; then
+        printf 'could not read the LOAD segments of %s\n' "$so" >&2
+        return 1
+    fi
+    if [ "$worst" -lt "$want" ]; then
+        cat >&2 <<EOF
+$so is aligned for a $worst-byte page, and Android 15 and later may use $want.
+
+It will not load there. The toolchain decides this: NDK r28 and later align to
+16 KB by default, so an older NDK is the likely cause —
+
+  $NDK
+
+Name a newer one in ANDROID_NDK_HOME, or pass -Wl,-z,max-page-size=$want.
+EOF
+        return 1
+    fi
+    printf '  %s-byte page alignment\n' "$worst"
+}
+
 printf '\n%s\n' "$OUT/$ABI/libwattrouter.so"
 du -sh "$OUT/$ABI/libwattrouter.so" | awk '{print "  " $1}'
+assert_page_alignment "$OUT/$ABI/libwattrouter.so"
