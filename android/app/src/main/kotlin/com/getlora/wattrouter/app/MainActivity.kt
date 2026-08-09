@@ -8,6 +8,8 @@
 //   2026-08-09  A. Sigdel  Reads the calendar, which is the first tool needing
 //                          a permission and so the first needing an Activity.
 //   2026-08-09  A. Sigdel  Takes what another app shares, once.
+//   2026-08-09  A. Sigdel  Can look at the screen and tap it, when the service
+//                          behind that has been switched on.
 //
 // The core and the driver are built once and held for the process. The core
 // owns a native pointer and a decision cache, and a second one is a second
@@ -51,12 +53,14 @@ import com.getlora.wattrouter.LocationTool
 import com.getlora.wattrouter.Memory
 import com.getlora.wattrouter.Permission
 import com.getlora.wattrouter.Tool
+import com.getlora.wattrouter.ReadScreenTool
 import com.getlora.wattrouter.RecallTool
 import com.getlora.wattrouter.RememberTool
 import com.getlora.wattrouter.Repository
 import com.getlora.wattrouter.NeuralWattInference
 import com.getlora.wattrouter.Row
 import com.getlora.wattrouter.Startup
+import com.getlora.wattrouter.TapTool
 import com.getlora.wattrouter.ToolBox
 import com.getlora.wattrouter.TurnDriver
 import com.getlora.wattrouter.routing
@@ -126,7 +130,7 @@ class MainActivity : ComponentActivity() {
                 Agent(
                     router = ready.core.routing(),
                     walk = ChainWalk(NeuralWattInference(credential.read().orEmpty())),
-                    tools = ToolBox(remembering() + phone() + working()),
+                    tools = ToolBox(remembering() + phone() + working() + driving()),
                 ),
                 scope,
             )
@@ -211,6 +215,19 @@ class MainActivity : ComponentActivity() {
             // shared twice is a conversation nobody had.
             incoming?.action = null
         }
+    }
+
+    /**
+     * The tools that drive the phone rather than read its data.
+     *
+     * Offered whether or not the accessibility service is on. A model that
+     * cannot see the tools cannot be told why they are unavailable, and
+     * read_screen's own answer names the switch and the restricted-settings
+     * trap behind it — which is the only place somebody learns about either.
+     */
+    private fun driving(): List<Tool> {
+        val screen = AndroidPhone()
+        return listOf(ReadScreenTool(screen), TapTool(screen))
     }
 
     override fun onDestroy() {
