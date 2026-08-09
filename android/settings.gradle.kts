@@ -34,9 +34,9 @@ pluginManagement {
     // bundling Kotlin does not bring that plugin with it, and `compose = true`
     // without it fails at configuration time saying so.
     plugins {
-        id("com.android.application") version "9.0.0"
-        id("com.android.library") version "9.0.0"
-        id("org.jetbrains.kotlin.plugin.compose") version "2.2.10"
+        id("com.android.application") version "9.3.1"
+        id("com.android.library") version "9.3.1"
+        id("org.jetbrains.kotlin.plugin.compose") version "2.4.10"
     }
 }
 
