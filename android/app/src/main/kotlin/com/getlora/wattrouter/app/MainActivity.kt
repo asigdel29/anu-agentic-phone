@@ -358,9 +358,15 @@ private fun Conversation(driver: TurnDriver, handed: MutableState<String?>) {
     LaunchedEffect(isRunning) {
         val about = rows.filterIsInstance<Row.Said>().lastOrNull()?.text.orEmpty()
         if (isRunning) {
+            // Before the service, not after: the notification carries a Stop
+            // button and the system may deliver a press the moment it is
+            // posted. Set second, that press finds no callback and does what
+            // #470 was about.
+            TurnService.onStop = driver::interrupt
             TurnService.begin(context, about)
         } else {
             TurnService.end(context)
+            TurnService.onStop = null
         }
 
         // The banner follows the same signal rather than a second lifecycle
