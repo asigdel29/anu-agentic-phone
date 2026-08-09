@@ -22,9 +22,9 @@ final class AgentTests: XCTestCase {
 
         init(_ rounds: [[StreamEvent]]) { self.rounds = rounds }
 
-        func complete(_ conversation: Conversation, model: String, maxTokens: Int?)
-            -> AsyncThrowingStream<StreamEvent, any Error>
-        {
+        func complete(
+            _ conversation: Conversation, model: String, maxTokens: Int?, tools: String? = nil
+        ) -> AsyncThrowingStream<StreamEvent, any Error> {
             defer { asked += 1 }
             return ScriptedInference(events: asked < rounds.count ? rounds[asked] : [])
                 .complete(conversation, model: model, maxTokens: maxTokens)

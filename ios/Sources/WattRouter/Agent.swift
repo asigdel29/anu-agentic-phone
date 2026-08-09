@@ -159,7 +159,13 @@ public actor Agent {
 
         var text = ""
         var calls: [ToolCall] = []
-        for try await event in walk.complete(conversation, following: chain) {
+        // Thrown rather than dropped. A tool whose schema will not parse is a
+        // tool the model would silently not have; #319 was the version of that
+        // with every tool missing, and a quiet `try?` here would be the same
+        // failure one tool at a time.
+        for try await event in walk.complete(
+            conversation, following: chain, tools: try tools.definitions())
+        {
             switch event {
             case .text(let chunk): text += chunk
             case .toolCall(let call): calls.append(call)
