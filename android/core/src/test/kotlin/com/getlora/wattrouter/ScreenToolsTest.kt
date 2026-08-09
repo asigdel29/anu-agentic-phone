@@ -23,6 +23,8 @@ private class Showing(private val reading: Reading?) : Phone {
     override suspend fun type(at: Handle, from: Generation, text: String): Done? = null
 
     override suspend fun navigate(way: Way): Done? = null
+
+    override suspend fun scroll(at: Handle, from: Generation, onward: Onward): Done? = null
 }
 
 class ScreenToolsTest {
@@ -145,6 +147,7 @@ private class Tapping(private val done: Done?, private val reading: Reading? = n
     var asked: Pair<Handle, Generation>? = null
     var typed: String? = null
     var pressed: Way? = null
+    var moved: Onward? = null
 
     override suspend fun read() = reading
 
@@ -154,6 +157,9 @@ private class Tapping(private val done: Done?, private val reading: Reading? = n
         done.also { asked = at to from; typed = text }
 
     override suspend fun navigate(way: Way) = done.also { pressed = way }
+
+    override suspend fun scroll(at: Handle, from: Generation, onward: Onward) =
+        done.also { asked = at to from; moved = onward }
 }
 
 class TapToolTest {
@@ -388,5 +394,62 @@ class ScrollColumnTest {
 
         assertTrue(said, said.contains("tap"))
         assertTrue(said, !said.contains("scroll"))
+    }
+}
+
+class ScrollToolTest {
+    private val list = Handle("messages", "list", null, null, 0)
+
+    private fun call(direction: String = "forward", handle: String = encode(list), screen: String = "k3f9.4") =
+        """{"handle":"$handle","screen":"$screen","direction":"$direction"}"""
+
+    @Test
+    fun bothDirectionsReachThePhone() = runTest {
+        Onward.entries.forEach { onward ->
+            val phone = Tapping(Done.Did(null))
+
+            ScrollTool(phone).run(call(direction = onward.word))
+
+            assertEquals(onward, phone.moved)
+            assertEquals(list to Generation("k3f9", 4), phone.asked)
+        }
+    }
+
+    @Test
+    fun aDirectionThatIsNotOneListsTheOnesThatAre() = runTest {
+        val phone = Tapping(Done.Did(null))
+
+        val said = ScrollTool(phone).run(call(direction = "down"))
+
+        assertTrue(said, said.contains("forward, back"))
+        assertNull("nothing should have moved", phone.moved)
+    }
+
+    @Test
+    fun thePurposeSaysForwardMeansOnwardRatherThanDown() {
+        // A carousel scrolls sideways and a list scrolls down, and both are
+        // the same action. "Down" would be right for most and wrong for some.
+        val said = ScrollTool(Tapping(null)).purpose
+
+        assertTrue(said, said.contains("onward through the content"))
+        assertTrue(said, said.contains("carousel"))
+    }
+
+    @Test
+    fun aBadHandleOrScreenIsRefusedBeforeAnythingMoves() = runTest {
+        val phone = Tapping(Done.Did(null))
+
+        assertTrue(ScrollTool(phone).run(call(handle = "the list")).startsWith("that is not a handle"))
+        assertTrue(ScrollTool(phone).run(call(screen = "last")).startsWith("that is not a screen id"))
+        assertNull(phone.moved)
+    }
+
+    @Test
+    fun beingAtTheEndIsAnAnswerRatherThanAFailure() {
+        // Told it failed, a model retries. Told the list is at its end, it
+        // stops — which is the answer to "is there any more".
+        val said = TapTool.say(Done.Refused("it is already at the end, so nothing moved"))
+
+        assertTrue(said, said.contains("already at the end"))
     }
 }

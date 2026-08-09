@@ -60,6 +60,7 @@ import com.getlora.wattrouter.RememberTool
 import com.getlora.wattrouter.Repository
 import com.getlora.wattrouter.NeuralWattInference
 import com.getlora.wattrouter.Row
+import com.getlora.wattrouter.ScrollTool
 import com.getlora.wattrouter.Startup
 import com.getlora.wattrouter.TapTool
 import com.getlora.wattrouter.ToolBox
@@ -234,6 +235,7 @@ class MainActivity : ComponentActivity() {
             TapTool(screen),
             TypeTextTool(screen),
             NavigateTool(screen),
+            ScrollTool(screen),
         )
     }
 
