@@ -236,6 +236,17 @@ The project and the xcframework are both build output and neither is checked in.
 `ios/AGENTS.md` says what a pull request may claim to have verified on a machine without
 Xcode, which is less than it looks.
 
+## Security
+
+This application reads and acts on other applications' screens, and what it reads reaches the
+provider that answers the turn. [`SECURITY.md`](SECURITY.md) says what that means in practice —
+the threat model, what leaves the device, what is protected and what is not — and how to report
+a vulnerability privately.
+
+Two things from it worth knowing before installing anything: **`FLAG_SECURE` windows are
+readable through accessibility**, so a banking application is not hidden from this; and **the
+router has no authentication**, which is why it binds loopback.
+
 ## Credits
 
 The routing approach follows [RouteLLM](https://github.com/lm-sys/RouteLLM) (Ong et al.,
