@@ -2,6 +2,7 @@
 //!
 //! History
 //!   2026-08-09  A. Sigdel  Created.
+//!   2026-08-09  A. Sigdel  Moved the two helpers to `jni_answer.rs`.
 //!
 //! `jni_memory.rs`'s shape and its reasoning: these go through
 //! `wattrouter_git_*` rather than `crate::git` directly, so both phones reach a
@@ -14,7 +15,13 @@
 //! nothing to hold between them. So `Repository.kt` is not `Memory.kt` — no
 //! handle, no `AutoCloseable`, no close. That ceremony would invent a lifetime
 //! which does not exist, and hand somebody a `close` to forget.
+//!
+//! What is left here is four translations and nothing else. `owned` and
+//! `answered` are `jni_answer.rs`'s, because the copy that used to be at the
+//! bottom of this file was identical to the one at the bottom of `jni_memory.rs`
+//! and neither applied the rules `jni.rs` states — see #468.
 
+use crate::jni_answer::{answered, owned};
 use jni::JNIEnv;
 use jni::objects::{JClass, JString};
 use jni::sys::jstring;
@@ -95,27 +102,4 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeCommit<'a>(
     answered(&mut env, unsafe {
         crate::ffi_git::wattrouter_git_commit(path.as_ptr(), message.as_ptr())
     })
-}
-
-/// A Java string as a C string, or nothing if it was neither.
-fn owned(env: &mut JNIEnv<'_>, value: &JString<'_>) -> Option<std::ffi::CString> {
-    let read = env.get_string(value).ok()?;
-    std::ffi::CString::new(read.to_string_lossy().as_ref()).ok()
-}
-
-/// Hand an envelope to Kotlin and free the Rust copy.
-fn answered(env: &mut JNIEnv<'_>, raw: *mut std::ffi::c_char) -> jstring {
-    if raw.is_null() {
-        return std::ptr::null_mut();
-    }
-    let read = unsafe { std::ffi::CStr::from_ptr(raw) }
-        .to_str()
-        .ok()
-        .and_then(|json| env.new_string(json).ok());
-
-    // Before returning, and whether or not the conversion worked: new_string
-    // copies, so nothing here refers to the Rust allocation afterwards.
-    unsafe { crate::ffi_answer::wattrouter_string_free(raw) };
-
-    read.map_or(std::ptr::null_mut(), jni::objects::JString::into_raw)
 }

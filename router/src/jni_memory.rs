@@ -2,6 +2,7 @@
 //!
 //! History
 //!   2026-08-09  A. Sigdel  Created.
+//!   2026-08-09  A. Sigdel  Moved the two helpers to `jni_answer.rs`.
 //!
 //! The C ABI beside this is what Swift links; Kotlin cannot use it, so these
 //! wrap the same calls in the shape JNI wants. They go through
@@ -15,8 +16,13 @@
 //! Every allocating call here frees the Rust string before returning. A Kotlin
 //! `String` is a copy by the time `new_string` returns, so there is nothing to
 //! keep and leaving it would leak once per call.
+//!
+//! `owned` and `answered` are `jni_answer.rs`'s. The copy that used to be at the
+//! bottom of this file was identical to `jni_git.rs`'s and neither applied the
+//! rules `jni.rs` states — see #468.
 
 use crate::ffi_memory::Memory;
+use crate::jni_answer::{answered, owned};
 use jni::JNIEnv;
 use jni::objects::{JClass, JString};
 use jni::sys::{jlong, jstring};
@@ -32,15 +38,15 @@ pub extern "system" fn Java_com_getlora_wattrouter_Memory_nativeOpen<'a>(
     path: JString<'a>,
     keep: jlong,
 ) -> jlong {
-    let Ok(path) = env.get_string(&path) else {
-        return 0;
-    };
-    let Ok(path) = std::ffi::CString::new(path.to_string_lossy().as_ref()) else {
+    let Some(path) = owned(&mut env, &path) else {
         return 0;
     };
 
     // Negative keep would wrap into an enormous usize and bound nothing, which
-    // is the one way this could quietly do the opposite of its job.
+    // is the one way this could quietly do the opposite of its job. The
+    // saturation beside it cannot fire on any ABI this ships for — `abiFilters`
+    // is arm64-v8a alone — and is written for the one it does not, rather than
+    // left to be found later and mistaken for a hazard.
     let keep = usize::try_from(keep.max(0)).unwrap_or(usize::MAX);
 
     let store = unsafe { crate::ffi_memory::wattrouter_memory_open(path.as_ptr(), keep) };
@@ -120,27 +126,4 @@ pub extern "system" fn Java_com_getlora_wattrouter_Memory_nativeRecall<'a>(
             usize::try_from(most.max(0)).unwrap_or(usize::MAX),
         )
     })
-}
-
-/// A Java string as a C string, or nothing if it was neither.
-fn owned(env: &mut JNIEnv<'_>, value: &JString<'_>) -> Option<std::ffi::CString> {
-    let read = env.get_string(value).ok()?;
-    std::ffi::CString::new(read.to_string_lossy().as_ref()).ok()
-}
-
-/// Hand an envelope to Kotlin and free the Rust copy.
-fn answered(env: &mut JNIEnv<'_>, raw: *mut std::ffi::c_char) -> jstring {
-    if raw.is_null() {
-        return std::ptr::null_mut();
-    }
-    let read = unsafe { std::ffi::CStr::from_ptr(raw) }
-        .to_str()
-        .ok()
-        .and_then(|json| env.new_string(json).ok());
-
-    // Before returning, and whether or not the conversion worked: new_string
-    // copies, so nothing here refers to the Rust allocation afterwards.
-    unsafe { crate::ffi_answer::wattrouter_string_free(raw) };
-
-    read.map_or(std::ptr::null_mut(), jni::objects::JString::into_raw)
 }
