@@ -10,4 +10,15 @@
 -->
 <resources>
     <string name="app_name">WattRouter</string>
+
+    <!--
+      Shown on the Settings screen where somebody turns the service on, which
+      is the one moment they decide whether to. So it says what is read and
+      what is not, rather than what the feature is called.
+    -->
+    <string name="driving_description">Lets the assistant read what is on
+        screen and act on it, when you ask it to do something on your phone.
+        What it reads goes to the model answering you and is not stored or
+        logged. Apps that hide their contents from accessibility, such as
+        banking apps, stay hidden.</string>
 </resources>
