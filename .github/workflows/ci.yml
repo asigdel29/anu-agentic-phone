@@ -5,6 +5,8 @@
 #                          Tests and the cross-build follow immediately; the
 #                          documentation and complexity gates follow later, as
 #                          they depend on lint scripts that do not exist yet.
+#   2026-08-08  A. Sigdel  The Android JVM suite, after six pull requests of
+#                          Kotlin merged with nothing here compiling any of it.
 #
 # Runs on merge_group as well as pull_request: the merge queue builds each
 # candidate on its own ref and waits for these checks, so a change is re-validated
@@ -39,6 +41,7 @@ jobs:
     outputs:
       rust: ${{ steps.probe.outputs.rust }}
       python: ${{ steps.probe.outputs.python }}
+      kotlin: ${{ steps.probe.outputs.kotlin }}
     steps:
       - uses: actions/checkout@v4
       - id: probe
@@ -46,6 +49,7 @@ jobs:
           set -euo pipefail
           test -f router/Cargo.toml && echo "rust=true" >> "$GITHUB_OUTPUT" || echo "rust=false" >> "$GITHUB_OUTPUT"
           test -f train/pyproject.toml && echo "python=true" >> "$GITHUB_OUTPUT" || echo "python=false" >> "$GITHUB_OUTPUT"
+          test -f android/settings.gradle.kts && echo "kotlin=true" >> "$GITHUB_OUTPUT" || echo "kotlin=false" >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
 
   format:
@@ -284,12 +288,57 @@ jobs:
           WATTROUTER_BENCH_QUICK: "1"
         run: cargo bench --manifest-path router/Cargo.toml --bench load --no-default-features
 
+  # The JVM half of the Android suite. It needs no emulator, no NDK and no Rust
+  # build: what it covers is the request a turn becomes, which touches nothing
+  # Android and so runs anywhere.
+  #
+  # The instrumented half is deliberately absent and cannot be added here. The
+  # system image is arm64-v8a and this runner is x86_64 with no KVM for it, so
+  # the emulator would run under full QEMU and never meet the 300s boot limit
+  # scripts/test-android.sh allows. macos-latest is Apple silicon and could, at
+  # several minutes a run. Until that trade is worth making, the only suite that
+  # can load the library stays a local gate — android/AGENTS.md says so, and it
+  # is why a pull request there has to name which of the two it ran.
+  android:
+    name: Android
+    needs: detect
+    if: ${{ needs.detect.outputs.kotlin == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # There is no wrapper here — a wrapper is a jar, and this repository does
+      # not track binaries it cannot review — so the version is named rather
+      # than read out of a properties file. setup-gradle installs it and caches
+      # the dependency downloads; its wrapper-validation sibling has nothing to
+      # validate and is not used.
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.7'
+
+      # --rerun-tasks is not optional. Gradle reports a cached test task as
+      # UP-TO-DATE and exits zero having run nothing, which here would be a
+      # permanently green check over an empty run.
+      - name: gradle test
+        working-directory: android
+        run: gradle test --rerun-tasks --console=plain
+
   # One check for branch protection to require, so adding a job does not mean
   # editing the ruleset. Skipped is a pass: a job guarded off by `detect` has
   # nothing to say.
+  #
+  # A job belongs in both `needs` and `RESULTS`. In `needs` alone it is waited
+  # for and its result ignored, which is worse than not gating it at all: the
+  # aggregator reports green over a red job. Adding one without proving it can
+  # turn this check red is trusting the YAML.
   required:
     name: Required
-    needs: [detect, format, lint, test, cross-build, ios-build, perf]
+    needs: [detect, format, lint, test, cross-build, ios-build, perf, android]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -303,6 +352,7 @@ jobs:
             cross-build:${{ needs.cross-build.result }}
             ios-build:${{ needs.ios-build.result }}
             perf:${{ needs.perf.result }}
+            android:${{ needs.android.result }}
         run: |
           set -euo pipefail
           fail=0

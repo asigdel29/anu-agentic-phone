@@ -56,12 +56,17 @@ Two workflows, and they check different things.
 
 `.github/workflows/ci.yml` checks the code, and **most of it is conditional** — the surprising
 property of this pipeline, and the first thing to know about it. A `detect` job probes for
-`router/Cargo.toml` and `train/pyproject.toml` and sets a flag per language; every later step
-carries an `if` on those flags.
+`router/Cargo.toml`, `train/pyproject.toml` and `android/settings.gradle.kts` and sets a flag
+per language; every later step carries an `if` on those flags.
 
 `router/Cargo.toml` exists, so the Rust half runs: `cargo fmt --check`, `clippy -D warnings`,
 `cargo test --all-targets`, a cross-build for `aarch64-unknown-linux-gnu`, a build for
 `aarch64-apple-ios`, and performance gates.
+
+`android/settings.gradle.kts` exists, so `gradle test` runs — **the JVM suite only**. The
+instrumented one cannot run there: the system image is `arm64-v8a` and the runner is x86_64
+with no KVM for it. So the only suite that can load the library is a local gate, which is why
+`android/AGENTS.md` asks a pull request to name which of the two it ran.
 
 **`train/pyproject.toml` does not exist, so the Python half runs over nothing.** `ruff format`,
 `ruff`, `mypy --strict` and `pytest` are all configured and all skipped. `train/` currently
