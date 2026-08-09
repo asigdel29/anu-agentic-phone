@@ -46,6 +46,27 @@ internal fun encodePaths(paths: List<String>): String = paths.joinToString(
 }
 
 /**
+ * A repository, as a seam.
+ *
+ * [Repository] loads the shared library when its class initialises, so a tool
+ * holding one cannot be built on the host at all — and the tools' own decisions,
+ * which are what to refuse and what to say, need no repository to exercise. The
+ * same split `Calendars`, `Directory` and `Whereabouts` are on.
+ *
+ * Every call answers the envelope the C ABI defines, undecoded: what a model
+ * should be told about a failed commit is a decision, made above this.
+ */
+interface Worktree {
+    fun head(): String?
+
+    fun status(): String?
+
+    fun add(paths: List<String>): String?
+
+    fun commit(message: String): String?
+}
+
+/**
  * One repository on disk.
  *
  * Cheap to build and cheap to throw away: it is a path and nothing else, so a
@@ -55,14 +76,14 @@ internal fun encodePaths(paths: List<String>): String = paths.joinToString(
  *   against the process's working directory, which on Android is `/` — so the
  *   mistake it looks like is not the one it is.
  */
-class Repository(val path: String) {
+class Repository(val path: String) : Worktree {
 
     /** Where `HEAD` points: a branch, a commit, or a branch with no commits
      *  yet. Answers the envelope, or null if the runtime could not allocate. */
-    fun head(): String? = nativeHead(path)
+    override fun head(): String? = nativeHead(path)
 
     /** The working tree, against the index and the head. */
-    fun status(): String? = nativeStatus(path)
+    override fun status(): String? = nativeStatus(path)
 
     /**
      * Stage paths, and answer with the status that results.
@@ -72,14 +93,14 @@ class Repository(val path: String) {
      *   ABI takes and the shape the model wrote — turning it into an array on
      *   the way through would be a third shape for one value.
      */
-    fun add(paths: List<String>): String? = nativeAdd(path, encodePaths(paths))
+    override fun add(paths: List<String>): String? = nativeAdd(path, encodePaths(paths))
 
     /**
      * Commit what is staged. Committing nothing is an error rather than a
      * no-op: libgit2 writes a commit whose tree matches its parent without
      * complaint, and a model doing that in a loop believes it is progressing.
      */
-    fun commit(message: String): String? = nativeCommit(path, message)
+    override fun commit(message: String): String? = nativeCommit(path, message)
 
     private companion object {
         init {

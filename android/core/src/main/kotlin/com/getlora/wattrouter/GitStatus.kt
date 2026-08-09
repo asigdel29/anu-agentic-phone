@@ -109,7 +109,7 @@ data class GitStatus(
 }
 
 /** Read the repository. */
-class GitStatusTool(private val repository: Repository) : Tool {
+class GitStatusTool(private val repository: Worktree) : Tool {
     override val name = "read_repository"
 
     override val purpose =

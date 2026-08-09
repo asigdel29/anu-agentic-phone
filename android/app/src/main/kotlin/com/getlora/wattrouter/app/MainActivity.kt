@@ -41,12 +41,16 @@ import com.getlora.wattrouter.CalendarTool
 import com.getlora.wattrouter.ChainWalk
 import com.getlora.wattrouter.ContactsTool
 import com.getlora.wattrouter.Credential
+import com.getlora.wattrouter.GitAddTool
+import com.getlora.wattrouter.GitCommitTool
+import com.getlora.wattrouter.GitStatusTool
 import com.getlora.wattrouter.LocationTool
 import com.getlora.wattrouter.Memory
 import com.getlora.wattrouter.Permission
 import com.getlora.wattrouter.Tool
 import com.getlora.wattrouter.RecallTool
 import com.getlora.wattrouter.RememberTool
+import com.getlora.wattrouter.Repository
 import com.getlora.wattrouter.NeuralWattInference
 import com.getlora.wattrouter.Row
 import com.getlora.wattrouter.Startup
@@ -109,7 +113,7 @@ class MainActivity : ComponentActivity() {
                 Agent(
                     router = ready.core.routing(),
                     walk = ChainWalk(NeuralWattInference(credential.read().orEmpty())),
-                    tools = ToolBox(remembering() + phone()),
+                    tools = ToolBox(remembering() + phone() + working()),
                 ),
                 scope,
             )
@@ -147,6 +151,24 @@ class MainActivity : ComponentActivity() {
         ContactsTool(AndroidContacts(this), permission),
         LocationTool(AndroidWhereabouts(this), permission),
     )
+
+    /**
+     * The repository the agent works in.
+     *
+     * `filesDir/work`, made if it is not there. A directory is not a repository
+     * and the core has no `init` (#393), so until one arrives here these three
+     * answer that it is not one — which is true and actionable, and the whole
+     * of what is missing is a single entry point rather than anything above it.
+     */
+    private fun working(): List<Tool> {
+        val root = java.io.File(filesDir, "work").apply { mkdirs() }
+        val repository = Repository(root.absolutePath)
+        return listOf(
+            GitStatusTool(repository),
+            GitAddTool(repository),
+            GitCommitTool(repository),
+        )
+    }
 
     override fun onDestroy() {
         (started as? Startup.Ready)?.core?.close()
