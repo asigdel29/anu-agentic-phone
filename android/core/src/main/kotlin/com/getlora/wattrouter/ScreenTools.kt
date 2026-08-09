@@ -2,12 +2,16 @@
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
+//   2026-08-09  A. Sigdel  The seam takes actions rather than answering nodes,
+//                          because a Node is a copy and cannot be clicked.
 //
 // Contents
+//   Done            What doing something produced.
 //   Phone           The screen, as a tool reaches it.
 //   encodeSeen      A generation as the model reads one.
 //   decodeSeen      One back, or nothing.
 //   ReadScreenTool  Looking.
+//   TapTool         Touching.
 //
 // The seam is why this is in core/ at all. DrivingService is an app-module
 // class holding framework types, and everything here is prose, rendering and
@@ -20,6 +24,31 @@
 // the one thing a token does not carry: whether the node can be acted on.
 
 package com.getlora.wattrouter
+
+/**
+ * What doing something produced.
+ *
+ * Three of the four are not failures of the action. A model told "failed" for
+ * all of them learns to retry, which is right for one and wrong for three.
+ */
+sealed interface Done {
+    /**
+     * It happened.
+     *
+     * @property now the screen afterwards, which may still be settling — a tap
+     *   opening a page is answered before the page has finished arriving.
+     */
+    data class Did(val now: Reading?) : Done
+
+    /** The screen moved before it could happen. Carries what is there instead. */
+    data class Moved(val now: Reading) : Done
+
+    /** This is still the screen and the handle names nothing on it. */
+    data class Lost(val resolution: Resolution) : Done
+
+    /** Found, and the framework would not do it. The only one about the action. */
+    data class Refused(val why: String) : Done
+}
 
 /** The screen, as a tool reaches it. */
 interface Phone {
@@ -36,12 +65,21 @@ interface Phone {
     suspend fun read(): Reading?
 
     /**
-     * Aim at a handle, against the screen as it is now.
+     * Tap what a handle names.
+     *
+     * The seam takes the action rather than answering the node, because a
+     * [Node] is a copy: plain values with no way back to the framework object
+     * that has to be clicked. It also keeps every framework type on the far
+     * side, which is why there is a seam at all.
      *
      * # Rely
-     * As [read], and answers on the same terms.
+     * As [read]. Suspends for as long as the framework takes to dispatch, and
+     * reads the screen again afterwards.
+     *
+     * @return null on [read]'s terms — the screen unreadable, which is not the
+     *   same as a tap that did not land.
      */
-    suspend fun aim(at: Handle, from: Generation): Aim?
+    suspend fun tap(at: Handle, from: Generation): Done?
 }
 
 /** A generation as the model reads one: `k3f9.4`. */
@@ -130,6 +168,77 @@ class ReadScreenTool(private val phone: Phone) : Tool {
             sighting.isEditable -> "type    "
             sighting.isClickable -> "tap     "
             else -> "        "
+        }
+    }
+}
+
+/** Tap what a handle names. */
+class TapTool(private val phone: Phone) : Tool {
+    override val name = "tap"
+
+    override val purpose =
+        "Tap something on the screen. Give the handle from a read_screen line " +
+            "and the screen id it was printed under. If the screen has changed " +
+            "since, the tap is refused and you are shown what is there now."
+
+    override val schema = """
+        {"type":"object","properties":{
+        "handle":{"type":"string","description":"A handle exactly as read_screen printed it."},
+        "screen":{"type":"string","description":"The screen id it was printed under."}},
+        "required":["handle","screen"]}
+    """.trimIndent().replace("\n", "")
+
+    /** # Rely
+     *  Obtains no capability: the accessibility service is granted once from
+     *  Settings rather than asked for per turn. May take as long as the
+     *  framework takes to dispatch a click. */
+    override suspend fun run(arguments: String): String {
+        // Refused here rather than resolved. A handle this build did not write
+        // would otherwise be assembled with defaults and act on something.
+        val handle = decode(Tools.field(arguments, "handle"))
+            ?: return "that is not a handle. Use one exactly as read_screen printed it."
+        val seen = decodeSeen(Tools.field(arguments, "screen"))
+            ?: return "that is not a screen id. Use the one at the top of a read_screen answer."
+
+        return say(phone.tap(handle, seen))
+    }
+
+    companion object {
+        /** What happened, for the model to read. */
+        fun say(done: Done?): String = when (done) {
+            null -> ReadScreenTool.describe(null)
+
+            is Done.Did ->
+                "tapped. The screen may still be settling; this is it now.\n\n" +
+                    ReadScreenTool.describe(done.now)
+
+            // Not a failure of the tap, and worth wording as an instruction
+            // rather than an error: the answer already contains what to do.
+            is Done.Moved ->
+                "the screen changed before that could happen, so nothing was " +
+                    "tapped. This is what is there now.\n\n" +
+                    ReadScreenTool.describe(done.now)
+
+            is Done.Lost -> lost(done.resolution)
+
+            is Done.Refused ->
+                "that is on the screen and could not be tapped: ${done.why}"
+        }
+
+        private fun lost(resolution: Resolution): String = when (resolution) {
+            is Resolution.Ambiguous ->
+                "that handle matches ${resolution.count} things on the screen, so " +
+                    "nothing was tapped. Read the screen again and use a handle " +
+                    "that names one of them."
+
+            Resolution.Unusable ->
+                "that handle does not describe anything to look for. Use one " +
+                    "exactly as read_screen printed it."
+
+            // Missing, and Found cannot reach here.
+            else ->
+                "that is still the screen and the thing that handle names is not " +
+                    "on it any more. Read it again."
         }
     }
 }

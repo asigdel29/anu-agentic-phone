@@ -18,7 +18,7 @@ import org.junit.Test
 private class Showing(private val reading: Reading?) : Phone {
     override suspend fun read() = reading
 
-    override suspend fun aim(at: Handle, from: Generation): Aim? = null
+    override suspend fun tap(at: Handle, from: Generation): Done? = null
 }
 
 class ScreenToolsTest {
@@ -134,5 +134,99 @@ class ScreenToolsTest {
         val token = printed.lines().last().trim().substringAfter("  ").trim()
 
         assertEquals(seen.handle, decode(token))
+    }
+}
+
+private class Tapping(private val done: Done?, private val reading: Reading? = null) : Phone {
+    var asked: Pair<Handle, Generation>? = null
+
+    override suspend fun read() = reading
+
+    override suspend fun tap(at: Handle, from: Generation) = done.also { asked = at to from }
+}
+
+class TapToolTest {
+    private val generation = Generation("k3f9", 4)
+    private val send = Handle("send", "button", "Send", null, 0)
+
+    private fun call(handle: String = encode(send), screen: String = "k3f9.4") =
+        """{"handle":"$handle","screen":"$screen"}"""
+
+    @Test
+    fun aHandleAndAScreenIdReachThePhoneUntouched() = runTest {
+        // What read_screen printed is what the phone is asked for. Anything
+        // rewritten in between is a tap on something else.
+        val phone = Tapping(Done.Did(null))
+
+        TapTool(phone).run(call())
+
+        assertEquals(send to generation, phone.asked)
+    }
+
+    @Test
+    fun aHandleThisBuildDidNotWriteIsRefusedBeforeAnythingHappens() = runTest {
+        // Assembled with defaults it would resolve, and resolving is acting.
+        val phone = Tapping(Done.Did(null))
+
+        val said = TapTool(phone).run(call(handle = "the Send button"))
+
+        assertTrue(said, said.startsWith("that is not a handle"))
+        assertNull("nothing should have been tapped", phone.asked)
+    }
+
+    @Test
+    fun aScreenIdThisBuildDidNotWriteIsRefusedTheSameWay() = runTest {
+        val phone = Tapping(Done.Did(null))
+
+        val said = TapTool(phone).run(call(screen = "the last one"))
+
+        assertTrue(said, said.startsWith("that is not a screen id"))
+        assertNull(phone.asked)
+    }
+
+    @Test
+    fun aTapAnswersWithTheScreenAndSaysItMaySettle() {
+        val after = Reading(Generation("k3f9", 5), listOf(Sighting(send, "button", "Send", isClickable = true)))
+
+        val said = TapTool.say(Done.Did(after))
+
+        assertTrue(said, said.startsWith("tapped."))
+        assertTrue(said, said.contains("still be settling"))
+        assertTrue(said, said.contains("screen k3f9.5"))
+    }
+
+    @Test
+    fun aScreenThatMovedIsAnInstructionRatherThanAnError() {
+        // Not a failure of the tap. Told "failed", a model retries — which is
+        // right for one of the four outcomes and wrong for this one.
+        val now = Reading(Generation("k3f9", 5), listOf(Sighting(send, "button", "Send", isClickable = true)))
+
+        val said = TapTool.say(Done.Moved(now))
+
+        assertTrue(said, said.contains("nothing was tapped"))
+        assertTrue(said, said.contains("screen k3f9.5"))
+    }
+
+    @Test
+    fun eachWayOfMissingGetsItsOwnInstruction() {
+        assertTrue(TapTool.say(Done.Lost(Resolution.Ambiguous(3))).contains("matches 3 things"))
+        assertTrue(TapTool.say(Done.Lost(Resolution.Unusable)).contains("does not describe anything"))
+        assertTrue(TapTool.say(Done.Lost(Resolution.Missing)).contains("not on it any more"))
+    }
+
+    @Test
+    fun theOneThatIsAboutTheTapSaysSo() {
+        val said = TapTool.say(Done.Refused("it is disabled"))
+
+        assertTrue(said, said.contains("could not be tapped: it is disabled"))
+    }
+
+    @Test
+    fun anUnreadableScreenSaysWhatReadScreenSays() = runTest {
+        // One sentence for one condition, rather than two tools disagreeing
+        // about how to describe the service being off.
+        val said = TapTool(Tapping(null)).run(call())
+
+        assertEquals(ReadScreenTool.describe(null), said)
     }
 }
