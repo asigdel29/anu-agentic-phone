@@ -22,7 +22,7 @@ table; this file assumes you have read it.
 | `hermes/` | Python, YAML | Configuration and two plugins for the agent, which is installed separately. Has its own `AGENTS.md`. |
 | `train/` | Python | `fetch_dataset.py`, which builds the training set for the scoring head. |
 | `deploy/` | Shell, systemd | Board bootstrap and the two service units. |
-| `android/` | — | Build output only so far: `just android-core` puts the core's shared object here. No app yet; see the tracking issue. |
+| `android/` | Kotlin, Gradle | The core as an Android library. `just android` builds it, core first. One module, no wrapper, and no app yet. |
 | `scripts/` | Shell | Everything `just` calls, plus `scripts/guards/`, which CI calls. |
 | `docs/` | Prose | The standard, and the decision records. |
 
@@ -35,9 +35,15 @@ The recipes that matter: `just router` runs it in the foreground, `just up` and 
 start and stop it detached, `just verify` checks the stack end to end and needs a router
 running first.
 
-`just ios-core` and `just android-core` build the same crate for the two phones. Both are
-optional toolchains — `just toolchain` reports the NDK as absent rather than failing, because a
-check that fails over a milestone nobody is working on is a check people learn to ignore.
+`just ios-core` and `just android-core` build the same crate for the two phones, and
+`just android` packages the Android one into a library Gradle can hand to an app. All of it is
+optional toolchain — `just toolchain` reports the NDK, the SDK and Gradle as absent rather than
+failing, because a check that fails over a milestone nobody is working on is a check people
+learn to ignore.
+
+There is no Gradle wrapper. A wrapper is a jar, and this repository does not track binaries it
+cannot review; the recipe says how to install Gradle instead, the way `scripts/test-ios.sh` does
+for xcodegen.
 
 ## What will reject a change
 
