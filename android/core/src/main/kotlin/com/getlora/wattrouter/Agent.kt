@@ -56,6 +56,14 @@ class Agent(
     private val tools: ToolBox,
     val conversation: Conversation = Conversation(),
     private val maxRounds: Int = DEFAULT_MAX_ROUNDS,
+    /**
+     * What a turn may do to the phone, reset at the top of each one.
+     *
+     * Null when there is nothing to bound: an agent with no phone tools cannot
+     * act on anything, and a budget it never spends is a number to keep in step
+     * for no reason.
+     */
+    private val budget: Budget? = null,
     private val session: String = java.util.UUID.randomUUID().toString(),
 ) {
     /**
@@ -82,6 +90,11 @@ class Agent(
     fun resume(): Flow<TurnEvent> = flow { loop() }
 
     private suspend fun kotlinx.coroutines.flow.FlowCollector<TurnEvent>.loop() {
+        // Here rather than in send(), so a resumed turn gets a fresh allowance
+        // rather than inheriting a spent one — which is the case an interrupt
+        // produces, and the one where somebody has just said carry on.
+        budget?.beginTurn()
+
         repeat(maxRounds) {
             val round = ask()
 
