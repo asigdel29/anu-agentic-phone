@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AndroidManifest.xml — what the app is allowed to do, and where it starts.
+
+  History
+    2026-08-08  A. Sigdel  Created with one permission and one activity.
+
+  INTERNET is the only permission here, and the only one the app can grant
+  itself. Everything else it will need — the calendar, contacts, location, an
+  overlay, the accessibility service — is asked for where it is used, because a
+  permission declared before the code that explains it is one nobody can weigh.
+
+  allowBackup is false rather than unset: the store this app is about to hold is
+  somebody's conversations, and cloud backup would copy it somewhere none of the
+  decisions about it apply.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:allowBackup="false"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.WattRouter">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

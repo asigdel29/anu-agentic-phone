@@ -54,10 +54,15 @@ ios/.build/
 # The Android core, built by `just android-core` from the same crate the iOS
 # xcframework comes from. Build output on the same terms, and a 4 MB binary is
 # not something to track.
-android/jniLibs/
+android/core/jniLibs/
 
 # Gradle's own output and the SDK path it wants written down. local.properties is
 # machine-specific and is exactly the file somebody commits by accident.
+#
+# `*/build/` rather than a line per module: the root project has one too, and a
+# third module would otherwise arrive with its output tracked until somebody
+# noticed.
+android/*/build/
 android/build/
 android/.gradle/
 android/local.properties

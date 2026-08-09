@@ -272,7 +272,7 @@ fn name(raw: *const std::ffi::c_char) -> Option<String> {
 mod tests {
     /// The Kotlin the library has to satisfy.
     const KOTLIN: &str =
-        include_str!("../../android/src/main/kotlin/com/getlora/wattrouter/Core.kt");
+        include_str!("../../android/core/src/main/kotlin/com/getlora/wattrouter/Core.kt");
 
     #[test]
     fn the_symbols_match_the_kotlin() {

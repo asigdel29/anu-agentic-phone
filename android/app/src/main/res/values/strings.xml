@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  strings.xml — text the system shows, as opposed to text the app draws.
+
+  History
+    2026-08-08  A. Sigdel  Created.
+
+  Only what appears outside a Compose tree belongs here. What the app draws is a
+  Kotlin string beside the code that draws it.
+-->
+<resources>
+    <string name="app_name">WattRouter</string>
+</resources>
