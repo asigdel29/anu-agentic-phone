@@ -1,0 +1,47 @@
+# .editorconfig — what an editor should already know.
+#
+# History
+#   2026-08-09  A. Sigdel  Created.
+#
+# Every rule below is one CI already enforces or one docs/coding-standard.md
+# already asks for. Nothing here is a new opinion; it is the existing ones put
+# where an editor can act on them, so a contributor is not fighting a formatter
+# that could have configured itself.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+
+# Prose wraps at 80. The standard asks for it in commit bodies and documents,
+# and an editor that knows is one fewer thing to remember.
+[*.md]
+max_line_length = 80
+# Two trailing spaces are a line break in Markdown, so trimming them changes
+# what renders.
+trim_trailing_whitespace = false
+
+# shfmt -i 4 -ci, which CI runs over every tracked script.
+[*.sh]
+indent_size = 4
+
+[*.{rs,kt,kts,swift,java}]
+indent_size = 4
+
+[*.{yml,yaml,json}]
+indent_size = 2
+
+# Tab-indented by the format itself, not by preference.
+[Makefile]
+indent_style = tab
+
+# Gradle's own, and the Android files that come with it.
+[gradle.properties]
+indent_size = 4
+
+[*.xml]
+indent_size = 4
