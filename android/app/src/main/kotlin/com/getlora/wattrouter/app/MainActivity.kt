@@ -42,6 +42,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.getlora.wattrouter.Agent
+import com.getlora.wattrouter.Budget
+import com.getlora.wattrouter.Budgeted
 import com.getlora.wattrouter.CalendarTool
 import com.getlora.wattrouter.ChainWalk
 import com.getlora.wattrouter.ContactsTool
@@ -75,6 +77,14 @@ class MainActivity : ComponentActivity() {
     private var started: Startup? = null
     private var memory: Memory? = null
     private lateinit var permission: Permission
+
+    /**
+     * What one turn may do to the phone.
+     *
+     * Held here so the Agent that resets it and the tools that spend it are the
+     * same one. A second would be a second allowance.
+     */
+    private val budget = Budget()
 
     /**
      * What another app shared, until a turn takes it.
@@ -137,6 +147,7 @@ class MainActivity : ComponentActivity() {
                     router = ready.core.routing(),
                     walk = ChainWalk(NeuralWattInference(credential.read().orEmpty())),
                     tools = ToolBox(remembering() + phone() + working() + driving()),
+                    budget = budget,
                 ),
                 scope,
             )
@@ -232,7 +243,7 @@ class MainActivity : ComponentActivity() {
      * trap behind it — which is the only place somebody learns about either.
      */
     private fun driving(): List<Tool> {
-        val screen = AndroidPhone(applicationContext)
+        val screen = Budgeted(AndroidPhone(applicationContext), budget)
         return listOf(
             ReadScreenTool(screen),
             TapTool(screen),
