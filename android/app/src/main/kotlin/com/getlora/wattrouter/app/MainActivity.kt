@@ -66,6 +66,7 @@ import com.getlora.wattrouter.Startup
 import com.getlora.wattrouter.TapTool
 import com.getlora.wattrouter.ToolBox
 import com.getlora.wattrouter.TypeTextTool
+import com.getlora.wattrouter.WaitForChangeTool
 import com.getlora.wattrouter.TurnDriver
 import com.getlora.wattrouter.routing
 
@@ -238,6 +239,7 @@ class MainActivity : ComponentActivity() {
             NavigateTool(screen),
             ScrollTool(screen),
             OpenAppTool(screen),
+            WaitForChangeTool(screen),
         )
     }
 

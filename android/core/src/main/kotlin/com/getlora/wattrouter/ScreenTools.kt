@@ -20,6 +20,7 @@
 //   Launchable      An app that can be started.
 //   matching        Which one a name means.
 //   OpenAppTool     Starting it.
+//   WaitForChangeTool  Letting the screen finish moving.
 //
 // The seam is why this is in core/ at all. DrivingService is an app-module
 // class holding framework types, and everything here is prose, rendering and
@@ -525,5 +526,73 @@ class OpenAppTool(private val phone: Phone) : Tool {
                 TapTool.say(phone.open(found.single().packageName))
             }
         }
+    }
+}
+
+/**
+ * Wait until the screen changes.
+ *
+ * @property pause how to wait between looks. Injected so a test drives the loop
+ *   without spending the time — the thing worth testing is how many times it
+ *   looks and when it stops, not that a delay delays.
+ */
+class WaitForChangeTool(
+    private val phone: Phone,
+    private val pause: suspend (Long) -> Unit = { kotlinx.coroutines.delay(it) },
+) : Tool {
+    override val name = "wait_for_change"
+
+    override val purpose =
+        "Wait for the screen to change, after something you did that takes a " +
+            "moment — a page loading, an app starting. Give the screen id you " +
+            "are waiting to move away from. If it has not changed by the time " +
+            "the wait is up you are told that, which is an answer in itself."
+
+    override val schema = """
+        {"type":"object","properties":{
+        "screen":{"type":"string","description":"The screen id to wait for a change from."},
+        "seconds":{"type":"integer",
+        "description":"How long to wait at most, 1 to $LONGEST. Default $USUAL."}},
+        "required":["screen"]}
+    """.trimIndent().replace("\n", "")
+
+    /** # Rely
+     *  Obtains no capability. Suspends for up to the requested wait, which is
+     *  a person waiting, so the ceiling is low on purpose. */
+    override suspend fun run(arguments: String): String {
+        val from = decodeSeen(Tools.field(arguments, "screen"))
+            ?: return "that is not a screen id. Use the one at the top of a read_screen answer."
+
+        val asked = Tools.field(arguments, "seconds").toIntOrNull() ?: USUAL
+        if (asked < 1 || asked > LONGEST) {
+            return "seconds must be between 1 and $LONGEST; $asked is outside it"
+        }
+
+        var last: Reading? = null
+        repeat(asked * 1000 / INTERVAL) {
+            val now = phone.read() ?: return ReadScreenTool.describe(null)
+            if (now.generation != from) {
+                return "the screen changed.\n\n" + ReadScreenTool.describe(now)
+            }
+            last = now
+            pause(INTERVAL.toLong())
+        }
+
+        // Not a failure. "Still the same screen" is what somebody asks when
+        // they want to know whether a tap did anything, and reported as an
+        // error a model retries the tap instead of looking for another reason.
+        return "the screen has not changed in $asked seconds; it is still this " +
+            "one.\n\n" + ReadScreenTool.describe(last)
+    }
+
+    companion object {
+        /** Between looks. Short enough to feel immediate, long enough not to spin. */
+        const val INTERVAL = 250
+
+        /** When nobody says. A few seconds covers a page load. */
+        const val USUAL = 5
+
+        /** The ceiling. Past this somebody would rather be told nothing happened. */
+        const val LONGEST = 15
     }
 }
