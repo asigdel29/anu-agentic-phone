@@ -18,9 +18,9 @@ final class ChainWalkTests: XCTestCase {
     private struct PerModel: Inference {
         let scripts: [String: ScriptedInference]
 
-        func complete(_ conversation: Conversation, model: String, maxTokens: Int?)
-            -> AsyncThrowingStream<StreamEvent, any Error>
-        {
+        func complete(
+            _ conversation: Conversation, model: String, maxTokens: Int?, tools: String? = nil
+        ) -> AsyncThrowingStream<StreamEvent, any Error> {
             let script =
                 scripts[model]
                 ?? ScriptedInference(

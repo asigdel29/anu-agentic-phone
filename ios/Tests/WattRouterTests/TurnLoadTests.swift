@@ -47,9 +47,9 @@ final class TurnLoadTests: XCTestCase {
             self.perChunk = perChunk
         }
 
-        func complete(_ conversation: Conversation, model: String, maxTokens: Int?)
-            -> AsyncThrowingStream<StreamEvent, any Error>
-        {
+        func complete(
+            _ conversation: Conversation, model: String, maxTokens: Int?, tools: String? = nil
+        ) -> AsyncThrowingStream<StreamEvent, any Error> {
             asked.lock()
             let round = count % max(rounds.count, 1)
             count += 1

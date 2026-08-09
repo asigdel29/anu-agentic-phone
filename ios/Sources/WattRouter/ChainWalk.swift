@@ -75,7 +75,8 @@ public struct ChainWalk: Sendable {
     /// Cancellation is not a model failure and does not advance the chain: a
     /// `CancellationError` ends the walk where it stands.
     public func complete(
-        _ conversation: Conversation, following steps: [Step], maxTokens: Int? = nil
+        _ conversation: Conversation, following steps: [Step], maxTokens: Int? = nil,
+        tools: String? = nil
     ) -> AsyncThrowingStream<TurnEvent, any Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
@@ -98,7 +99,8 @@ public struct ChainWalk: Sendable {
                     var delivered = false
                     do {
                         for try await event in inference.complete(
-                            conversation, model: step.model, maxTokens: maxTokens)
+                            conversation, model: step.model, maxTokens: maxTokens,
+                            tools: tools)
                         {
                             // A tool call counts as delivered exactly as text
                             // does: once one has been handed up, a second model

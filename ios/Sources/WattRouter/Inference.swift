@@ -81,6 +81,10 @@ public protocol Inference: Sendable {
     ///   - model: the model to ask, named as the provider names it. A [`Step`]
     ///     carries one, along with where it runs.
     ///   - maxTokens: a cap on the reply, or `nil` for the provider's default.
+    ///   - tools: the `tools` array as the provider spells it, from
+    ///     `ToolBox.definitions()`, or `nil` to send none. Per call rather than
+    ///     held: a conformance that kept a tool set would be a second place for
+    ///     one to be wrong, and the Kotlin side passes it the same way.
     /// - Returns: what the model produced, in order.
     ///
     /// # Rely
@@ -93,7 +97,7 @@ public protocol Inference: Sendable {
     /// # Atomic
     /// Safe to call concurrently. Each call owns its own stream; ending one, by
     /// cancellation or by leaving the loop early, must not disturb another.
-    func complete(_ conversation: Conversation, model: String, maxTokens: Int?)
+    func complete(_ conversation: Conversation, model: String, maxTokens: Int?, tools: String?)
         -> AsyncThrowingStream<StreamEvent, any Error>
 }
 
@@ -141,9 +145,10 @@ public struct ScriptedInference: Inference {
             perChunk: perChunk)
     }
 
-    public func complete(_ conversation: Conversation, model: String, maxTokens: Int?)
-        -> AsyncThrowingStream<StreamEvent, any Error>
-    {
+    /// Ignores `tools`: a script answers what it was given, whatever was asked.
+    public func complete(
+        _ conversation: Conversation, model: String, maxTokens: Int?, tools: String? = nil
+    ) -> AsyncThrowingStream<StreamEvent, any Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {

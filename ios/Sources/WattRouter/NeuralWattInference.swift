@@ -44,14 +44,15 @@ public struct NeuralWattInference: Inference {
         self.session = session
     }
 
-    public func complete(_ conversation: Conversation, model: String, maxTokens: Int?)
-        -> AsyncThrowingStream<StreamEvent, any Error>
-    {
+    public func complete(
+        _ conversation: Conversation, model: String, maxTokens: Int?, tools: String? = nil
+    ) -> AsyncThrowingStream<StreamEvent, any Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
                     let (bytes, response) = try await session.bytes(
-                        for: request(conversation, model: model, maxTokens: maxTokens))
+                        for: request(
+                            conversation, model: model, maxTokens: maxTokens, tools: tools))
                     try await Self.check(response, body: bytes, model: model)
 
                     // Calls are held until something says they are complete:
@@ -163,17 +164,61 @@ public struct NeuralWattInference: Inference {
         return text.isEmpty ? "no message" : text
     }
 
-    private func request(_ conversation: Conversation, model: String, maxTokens: Int?) throws
-        -> URLRequest
-    {
+    /// Internal rather than private so a test can read the bytes it produces.
+    ///
+    /// That is the seam #319 hid behind. Every layer below the wire was tested
+    /// and correct, and nothing asserted what a *request body* carried — so
+    /// seventeen tools were invisible to the model with a green suite.
+    func request(
+        _ conversation: Conversation, model: String, maxTokens: Int?, tools: String?
+    ) throws -> URLRequest {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-        request.httpBody = try JSONEncoder().encode(
-            Request(model: model, messages: conversation.messages, maxTokens: maxTokens))
+        request.httpBody = try Self.body(
+            Request(model: model, messages: conversation.messages, maxTokens: maxTokens),
+            tools: tools)
         return request
+    }
+
+    /// The request, with the tool definitions spliced in.
+    ///
+    /// `ToolBox.definitions()` already produces the exact bytes the provider
+    /// wants, sorted so a prompt cache can hit. Re-modelling that as `Encodable`
+    /// would mean a second description of the same JSON, which is the shape
+    /// #319 came from: a definition nothing sent, agreeing with nothing.
+    ///
+    /// So the envelope is encoded, reopened, and the parsed array put in. It
+    /// costs one round trip through `JSONSerialization` per request, on a path
+    /// that is about to wait on a network.
+    ///
+    /// - Throws: [`ToolBox.SchemaError`] IF `tools` is not a JSON array. It
+    ///   comes from `definitions()`, which builds one, so this is a guard
+    ///   against a future caller rather than a case that arises now.
+    private static func body(_ envelope: Request, tools: String?) throws -> Data {
+        let encoded = try JSONEncoder().encode(envelope)
+
+        // No tools is not an empty array. `[]` tells a provider the model may
+        // call nothing, which is true and is also what omitting the key says,
+        // and one of the two is a key that need not be sent.
+        guard let tools, tools != "[]" else { return encoded }
+
+        guard
+            let parsed = try? JSONSerialization.jsonObject(with: Data(tools.utf8)),
+            let array = parsed as? [Any],
+            var object = try JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        else {
+            throw ToolBox.SchemaError(tool: "(all)", detail: "tools is not a JSON array")
+        }
+
+        object["tools"] = array
+        // Sorted, for the reason `definitions()` sorts: two runs of the same
+        // conversation and the same tool set produce the same bytes, so a
+        // prompt cache can hit. JSONEncoder alone does not — the suite caught
+        // two encodings of one request differing at the same length.
+        return try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
     }
 
     /// The body the provider expects.
