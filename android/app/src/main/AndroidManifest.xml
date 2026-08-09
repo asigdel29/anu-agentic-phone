@@ -19,6 +19,22 @@
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+      Without this the package manager admits almost nothing exists, and
+      open_app answers "there is no app called that" for every app on the
+      phone — a total failure whose message reads like a spelling mistake.
+
+      Scoped to apps with a launcher icon, which is exactly the set open_app
+      offers. QUERY_ALL_PACKAGES would also work, is a restricted permission,
+      and asks for far more than is needed.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!--
