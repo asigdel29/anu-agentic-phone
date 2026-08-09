@@ -2,6 +2,7 @@
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
+//   2026-08-08  A. Sigdel  Moved under core/ when the app arrived beside it.
 //
 // What this module is: `Core.kt` and the shared object it declares. The library
 // itself is built by `just android-core` from the same crate iOS links, and is
@@ -12,22 +13,28 @@
 // there produces an AAR that compiles and fails to load, which is why
 // `just android` runs the core build first.
 //
-// The source layout is the repository's rather than Gradle's default: Core.kt
-// was written before this file existed and moving it would break the parity test
-// in router/src/jni.rs, which reads it by path. Pointing the source set here is
-// one line; the alternative is a moved file and a changed include_str!.
+// The source layout is `src/main/kotlin` rather than Gradle's `src/main/java`,
+// which is the repository's convention and also load-bearing: router/src/jni.rs
+// reads Core.kt by path for its symbol-parity test, so the path is part of a
+// contract rather than a preference. Moving it edits the Rust in the same
+// commit.
 
 plugins {
     // AGP 9 brings Kotlin support with it, and applying
     // org.jetbrains.kotlin.android alongside is an error rather than a
-    // duplicate. AGP 9 rather than 8: Homebrew's Gradle is 9.7, and AGP 8.13
-    // relies on a Gradle internal removed in 9.6.
-    id("com.android.library") version "9.0.0"
+    // duplicate. The version lives in settings.gradle.kts, once for both
+    // modules, and why is written there.
+    id("com.android.library")
 }
 
 android {
     namespace = "com.getlora.wattrouter"
-    compileSdk = 35
+
+    // Matching the app rather than trailing it. A library compiled against an
+    // older platform than its consumer is legal and warns, and the warning is
+    // the kind people learn to scroll past.
+    compileSdk = 37
+    compileSdkMinor = 1
 
     defaultConfig {
         // 29 rather than lower, and #229 is why: since API 29 an app cannot

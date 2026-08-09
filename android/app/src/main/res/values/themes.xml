@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  themes.xml — the window Compose draws into.
+
+  History
+    2026-08-08  A. Sigdel  Created.
+
+  A platform theme rather than one from com.google.android.material: Compose
+  draws every pixel here, so all this decides is the background before the first
+  frame and whether an action bar sits above it. DeviceDefault.DayNight follows
+  the system setting and exists from API 29, this app's floor.
+-->
+<resources>
+    <style name="Theme.WattRouter" parent="@android:style/Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>
