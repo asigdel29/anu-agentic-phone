@@ -283,16 +283,12 @@ mod tests {
         anchor: &'static str,
     }
 
-    const BINDINGS: &[Binding] = &[
-        Binding {
-            class: "Core",
-            kotlin: include_str!(
-                "../../android/core/src/main/kotlin/com/getlora/wattrouter/Core.kt"
-            ),
-            rust: include_str!("jni.rs"),
-            anchor: "nativeNew",
-        },
-    ];
+    const BINDINGS: &[Binding] = &[Binding {
+        class: "Core",
+        kotlin: include_str!("../../android/core/src/main/kotlin/com/getlora/wattrouter/Core.kt"),
+        rust: include_str!("jni.rs"),
+        anchor: "nativeNew",
+    }];
 
     #[test]
     fn the_symbols_match_the_kotlin() {
