@@ -2,6 +2,8 @@
 //!
 //! History
 //!   2026-08-08  A. Sigdel  Created.
+//!   2026-08-09  A. Sigdel  Reads the chain off the router rather than
+//!                          rebuilding it from the environment.
 //!
 //! Contents
 //!   `Java_..._nativeConfigure`  The credential the core reads from.
@@ -32,11 +34,7 @@
 //! somebody runs the app. `the_symbols_match_the_kotlin` holds the two in step,
 //! the way the header parity test does for C.
 
-use crate::backend::Backend;
-use crate::chain::chain_for;
-use crate::config::Config;
 use crate::ffi::Router;
-use crate::tier::Tier;
 use jni::JNIEnv;
 use jni::objects::{JClass, JString};
 use jni::sys::{jboolean, jlong, jstring};
@@ -234,25 +232,47 @@ fn decide(router: &Router, body: &str, session: &str) -> Option<Decided> {
         return None;
     }
 
-    let tier = Tier::ALL.get(answer.tier as usize).copied()?;
-    let config = Config::from_env().ok()?;
     Some(Decided {
         tier: name(crate::ffi::wattrouter_tier_name(answer.tier))?,
         reason: name(crate::ffi::wattrouter_reason_name(answer.reason))?,
         // Absent rather than -1. A number that means "no number" is a number a
         // caller compares against a threshold.
         score: (answer.score >= 0.0).then_some(answer.score),
-        chain: chain_for(&config, tier)
-            .into_iter()
-            .map(|step| Attempt {
-                model: step.model().to_owned(),
-                backend: match step.backend() {
-                    Backend::Local => "local".to_owned(),
-                    Backend::Remote => "remote".to_owned(),
+        chain: chain(router, answer.tier),
+    })
+}
+
+/// A tier's chain, read off the router rather than rebuilt.
+///
+/// This used to call `Config::from_env` and `chain_for`, and #476 has the three
+/// reasons it no longer does. The shortest: `nativeConfigure` writes the
+/// environment with `set_var`, this read it, and since #474 the two run on
+/// different threads — which `config.rs`'s own `# Rely` forbids and the
+/// standard library calls undefined behaviour.
+///
+/// The router resolved every chain once when it was built, which is what
+/// `ffi.rs` means by the request path allocating nothing. The C ABI reads it
+/// back through these three; there was never a reason for a second source.
+fn chain(router: &Router, tier: u8) -> Vec<Attempt> {
+    let length = unsafe { crate::ffi::wattrouter_chain_length(router, tier) };
+    (0..length)
+        .filter_map(|index| {
+            let model = name(unsafe { crate::ffi::wattrouter_chain_model(router, tier, index) })?;
+            let backend = unsafe { crate::ffi::wattrouter_chain_backend(router, tier, index) };
+            Some(Attempt {
+                model,
+                // The codes `backend_code` writes, and the same spellings the
+                // Swift side decodes. Anything else is a step this build does
+                // not understand, and reporting it as remote would send work
+                // off the phone on the strength of a number nobody recognised.
+                backend: match backend {
+                    0 => "local".to_owned(),
+                    1 => "remote".to_owned(),
+                    _ => return None,
                 },
             })
-            .collect(),
-    })
+        })
+        .collect()
 }
 
 /// A borrowed static name, as an owned `String`.
@@ -436,5 +456,56 @@ mod tests {
                 binding.class
             );
         }
+    }
+
+    /// The chain a decision carries comes from the router, not the environment.
+    ///
+    /// #476's shape, and the only one of its three problems a test can reach
+    /// from here: the other two are a hot-path allocation and a data race with
+    /// `set_var`, and neither has an assertion. This one does — build a router,
+    /// change the environment under it, and read a chain.
+    ///
+    /// Before the change it read `first-model`, because it went back to the
+    /// environment for every decision. The router had been built from the
+    /// other value and was never asked.
+    #[test]
+    fn a_chain_follows_the_router_it_came_from() {
+        use crate::testenv::with_env;
+
+        // The credential too: `Config::from_env` refuses without one, and a
+        // router that did not build would pass the assertions below vacuously.
+        let router = with_env(
+            &[
+                ("NEURALWATT_API_KEY", Some("jni-test")),
+                ("WATTROUTER_MODEL_MID", Some("built-with-this")),
+            ],
+            || unsafe { crate::ffi::wattrouter_new(std::ptr::null()) },
+        );
+        assert!(!router.is_null(), "the router did not build");
+
+        // The tier's own index, which is what `wattrouter_decide` answers with.
+        let mid = u8::try_from(
+            crate::tier::Tier::ALL
+                .iter()
+                .position(|tier| tier.name() == "mid")
+                .expect("no mid tier"),
+        )
+        .expect("six tiers fit in a byte");
+
+        let read = with_env(
+            &[
+                ("NEURALWATT_API_KEY", Some("jni-test")),
+                ("WATTROUTER_MODEL_MID", Some("changed-underneath")),
+            ],
+            || super::chain(unsafe { &*router }, mid),
+        );
+
+        unsafe { crate::ffi::wattrouter_free(router) };
+
+        assert!(!read.is_empty(), "a tier with no chain behind it");
+        assert_eq!(
+            "built-with-this", read[0].model,
+            "the chain was rebuilt from the environment rather than read off the router"
+        );
     }
 }
