@@ -21,4 +21,8 @@
         What it reads goes to the model answering you and is not stored or
         logged. Apps that hide their contents from accessibility, such as
         banking apps, stay hidden.</string>
+
+    <!-- On the overlay, over whatever is being driven. One word, because it
+         sits beside a sentence and the sentence is the part to read. -->
+    <string name="banner_stop">Stop</string>
 </resources>
