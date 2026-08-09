@@ -8,6 +8,7 @@
 //   2026-08-09  A. Sigdel  Reads the calendar, which is the first tool needing
 //                          a permission and so the first needing an Activity.
 //   2026-08-09  A. Sigdel  Takes what another app shares, once.
+//   2026-08-09  A. Sigdel  Shows the checklist when the phone half is not on.
 //   2026-08-09  A. Sigdel  Can look at the screen and tap it, when the service
 //                          behind that has been switched on.
 //
@@ -30,7 +31,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.foundation.layout.fillMaxSize
+import android.provider.Settings
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
@@ -41,6 +44,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.getlora.wattrouter.Agent
 import com.getlora.wattrouter.Budget
 import com.getlora.wattrouter.Budgeted
@@ -54,6 +60,7 @@ import com.getlora.wattrouter.GitCommitTool
 import com.getlora.wattrouter.GitStatusTool
 import com.getlora.wattrouter.LocationTool
 import com.getlora.wattrouter.Memory
+import com.getlora.wattrouter.Needed
 import com.getlora.wattrouter.NavigateTool
 import com.getlora.wattrouter.OpenAppTool
 import com.getlora.wattrouter.Permission
@@ -110,10 +117,20 @@ class MainActivity : ComponentActivity() {
             var state by remember { mutableStateOf(started ?: Startup.begin(this)) }
             started = state
 
+            // Shown only when something required is off. Somebody whose phone
+            // half is already on never sees it, which is the difference
+            // between a checklist and a wizard nobody can dismiss.
+            var checking by remember { mutableStateOf(!readiness(this).canDrive) }
+
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     when (val now = state) {
-                        is Startup.Ready -> Conversation(driverFor(now, credential), handed)
+                        is Startup.Ready ->
+                            if (checking) {
+                                Checklist { checking = false }
+                            } else {
+                                Conversation(driverFor(now, credential), handed)
+                            }
                         Startup.NoCredential, Startup.CoreRefused ->
                             SignInScreen(refused = now == Startup.CoreRefused) { typed ->
                                 // store() answers false for an unusable key, and
@@ -256,6 +273,58 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    /**
+     * The checklist, re-read every time this screen comes back.
+     *
+     * ON_RESUME rather than first composition: the moment somebody looks at
+     * this is the moment they return from Settings, and a state read before
+     * they went is the lie a wizard tells.
+     */
+    @Composable
+    private fun Checklist(onCarryOn: () -> Unit) {
+        val owner = LocalLifecycleOwner.current
+        var now by remember { mutableStateOf(readiness(this)) }
+        var seeing by remember { mutableStateOf<String?>(null) }
+
+        DisposableEffect(owner) {
+            val watching = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) now = readiness(this@MainActivity)
+            }
+            owner.lifecycle.addObserver(watching)
+            onDispose { owner.lifecycle.removeObserver(watching) }
+        }
+
+        // Evidence rather than a claim, and only once there is any: before the
+        // service is on there is nothing to show and nothing to promise.
+        LaunchedEffect(now.canDrive) {
+            seeing = if (!now.canDrive) {
+                null
+            } else {
+                ReadScreenTool(AndroidPhone(applicationContext)).run("{}").lines().take(LOOK).joinToString("\n")
+            }
+        }
+
+        ReadinessScreen(now, seeing, onOpen = { open(it) }, onCarryOn = onCarryOn)
+    }
+
+    /**
+     * Take somebody to the screen a row names.
+     *
+     * The restricted-settings row names a menu inside a page rather than a
+     * page, and there is no intent for a menu — so it opens the page and the
+     * row's own words say which item to press.
+     */
+    private fun open(step: Needed) {
+        val where = when {
+            step.what.contains("screen") -> Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            else -> Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                android.net.Uri.fromParts("package", packageName, null),
+            )
+        }
+        runCatching { startActivity(where.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
     override fun onDestroy() {
         (started as? Startup.Ready)?.core?.close()
         memory?.close()
@@ -336,4 +405,7 @@ private fun Conversation(driver: TurnDriver, handed: MutableState<String?>) {
  * [Startup.CoreRefused], which is a normal answer and means the library
  * answered; a missing or unloadable `.so` throws out of the initialiser.
  */
+/** Lines of a reading shown as evidence. Enough to recognise the screen. */
+private const val LOOK = 10
+
 internal fun coreLoads(): Boolean = runCatching { Startup.from("") }.isSuccess
