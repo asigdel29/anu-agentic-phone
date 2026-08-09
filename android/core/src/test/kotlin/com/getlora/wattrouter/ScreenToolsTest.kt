@@ -15,7 +15,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-private class Showing(private val reading: Reading?, private val why: String? = null) : Phone {
+private class Static(private val reading: Reading?, private val why: String? = null) : Phone {
     override suspend fun barredNow() = why
 
     override suspend fun read() = reading
@@ -77,7 +77,7 @@ class ScreenToolsTest {
     @Test
     fun aScreenIsItsIdAndOneLinePerThing() = runTest {
         val said = ReadScreenTool(
-            Showing(
+            Static(
                 Reading(
                     generation,
                     listOf(
@@ -121,7 +121,7 @@ class ScreenToolsTest {
 
     @Test
     fun anEmptyScreenIsNotAnUnreadableOne() = runTest {
-        val said = ReadScreenTool(Showing(Reading(generation, emptyList()))).run("{}")
+        val said = ReadScreenTool(Static(Reading(generation, emptyList()))).run("{}")
 
         assertEquals("the screen is readable and has nothing on it", said)
     }
@@ -742,7 +742,7 @@ class BarredScreenTest {
         // The tempting exception. read_screen on the permissions page tells
         // the model exactly which button says Allow, and the refusal it would
         // then get from tap is one it can plan around.
-        val said = ReadScreenTool(Showing(Reading(generation, listOf(row)), why)).run("{}")
+        val said = ReadScreenTool(Static(Reading(generation, listOf(row)), why)).run("{}")
 
         assertEquals(why, said)
         assertTrue(said, !said.contains("Allow"))
@@ -762,7 +762,7 @@ class BarredScreenTest {
     fun aRefusalIsNotTheSameAsAScreenThatCannotBeRead() = runTest {
         // Different problems with different fixes: one is the service being
         // off, the other is the agent declining to look.
-        val barred = ReadScreenTool(Showing(null, why)).run("{}")
+        val barred = ReadScreenTool(Static(null, why)).run("{}")
 
         assertEquals(why, barred)
         assertTrue(barred, !barred.contains("Settings > Accessibility"))

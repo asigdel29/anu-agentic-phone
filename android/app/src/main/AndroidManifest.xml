@@ -58,6 +58,18 @@
       precise/approximate choice to the dialog, for an accuracy nothing here
       wants.
     -->
+    <!--
+      Below API 34 only. Since 34 an accessibility service attaches its own
+      overlay and needs nothing granted, so a phone on 34 or later never sees
+      this in the app's permission list and never has it to grant. Declared
+      unconditionally it would ask every phone for the one permission
+      what-android-allows.md records as the one Play looks at hardest, in
+      order to use it on none of them.
+    -->
+    <uses-permission
+        android:name="android.permission.SYSTEM_ALERT_WINDOW"
+        android:maxSdkVersion="33" />
+
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
