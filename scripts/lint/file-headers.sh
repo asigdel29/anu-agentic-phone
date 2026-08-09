@@ -78,9 +78,19 @@ files=()
 if [ "$#" -gt 0 ]; then
     files=("$@")
 else
+    # Through a temporary rather than a process substitution: #478 has why.
+    # A git that fails here would give an empty list, and an empty list is
+    # reported as a tree where every file carries a header.
+    listing="$(mktemp)"
+    trap 'rm -f "$listing"' EXIT
+    if ! git ls-files -z '*.rs' '*.py' '*.swift' '*.kt' '*.kts' '*.sh' >"$listing"; then
+        printf 'file-headers: could not list files; nothing was checked\n' >&2
+        exit 2
+    fi
+
     while IFS= read -r -d '' path; do
         files+=("$path")
-    done < <(git ls-files -z '*.rs' '*.py' '*.swift' '*.kt' '*.kts' '*.sh')
+    done <"$listing"
 fi
 
 printf 'file-headers: %s source file(s)\n' "${#files[@]}"
