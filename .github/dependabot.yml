@@ -1,0 +1,58 @@
+---
+# dependabot.yml — what watches the dependencies.
+#
+# History
+#   2026-08-09  A. Sigdel  Created.
+#
+# Grouped and monthly rather than per-dependency and weekly. There are 304
+# crates in router/Cargo.lock, and ungrouped weekly bumps on that is a stream
+# nobody reads — which is how a real advisory ends up closed unlooked-at. The
+# point of this file is that #483 was noticed by a notification rather than by
+# a process.
+#
+# Two things it cannot see, written here because a watcher people trust to be
+# complete is worse than none:
+#
+#   - ci.yml fetches shfmt and actionlint by URL at pinned versions. Nothing
+#     updates those, and a bump is a hand edit.
+#   - zeromem is a git dependency pinned by revision, on purpose: Cargo.toml
+#     says an unpinned one means the memory layer can change under a rebuild
+#     with no signal. Dependabot does not move git revisions and should not.
+#
+# The guards: issue-link exempts dependabot[bot], because a bot cannot open an
+# issue first and inventing one per bump is worse than not having the rule.
+# pr-size deliberately does not — it already excludes lockfiles, so a Cargo
+# bump is a few lines of a manifest, and one that changes 300 lines of source
+# is one somebody should look at.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /router
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      cargo:
+        patterns:
+          - "*"
+
+  # Both modules resolve from settings.gradle.kts, so one entry covers them.
+  - package-ecosystem: gradle
+    directory: /android
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      gradle:
+        patterns:
+          - "*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns:
+          - "*"

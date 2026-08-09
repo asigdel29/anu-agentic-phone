@@ -3,6 +3,7 @@
 #
 # History
 #   2026-08-09  A. Sigdel  Created with the fix for #478.
+#   2026-08-09  A. Sigdel  Covers the dependabot exemption, both ways round.
 #
 # Usage
 #   scripts/lint/test-gates.sh
@@ -109,6 +110,19 @@ headerless="$(mktemp -d)/headerless.rs"
 printf 'pub fn nothing() {}\n' >"$headerless"
 check "file-headers on a file with no header" 1 \
     bash "$root/scripts/lint/file-headers.sh" "$headerless"
+
+# --- the one guard exemption, both ways round ---
+#
+# #493 added it so dependabot's pull requests are not permanently red. An
+# exemption nothing tests is one that either stops working or quietly widens.
+
+check "issue-link exempts dependabot" 0 \
+    env PR_AUTHOR="dependabot[bot]" PR_TITLE="bump x" PR_BODY="" \
+    PR_HEAD_REF="dependabot/cargo/x" bash "$root/scripts/guards/issue-link.sh"
+
+check "issue-link still applies to a person" 1 \
+    env PR_AUTHOR="somebody" PR_TITLE="bump x" PR_BODY="" \
+    PR_HEAD_REF="some-branch" bash "$root/scripts/guards/issue-link.sh"
 
 printf '\n'
 if [ "$failures" -eq 0 ]; then
