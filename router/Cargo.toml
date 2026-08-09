@@ -54,7 +54,7 @@ axum = "0.8"
 # are the half this does not do — see the decision record. What is left vendors
 # libgit2's C and builds it with cc, which is the toolchain the cross-build
 # already uses.
-git2 = { version = "0.19", optional = true, default-features = false }
+git2 = { version = "0.20", optional = true, default-features = false }
 # Pinned to the version zeromem uses. Two versions means two libsqlite3-sys,
 # which is two copies of SQLite in one binary: it sometimes links, and when it
 # does the two hold separate page caches over one file. `bundled` for the same
