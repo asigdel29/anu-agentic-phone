@@ -70,6 +70,17 @@ class Agent(
         loop()
     }
 
+    /**
+     * Run a turn without saying anything first.
+     *
+     * For one interrupted before it committed: the message is already in the
+     * conversation, and appending it again would ask twice.
+     *
+     * # Rely
+     * As [send].
+     */
+    fun resume(): Flow<TurnEvent> = flow { loop() }
+
     private suspend fun kotlinx.coroutines.flow.FlowCollector<TurnEvent>.loop() {
         repeat(maxRounds) {
             val round = ask()
