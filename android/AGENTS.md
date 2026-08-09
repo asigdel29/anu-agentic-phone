@@ -20,9 +20,11 @@ accumulates and the request body it becomes. That encoding is hand-written with
 than a default, and the compiler plugin would be a version to keep in step with AGP for
 nothing.
 
-`core/jniLibs/` holds `arm64-v8a/libwattrouter.so`, which `just android-core` builds from the
-same crate the iOS xcframework comes from. It is build output, it is gitignored, and an AAR
-assembled without it installs and fails to load.
+`core/src/main/jniLibs/` holds `arm64-v8a/libwattrouter.so`, which `just android-core` builds
+from the same crate the iOS xcframework comes from. It is build output, it is gitignored, and an
+AAR assembled without it installs and fails to load. It sits in AGP's default location rather
+than a declared one: the `sourceSets` accessor that used to point at `core/jniLibs` broke on the
+AGP 9.3 bump, and the default needs no accessor at all.
 
 `core/src/main/AndroidManifest.xml` is empty on purpose. A library asking for no permission and
 contributing no component has nothing to declare; the accessibility, overlay and
@@ -65,8 +67,8 @@ in the core within six tests.
 
 It runs both modules' suites and they make different claims. `core`'s says the library loads
 and the ABI is right. `app`'s says the `.so` survived the trip into the APK — out of
-`core/jniLibs`, into the AAR, into `lib/arm64-v8a/` — which `core`'s suite cannot see, because
-it packages its own test APK.
+`core/src/main/jniLibs`, into the AAR, into `lib/arm64-v8a/` — which `core`'s suite cannot see,
+because it packages its own test APK.
 
 So: a pull request touching `Core.kt` or `jni.rs` and claiming only `just android-test` has
 claimed nothing about the change it made.

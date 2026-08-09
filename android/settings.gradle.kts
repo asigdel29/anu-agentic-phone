@@ -30,12 +30,22 @@ pluginManagement {
     //
     // AGP 9 rather than 8: Homebrew's Gradle is 9.7, and AGP 8.13 relies on a
     // Gradle internal removed in 9.6. The Compose compiler version is not free
-    // to choose — it must be the Kotlin AGP bundles, 2.2.10 for AGP 9.0.0. AGP
-    // bundling Kotlin does not bring that plugin with it, and `compose = true`
-    // without it fails at configuration time saying so.
+    // to choose — it must be the Kotlin AGP bundles. AGP bundling Kotlin does
+    // not bring that plugin with it, and `compose = true` without it fails at
+    // configuration time saying so.
+    //
+    // 9.3.1 rather than 9.0.0 since #357, which had cost two workarounds. The
+    // bump is not free: AGP 9.3 answers a decorated type from the `sourceSets`
+    // accessor that the old interface cannot be cast to, so the four srcDirs
+    // calls in the two module files had to go. Three were redundant — Kotlin
+    // source roots are defaults now — and the fourth moved the library into
+    // AGP's own jniLibs location, which needs no accessor.
+    //
+    // Gradle 9.7 is enough for it, which was the thing to check before bumping:
+    // AGP 9.3 needing a newer Gradle would have moved ci.yml too.
     plugins {
-        id("com.android.application") version "9.0.0"
-        id("com.android.library") version "9.0.0"
+        id("com.android.application") version "9.3.1"
+        id("com.android.library") version "9.3.1"
         id("org.jetbrains.kotlin.plugin.compose") version "2.2.10"
     }
 }

@@ -52,10 +52,14 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    sourceSets["main"].java.srcDirs("src/main/kotlin")
-    sourceSets["main"].jniLibs.srcDirs("jniLibs")
-    sourceSets["test"].java.srcDirs("src/test/kotlin")
-    sourceSets["androidTest"].java.srcDirs("src/androidTest/kotlin")
+    // Only the jniLibs line is still needed. src/main/kotlin and its two
+    // siblings are Kotlin source roots by default now that AGP bundles Kotlin;
+    // declaring them again through `sourceSets[...].java` is what broke on AGP
+    // 9.3, which returns a decorated type the old interface cannot be cast to.
+    // Removed on the AGP 9.3 bump: the sourceSets accessor answers a decorated
+    // type the old interface cannot be cast to, and the library is now written
+    // straight into the default location instead. scripts/build-android-core.sh
+    // puts it in src/main/jniLibs, which AGP finds without being told.
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
