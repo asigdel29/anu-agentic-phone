@@ -26,6 +26,7 @@ true only here.
 | `memory.rs` | Bounding what a store loads at open, behind the `memory` feature. |
 | `ffi_memory.rs` | A memory store across the ABI, behind the same feature. |
 | `jni.rs` | The same core reached from Kotlin, behind the `android` feature. |
+| `jni_memory.rs` | The memory store from Kotlin, behind `android` and `memory`. |
 | `testenv.rs` | The environment, as the crate's tests are allowed to touch it. |
 
 ## Building and testing
