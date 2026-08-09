@@ -176,13 +176,44 @@ never a tracked file. See `.env.example`.
 
 ### The board
 
+Any aarch64 Linux with systemd. It is called the board because that is what it runs on here;
+nothing depends on the hardware. `deploy/bootstrap-pi.sh` installs two services —
+`wattrouter` and `hermes` — so this is a machine you are willing to have run things.
+
 ```sh
 just toolchain                        # are the required tools present
 cargo build --release --manifest-path router/Cargo.toml
 sudo NEURALWATT_API_KEY=nw-... deploy/bootstrap-pi.sh
 deploy/install-zeromem.sh             # memory; compiles a Rust extension
-NEURALWATT_API_KEY=nw-... scripts/verify-stack.sh
 ```
+
+Then point Hermes at the router, which is the step that makes the diagram above true and is
+otherwise the easiest thing in this repository to leave undone:
+
+```sh
+just install-hermes                   # this repository's plugins where Hermes finds them
+just hermes-config                    # what pointing Hermes at the router would change
+just hermes-config-apply              # do it. `just hermes-unconfig` puts it back
+```
+
+`hermes-config` changes nothing and prints the diff, because rewriting somebody's agent
+configuration unasked is not a thing to do quietly. Both are reversible leaf by leaf.
+
+To check it end to end you need a router answering. On the board the service is already up;
+anywhere else, start one:
+
+```sh
+just up                               # detached, and waits until it answers
+just status                           # is one serving, and which process
+just verify                           # the stack, end to end
+just down
+```
+
+`just verify` is the wrapper that passes the address from `WATTROUTER_ADDR`. Running
+`scripts/verify-stack.sh` by hand verifies whatever the default happens to be, which is not
+the same claim.
+
+`just router` runs it in the foreground until Ctrl-C, which is what you want while changing it.
 
 The router runs without a scoring head, taking the policy's unscored path. To fit
 one:
@@ -200,11 +231,18 @@ they cannot drift apart from the weights that produced them.
 
 Needs Xcode and one simulator runtime; nothing else has to be installed by hand.
 
+**The order matters and is not optional.** The Xcode project and the xcframework are both
+generated and neither is checked in, so a fresh clone has neither:
+
 ```sh
+just ios-project                      # generate the project from ios/project.yml — first, on a fresh clone
 just ios-core                         # the routing core as an xcframework
 just ios-test                         # the suite, on a simulator it creates if absent
-just ios-project                      # regenerate the Xcode project from project.yml
 ```
+
+`just ios-test` without `just ios-core` fails on a missing framework rather than on anything
+about the change being tested. Re-run `ios-project` after editing `project.yml`; it also writes
+the `Info.plist` files and the entitlements, which is why those are gitignored too.
 
 ### Android
 
@@ -232,7 +270,6 @@ service, from Settings. On a sideloaded build that switch is greyed out until re
 settings are allowed — the app's own checklist screen walks through it, because nothing else
 on the phone explains why the switch does not work.
 
-The project and the xcframework are both build output and neither is checked in.
 `ios/AGENTS.md` says what a pull request may claim to have verified on a machine without
 Xcode, which is less than it looks.
 
