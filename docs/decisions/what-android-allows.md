@@ -37,9 +37,24 @@ declaring the permission for this purpose is refused. A personally sideloaded bu
 unaffected, which is what this repository is — but the moment the goal changes to
 distribution, this feature is the reason it cannot.
 
-**`FLAG_SECURE` windows are blank.** Banking apps, password managers and DRM video set it.
-They appear as black rectangles in a screenshot and expose nothing useful in the node tree,
-so the agent is blind on exactly the apps where a mistake costs most. That is a feature.
+**`FLAG_SECURE` windows are not blank, and this used to say they were.** Banking apps, password
+managers and DRM video set it. They do appear as black rectangles in a screenshot — that half
+was right — and the node tree is untouched. `FLAG_SECURE` restricts screen *capture*, and it
+has to leave accessibility alone: a screen reader is required to work in a banking app.
+
+Measured rather than reasoned about, after this paragraph claimed otherwise for a milestone.
+`SecureScreenDeviceTest` puts a `FLAG_SECURE` activity in front of the connected service and
+reads it: the window comes back with its labels intact. That test exists to notice if a future
+Android makes the old sentence true.
+
+So the agent is **not** blind on the apps where a mistake costs most. It sees them as it sees
+anything else, and the only protection the framework offers here is narrow: a node marked
+`isPassword` has its text withheld, which is why `type_text` refuses one (#423). Everything
+else on a banking screen — the balance, the payee list, the last transaction — is readable by
+anything the person has switched an accessibility service on for, including this.
+
+That is a fact about the platform rather than a decision this repository made, and it belongs
+in the security posture rather than in a sentence calling it a feature.
 
 **The service is killed and must survive it.** An accessibility service is restarted by the
 system, at which point in-memory state is gone; and it is disabled outright by a settings
