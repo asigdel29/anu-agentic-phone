@@ -57,10 +57,11 @@ A Swift app with its own turn loop, linking the router as an xcframework. It doe
 Hermes: a phone has no shell, so the tools are written rather than shelled out to, and the
 loop is `Agent.swift` rather than a harness.
 
-What exists: the turn loop with atomic rounds, streaming, interruption and resumption; six
-file and todo tools over a workspace boundary; calendar reading and writing over EventKit
-behind a permission seam; the transcript; the routing panel. `ios/AGENTS.md` has the layout
-and, more usefully, what can and cannot be verified without Xcode.
+What exists: the turn loop with atomic rounds, streaming, interruption and resumption;
+eighteen tools — files and todos over a workspace boundary, calendar and reminders over
+EventKit, contacts, location, Shortcuts, git, and memory across the same store the board
+uses — each behind a permission seam; the transcript; the routing panel. `ios/AGENTS.md` has
+the layout and, more usefully, what can and cannot be verified without Xcode.
 
 What is blocked: local inference, permanently until a physical device exists —
 `docs/decisions/inference-needs-a-phone.md` records why the simulator gives no signal at all.
@@ -79,7 +80,7 @@ Android's permissions are revocable, so nothing is cached and a permanent denial
 name; git over the same libgit2 the phone already links; and `ACTION_SEND` intake.
 
 And the part only Android can do: **it reads and drives other apps.** An `AccessibilityService`
-behind nine tools — read the screen, tap, type, scroll, navigate, open an app, wait for a
+behind eight tools — read the screen, tap, type, scroll, navigate, open an app, wait for a
 change, search what was not printed. The model never sees a coordinate: it holds a *handle*,
 which is a recipe re-resolved against a freshly fetched tree before every action, and zero
 matches or more than one is a refusal that says which.
@@ -98,11 +99,13 @@ guess (#452).
 
 ### What the two phones do not share
 
-Built unless the row says otherwise.
+Built unless the row says otherwise — and **built** here means the emulator or the simulator.
+Nothing in this section has run on a physical phone; #188 is the checklist for the first time
+one is attached.
 
 | | iOS | Android |
 |---|---|---|
-| Read and drive other apps | Not possible for a third party, at all | **Built.** Nine tools over an `AccessibilityService`, by handle rather than coordinate |
+| Read and drive other apps | Not possible for a third party, at all | **Built.** Eight tools over an `AccessibilityService`, by handle rather than coordinate |
 | What stops it | The API does not exist | Play policy, not the API — so this build is sideloaded, and pays for it in restricted settings |
 | Saying what it is doing over another app | — | **Built.** `TYPE_ACCESSIBILITY_OVERLAY`, which needs no permission at all |
 | Long turns in the background | Seconds, so the app warns and stops | **Built.** A `specialUse` foreground service, uncapped |
@@ -114,7 +117,19 @@ The routing core is identical on both. A second routing policy written in Kotlin
 with the first until the day it did not, which is the argument
 `retiring-the-second-harness.md` already made about a second harness.
 
+The tools are not identical, and the table above does not show it. Android registers sixteen
+and iOS eighteen. Only iOS has `read_file`, `write_file`, `patch`, `search_files`, `todo`,
+`clarify`, `add_event`, `add_reminder`, `read_reminders` and `run_shortcut`; only Android has
+the eight screen tools. And the same three git operations are `git_status`, `git_add` and
+`git_commit` on one phone and `read_repository`, `stage_paths` and `commit` on the other —
+which is a divergence nobody decided, recorded here rather than quietly fixed.
+
 ## Routing
+
+These six names are defaults in `router/src/tier.rs`, each overridable by
+`WATTROUTER_MODEL_<TIER>`. Nothing in this repository establishes that they exist upstream or
+that the context windows below are right — the table is the map the router was built to, and
+#188 is what would turn it into a measurement.
 
 | Tier | Model | Context | Used for |
 |------|-------|---------|----------|
@@ -140,7 +155,9 @@ Set `x-wattrouter-tier` on a request to override the decision entirely.
 ## Resource floor
 
 The stack is built for generic aarch64 Linux. Memory is what binds, and the deciding factor is
-whether zeromem runs its ONNX embedder or falls back to hashing.
+whether zeromem runs its ONNX embedder or falls back to hashing. `use_model` below is zeromem's
+own setting rather than one of this repository's, and neither figure has been measured on a
+board — they are the sizes the model and the runtime are documented to want.
 
 | RAM | Embedder | Notes |
 |-----|----------|-------|
@@ -196,7 +213,7 @@ than failing inside a build. There is no Gradle wrapper — a wrapper is a jar, 
 repository does not track binaries it cannot review.
 
 ```sh
-just android                          # the core, then the library an app links
+just android                          # the core, then the debug app
 just android-test                     # the JVM suite: everything that touches nothing Android
 just android-device-test              # the emulator suite: the only one that loads the .so
 just android-release                  # the APK a person installs, signed from the environment

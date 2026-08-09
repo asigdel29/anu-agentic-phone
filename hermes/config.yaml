@@ -4,7 +4,7 @@
 #   2026-08-05  A. Sigdel  Created.
 #
 # Copy to ~/.hermes/config.yaml, or merge these keys into an existing one.
-# Everything here is deliberate; see docs/architecture.md for the reasoning.
+# Everything here is deliberate; docs/decisions/INDEX.md routes to the reasoning.
 
 model:
   # The router decides. Pin a tier by name — heavy, code, long, mid, cheap,
