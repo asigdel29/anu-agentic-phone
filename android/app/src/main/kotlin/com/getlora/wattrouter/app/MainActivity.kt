@@ -13,13 +13,19 @@
 
 package com.getlora.wattrouter.app
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,10 +33,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import com.getlora.wattrouter.Agent
 import com.getlora.wattrouter.ChainWalk
 import com.getlora.wattrouter.Credential
 import com.getlora.wattrouter.NeuralWattInference
+import com.getlora.wattrouter.Row
 import com.getlora.wattrouter.Startup
 import com.getlora.wattrouter.ToolBox
 import com.getlora.wattrouter.TurnDriver
@@ -104,12 +112,40 @@ private fun Conversation(driver: TurnDriver) {
     val rows by driver.rows.collectAsState()
     val isRunning by driver.isRunning.collectAsState()
     val routing by driver.routing.collectAsState()
+    val context = LocalContext.current
+
+    // The service follows the driver rather than being started beside a send.
+    // Every way a turn can end — answered, failed, interrupted — goes through
+    // isRunning, and a notification left behind by one of them is a turn the
+    // person believes is still running.
+    LaunchedEffect(isRunning) {
+        if (isRunning) {
+            TurnService.begin(context, rows.filterIsInstance<Row.Said>().lastOrNull()?.text.orEmpty())
+        } else {
+            TurnService.end(context)
+        }
+    }
+
+    val asking = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     ChatScreen(
         rows = rows,
         isRunning = isRunning,
         routing = routing,
-        onSend = driver::send,
+        onSend = { text ->
+            // Asked at the first send rather than at launch: a permission
+            // prompt before anybody has done anything is one people refuse.
+            // Context.checkSelfPermission rather than ContextCompat: it is
+            // API 23 and this app's floor is 29, and androidx.core 1.19 wants
+            // an AGP this build does not have (#357).
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                asking.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            driver.send(text)
+        },
         onInterrupt = driver::interrupt,
     )
 }
