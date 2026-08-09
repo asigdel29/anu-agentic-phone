@@ -1,7 +1,7 @@
 # anu-agentic-stack
 
-A personal agent stack. One routing core, in three places: a small aarch64 board, an iPhone,
-and — next — an Android phone. The board runs [Hermes
+A personal agent stack. One routing core, in three places: a small aarch64 board, an iPhone
+and an Android phone. The board runs [Hermes
 Agent](https://github.com/NousResearch/hermes-agent) as the harness with
 [zeromem](https://github.com/ptaranat/zeromem) for memory that costs no tokens; the phones
 run their own turn loop over the same core. All three route to the cheapest model on
@@ -65,23 +65,50 @@ and, more usefully, what can and cannot be verified without Xcode.
 What is blocked: local inference, permanently until a physical device exists —
 `docs/decisions/inference-needs-a-phone.md` records why the simulator gives no signal at all.
 
-### Android — `android/`, next
+### Android — `android/`
 
-Not built yet. `docs/decisions/what-android-allows.md` is written first, because Android
-permits most of what iOS forbids and the constraints on each are not the ones you would
-guess.
+Two Gradle modules: `core/`, the routing core as a library over four JNI entry points, and
+`app/`, a Compose chat over it. Same turn loop as iOS, arrived at in Kotlin rather than
+shared — `Agent.kt` is `Agent.swift`'s four properties argued out again, because a second
+implementation that agrees is worth more than a shared one that has to.
+
+What exists: sign-in over the Android Keystore; a streaming turn that survives backgrounding
+in a foreground service, which iOS cannot do; memory across JNI into the same store;
+calendar, contacts and location behind a permission seam that is deliberately *not* iOS's —
+Android's permissions are revocable, so nothing is cached and a permanent denial has its own
+name; git over the same libgit2 the phone already links; and `ACTION_SEND` intake.
+
+And the part only Android can do: **it reads and drives other apps.** An `AccessibilityService`
+behind nine tools — read the screen, tap, type, scroll, navigate, open an app, wait for a
+change, search what was not printed. The model never sees a coordinate: it holds a *handle*,
+which is a recipe re-resolved against a freshly fetched tree before every action, and zero
+matches or more than one is a refusal that says which.
+`docs/decisions/how-the-agent-drives.md` argues all of it, including the two decisions that
+only work together — the generation follows the tree's shape rather than its content, and
+resolution refuses when the field that would tell two rows apart matches neither.
+
+What is not verified: **any of it on a real phone.** Every claim above is a host suite or an
+emulator. Driving *other* apps needs a device with apps on it, no real calendar, contact,
+location fix or repository has been read, and the onboarding checklist has not been looked at
+by anybody. `android/AGENTS.md` says which of the two Android test recipes may claim what.
+
+What is missing: a screenshot tool, blocked because nothing in the stack carries an image
+(#439); and a confirmation prompt, deferred because every rule for when it should fire is a
+guess (#452).
 
 ### What the two phones do not share
 
+Built unless the row says otherwise.
+
 | | iOS | Android |
 |---|---|---|
-| Read and drive other apps | Not possible for a third party, at all | `AccessibilityService`: node tree, gestures, screenshots |
-| What stops it | The API does not exist | Play policy, not the API. A sideloaded build is unaffected |
-| Floating chat | No | Bubbles (sanctioned) or an overlay window (flexible) |
-| Long turns in the background | Seconds, so the app warns and stops | A foreground service, for as long as it is useful |
-| A shell | No | Yes, if the tools ship as native libraries — an app cannot `exec` its own data directory |
-| Driving a browser | An embedded web view only | An embedded web view, or the person's own browser through accessibility |
-| Content handed in | Share extension, App Intents, Siri and Shortcuts | Intents and the share sheet |
+| Read and drive other apps | Not possible for a third party, at all | **Built.** Nine tools over an `AccessibilityService`, by handle rather than coordinate |
+| What stops it | The API does not exist | Play policy, not the API — so this build is sideloaded, and pays for it in restricted settings |
+| Saying what it is doing over another app | — | **Built.** `TYPE_ACCESSIBILITY_OVERLAY`, which needs no permission at all |
+| Long turns in the background | Seconds, so the app warns and stops | **Built.** A `specialUse` foreground service, uncapped |
+| Summoned from anywhere | — | **Built.** The accessibility button; the assistant role was declined |
+| A shell | No | *Predicted, not built.* Possible if the tools ship as native libraries — an app cannot `exec` its own data directory |
+| Content handed in | Share extension, App Intents, Siri and Shortcuts | **Built.** `ACTION_SEND`, `singleTop` so a share reuses the one instance |
 
 The routing core is identical on both. A second routing policy written in Kotlin would agree
 with the first until the day it did not, which is the argument
@@ -161,6 +188,32 @@ just ios-core                         # the routing core as an xcframework
 just ios-test                         # the suite, on a simulator it creates if absent
 just ios-project                      # regenerate the Xcode project from project.yml
 ```
+
+### Android
+
+Needs the Android SDK, the NDK and Gradle; `just toolchain` says which are absent rather
+than failing inside a build. There is no Gradle wrapper — a wrapper is a jar, and this
+repository does not track binaries it cannot review.
+
+```sh
+just android                          # the core, then the library an app links
+just android-test                     # the JVM suite: everything that touches nothing Android
+just android-device-test              # the emulator suite: the only one that loads the .so
+just android-release                  # the APK a person installs, signed from the environment
+```
+
+The two test recipes make different claims and `android/AGENTS.md` is emphatic about it: the
+`.so` is built for `aarch64-linux-android` and will not load on the host at all, so a change
+to `Core.kt` or `jni.rs` claiming only `just android-test` has claimed nothing.
+
+Signing reads `WATTROUTER_KEYSTORE`, `WATTROUTER_KEYSTORE_PASSWORD`, `WATTROUTER_KEY_ALIAS`
+and `WATTROUTER_KEY_PASSWORD`. Without them the release build assembles unsigned and says so,
+and an unsigned APK cannot be installed. The keystore is yours and is never tracked.
+
+Installed, the app asks for one thing that is not a normal permission: an accessibility
+service, from Settings. On a sideloaded build that switch is greyed out until restricted
+settings are allowed — the app's own checklist screen walks through it, because nothing else
+on the phone explains why the switch does not work.
 
 The project and the xcframework are both build output and neither is checked in.
 `ios/AGENTS.md` says what a pull request may claim to have verified on a machine without
