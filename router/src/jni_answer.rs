@@ -7,6 +7,7 @@
 //! Contents
 //!   `owned`     A Java string as a C string.
 //!   `answered`  Hand an envelope to Kotlin and free the Rust copy.
+//!   `guarded`   Turn a panic into a refusal rather than undefined behaviour.
 //!
 //! `ffi_answer.rs` beside this is the same module for the C ABI, and it exists
 //! for the reason recorded in its header: two envelopes that agree today, and a
@@ -25,15 +26,15 @@
 //! `Decided` it serialises itself rather than with a C string somebody else
 //! allocated, and its `read` already does what `owned` does.
 //!
-//! The third rule those two files also do not follow — no entry point in either
-//! guards a panic, and one crossing into the JVM is undefined behaviour — is a
-//! separate change. It wraps eight bodies in a closure, which re-indents both
-//! files, and doing it here would put this over the size limit.
+//! `guarded` arrived after the other two, in #482. It was the third rule those
+//! files did not follow and it was left out of #469 because wrapping eight
+//! bodies in a closure re-indents both, which put that change over the limit.
 
 use jni::JNIEnv;
 use jni::objects::JString;
 use jni::sys::jstring;
 use std::ffi::{CStr, CString, c_char};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 
 /// A Java string as a C string.
 ///
@@ -103,4 +104,23 @@ pub(crate) fn answered(env: &mut JNIEnv<'_>, raw: *mut c_char) -> jstring {
     unsafe { crate::ffi_answer::wattrouter_string_free(raw) };
 
     read.map_or(std::ptr::null_mut(), jni::objects::JString::into_raw)
+}
+
+/// Run `body`, answering `refusal` rather than unwinding into the JVM.
+///
+/// # Arguments
+/// * `refusal` — what the entry point answers on a panic, WHERE it is the value
+///   that entry point already uses to mean it could not do the thing: a null
+///   `jstring`, a zero handle, or nothing at all.
+///
+/// # Rely
+/// A panic crossing into the JVM is undefined behaviour, exactly as into C.
+/// `jni.rs` states that and guards all four of its own entry points; the C ABI
+/// states it and satisfies it through `ffi_answer::guarded`. The eight here
+/// were the only foreign entry points in the crate with no guard at all.
+///
+/// Takes the refusal rather than using `Default`, because the three return
+/// types are `jstring`, `jlong` and `()`, and a raw pointer has no `Default`.
+pub(crate) fn guarded<T>(refusal: T, body: impl FnOnce() -> T) -> T {
+    catch_unwind(AssertUnwindSafe(body)).unwrap_or(refusal)
 }
