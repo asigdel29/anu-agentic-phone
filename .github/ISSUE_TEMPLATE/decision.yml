@@ -1,0 +1,40 @@
+---
+# decision.yml — a question about how something should work.
+#
+# History
+#   2026-08-09  A. Sigdel  Created.
+#
+# Shaped like the issues already open here, which state a problem and the
+# candidate answers rather than requesting a feature. Several of them are open
+# because a decision was deferred deliberately, and the field asking what was
+# ruled out is what makes that possible to record.
+name: A decision or a design question
+description: Something that needs deciding before it can be built.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: >-
+        What is wrong or missing, stated before any solution. If the answer is
+        obvious the issue is probably a defect rather than this.
+    validations:
+      required: true
+
+  - type: textarea
+    id: candidates
+    attributes:
+      label: The candidate answers, and what is wrong with each
+      description: >-
+        At least two. An issue proposing one answer is a pull request
+        description; what makes this worth opening is the comparison.
+    validations:
+      required: true
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: What constrains it
+      description: >-
+        Existing decisions this has to live with, and where they are argued —
+        docs/decisions/INDEX.md routes most of them.

@@ -1,0 +1,22 @@
+---
+# config.yml — where the new-issue page sends people.
+#
+# History
+#   2026-08-09  A. Sigdel  Created.
+#
+# Blank issues are off because the two templates are how this repository states
+# a problem, and the "where it ran" field in particular is a rule people do not
+# know to follow until they are asked.
+blank_issues_enabled: false
+contact_links:
+  - name: A vulnerability
+    url: https://github.com/asigdel29/anu-agentic-stack/security/advisories/new
+    about: >-
+      Report privately. This application reads other applications' screens, so a
+      public issue for a finding is a disclosure. SECURITY.md has the scope.
+
+  - name: Why is it like this
+    url: https://github.com/asigdel29/anu-agentic-stack/blob/main/docs/decisions/INDEX.md
+    about: >-
+      The decision index routes most questions of this shape to the change that
+      argued it, which is usually faster than asking.

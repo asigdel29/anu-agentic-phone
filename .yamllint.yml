@@ -21,6 +21,12 @@ rules:
     min-spaces-from-content: 1
   document-start: disable
 
+# Build output, not sources. Xcode writes a great deal of YAML under
+# ios/.build that nothing here wrote and nothing here can fix, and a local run
+# that drowns in it is a run people stop doing. CI never sees these — it builds
+# from a fresh checkout — so this only makes the local gate match the one in CI.
 ignore: |
   .venv/
   router/target/
+  ios/.build/
+  android/**/build/

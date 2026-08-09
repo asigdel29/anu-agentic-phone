@@ -1,0 +1,58 @@
+---
+# defect.yml — something behaves wrongly.
+#
+# History
+#   2026-08-09  A. Sigdel  Created.
+#
+# The "where it ran" field is this repository's own rule made into a question.
+# A change that compiled in CI, one that passed a host suite, one that ran on a
+# simulator or an emulator, and one watched on a phone are four claims, and a
+# report that collapses them into "it does not work" costs a round trip.
+name: Something behaves wrongly
+description: A defect, with what was expected and what happened instead.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happens
+      description: >-
+        What you did, what you expected, and what happened instead. If there is
+        an error, paste it rather than describing it.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where it ran
+      description: >-
+        These are different claims and the difference usually matters. If it was
+        more than one, pick the strongest and say so above.
+      options:
+        - A physical Android phone
+        - A physical iPhone
+        - The Android emulator
+        - The iOS simulator
+        - A host suite (cargo test, gradle test)
+        - Continuous integration
+        - The board, or a Linux machine standing in for it
+        - Somewhere else, described above
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Which commit
+      description: Output of `git rev-parse --short HEAD`.
+    validations:
+      required: true
+
+  - type: textarea
+    id: ruled-out
+    attributes:
+      label: What you ruled out
+      description: >-
+        Optional, and the most useful field here. What you checked that turned
+        out not to be the cause saves whoever picks this up from checking it
+        again.
