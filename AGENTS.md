@@ -22,7 +22,7 @@ table; this file assumes you have read it.
 | `hermes/` | Python, YAML | Configuration and two plugins for the agent, which is installed separately. Has its own `AGENTS.md`. |
 | `train/` | Python | `fetch_dataset.py`, which builds the training set for the scoring head. |
 | `deploy/` | Shell, systemd | Board bootstrap and the two service units. |
-| `android/` | Kotlin, Gradle | The core as an Android library. `just android` builds it, core first. One module, no wrapper, and no app yet. |
+| `android/` | Kotlin, Gradle | Two modules: `core/`, the routing core as a library, and `app/`, a Compose chat over it that reads and drives other apps. `just android` builds the debug app, core first. No wrapper. Has its own `AGENTS.md`. |
 | `scripts/` | Shell | Everything `just` calls, plus `scripts/guards/`, which CI calls. |
 | `docs/` | Prose | The standard, and the decision records. |
 
