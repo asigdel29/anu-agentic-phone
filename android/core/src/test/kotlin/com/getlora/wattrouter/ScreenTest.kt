@@ -23,6 +23,7 @@ internal data class Seen(
     override val description: String? = null,
     override val isClickable: Boolean = false,
     override val isEditable: Boolean = false,
+    override val isScrollable: Boolean = false,
     override val isPassword: Boolean = false,
     override val isVisible: Boolean = true,
     override val children: List<Node> = emptyList(),

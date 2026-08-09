@@ -2,6 +2,7 @@
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
+//   2026-08-09  A. Sigdel  Says whether a node scrolls, so one can be named.
 //
 // Contents
 //   Node    One thing on screen, as much of one as the agent needs.
@@ -46,6 +47,15 @@ interface Node {
     val isClickable: Boolean
 
     val isEditable: Boolean
+
+    /**
+     * Whether it can be scrolled.
+     *
+     * Here because a scroll container says nothing else: no text, no
+     * description, no click. Without this it is pruned as a container and
+     * there is no handle for the list itself, only for its rows.
+     */
+    val isScrollable: Boolean
 
     /**
      * Whether the framework marks this a password field. Never read, and the

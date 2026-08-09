@@ -2,6 +2,8 @@
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
+//   2026-08-09  A. Sigdel  A scroll container says something after all: without
+//                          it the list is dropped and only its rows survive.
 //
 // Contents
 //   Sighting  A node as it may be shown.
@@ -37,6 +39,7 @@ data class Sighting(
     val label: String?,
     val isClickable: Boolean = false,
     val isEditable: Boolean = false,
+    val isScrollable: Boolean = false,
     val isPassword: Boolean = false,
     val depth: Int = 0,
 )
@@ -48,7 +51,8 @@ data class Sighting(
  * walked. Dropping one without flattening would take the page with it.
  */
 private fun Node.saysSomething(): Boolean =
-    isClickable || isEditable || !text.isNullOrBlank() || !description.isNullOrBlank()
+    isClickable || isEditable || isScrollable ||
+        !text.isNullOrBlank() || !description.isNullOrBlank()
 
 /** Where the walk is: a node, and what it inherited from above. */
 private data class Descent(
@@ -93,6 +97,7 @@ fun prune(root: Node): List<Sighting> {
                 },
                 isClickable = node.isClickable,
                 isEditable = node.isEditable,
+                isScrollable = node.isScrollable,
                 isPassword = node.isPassword,
                 depth = depth,
             )

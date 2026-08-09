@@ -353,3 +353,40 @@ class NavigateToolTest {
         assertTrue(said, said.contains("keyboard"))
     }
 }
+
+class ScrollColumnTest {
+    @Test
+    fun aScrollableLineIsMarkedScroll() {
+        // The action column is the only way a model knows what a line accepts,
+        // and every refusal so far points at it. A scroll tool with nothing
+        // marked scroll would cite a column that never says the word.
+        val list = Sighting(
+            handle = Handle("messages", "list", null, null, 0),
+            role = "list",
+            label = null,
+            isScrollable = true,
+        )
+
+        val said = ReadScreenTool.describe(Reading(Generation("k3f9", 4), listOf(list)))
+
+        assertTrue(said, said.contains("scroll    h:messages|list|||0"))
+    }
+
+    @Test
+    fun somethingBothTappableAndScrollableReadsAsTappable() {
+        // Tapping is the one that does something irreversible, so it is the
+        // one worth naming.
+        val both = Sighting(
+            handle = Handle("card", "view", null, null, 0),
+            role = "view",
+            label = null,
+            isClickable = true,
+            isScrollable = true,
+        )
+
+        val said = ReadScreenTool.describe(Reading(Generation("k3f9", 4), listOf(both)))
+
+        assertTrue(said, said.contains("tap"))
+        assertTrue(said, !said.contains("scroll"))
+    }
+}
