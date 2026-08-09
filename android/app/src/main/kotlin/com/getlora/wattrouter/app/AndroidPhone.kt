@@ -18,6 +18,7 @@ package com.getlora.wattrouter.app
 import com.getlora.wattrouter.Done
 import com.getlora.wattrouter.Generation
 import com.getlora.wattrouter.Handle
+import com.getlora.wattrouter.Launchable
 import com.getlora.wattrouter.Onward
 import com.getlora.wattrouter.Phone
 import com.getlora.wattrouter.Reading
@@ -50,4 +51,11 @@ class AndroidPhone : Phone {
         withContext(Dispatchers.Default) {
             DrivingService.connected?.scroll(at, from, onward)
         }
+
+    // Unreadable until the conformance lands: the package manager needs a
+    // <queries> element before it will admit any app exists, and that is its
+    // own change. OpenAppTool already words this as "could not be read".
+    override suspend fun apps(): List<Launchable>? = null
+
+    override suspend fun open(packageName: String): Done? = null
 }
