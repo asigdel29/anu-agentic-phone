@@ -89,6 +89,21 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Take the app off first. Gradle cannot replace an APK signed with a different
+# key, and the one that gets installed by hand here is the release build —
+# `just android-release` produces something signed with the person's own key,
+# and proving it loads the native library means installing it. After that the
+# suite fails with INSTALL_FAILED_UPDATE_INCOMPATIBLE, which names a signature
+# mismatch rather than the APK somebody installed twenty minutes earlier.
+#
+# `pm uninstall --user 0` rather than `adb uninstall`: the latter answers
+# DELETE_FAILED_INTERNAL_ERROR here and the former does not, which is not
+# something anybody guesses at the point of needing it.
+#
+# A no-op on the ordinary path, where the package is absent or debug-signed.
+"$ADB" shell pm uninstall --user 0 com.getlora.wattrouter >/dev/null 2>&1 || true
+"$ADB" shell pm uninstall --user 0 com.getlora.wattrouter.test >/dev/null 2>&1 || true
+
 "$ROOT/scripts/build-android-core.sh" >/dev/null
 cd "$ROOT/android"
 ANDROID_HOME="$SDK" gradle connectedDebugAndroidTest --console=plain
