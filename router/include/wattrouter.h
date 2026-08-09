@@ -14,6 +14,7 @@
  *   wattrouter_tier_name  The name behind a tier code.
  *   wattrouter_reason_name  The name behind a reason code.
  *   wattrouter_backend_name  The name behind a backend code.
+ *   wattrouter_git_init      Make a directory into a repository.
  *   wattrouter_git_head      Where a repository's HEAD points.
  *   wattrouter_git_status    The working tree, against the index and the head.
  *   wattrouter_git_add       Staging paths.
@@ -173,6 +174,21 @@ const char *wattrouter_backend_name(uint8_t backend);
  * finds on a repository it has just made.
  *
  * Returns an owned string, or NULL IF `path` was NULL or not UTF-8. */
+/* Make a directory into a repository, or say it already was one.
+ *
+ * `ok` carries a `kind` of "created" or "already_there". The two are separate
+ * answers rather than one success: `git init` is idempotent, and a model that
+ * cannot tell "made you one" from "there already was one" reports having
+ * started work it is in the middle of.
+ *
+ * The directory is created if it is not there, because a phone has no shell to
+ * make one with first.
+ *
+ * Returns an owned string for wattrouter_string_free, or NULL on the terms
+ * wattrouter_git_head states.
+ */
+char *wattrouter_git_init(const char *path);
+
 char *wattrouter_git_head(const char *path);
 
 /* The working tree, against the index and the head.

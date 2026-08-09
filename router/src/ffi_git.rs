@@ -2,8 +2,10 @@
 //!
 //! History
 //!   2026-08-08  A. Sigdel  Created.
+//!   2026-08-09  A. Sigdel  Took in init, so a phone can make a repository.
 //!
 //! Contents
+//!   `wattrouter_git_init`     Make a directory into a repository.
 //!   `wattrouter_git_head`     Where `HEAD` points.
 //!   `wattrouter_git_status`   The working tree, against the index and the head.
 //!   `wattrouter_git_add`      Staging paths.
@@ -30,6 +32,30 @@ use crate::ffi_answer::{borrowed, guarded, refused, rendered};
 use crate::git;
 use std::ffi::c_char;
 use std::path::Path;
+
+/// Make a directory into a repository, or say it already was one.
+///
+/// # Returns
+/// An owned JSON string to pass to [`wattrouter_string_free`], carrying `ok`
+/// with a `kind` of `created` or `already_there`, or `error` with the reason.
+/// Null IF `path` was null or not UTF-8, or the call panicked.
+///
+/// The two successes are named separately on purpose. `git init` is idempotent
+/// and this could have answered one success for both; a model that cannot tell
+/// "made you one" from "there already was one" reports having started work it
+/// is in the middle of.
+///
+/// # Safety
+/// `path` must be null or a valid NUL-terminated string outliving the call. The
+/// returned pointer must be released with [`wattrouter_string_free`] and not
+/// with `free`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wattrouter_git_init(path: *const c_char) -> *mut c_char {
+    guarded(|| match unsafe { borrowed(path) } {
+        None => std::ptr::null_mut(),
+        Some(path) => rendered(git::init(Path::new(path))),
+    })
+}
 
 /// Where `HEAD` points: a branch, a commit, or a branch with no commits yet.
 ///

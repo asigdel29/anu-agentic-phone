@@ -33,6 +33,18 @@ import Foundation
 /// a branch are not absences. A detached head has a commit and no branch; an
 /// unborn one has a branch that does not exist yet, which is what `git init`
 /// leaves behind and the state an agent most often finds.
+/// What `init` found, which is not always what it did.
+public enum GitMade: String, Decodable, Equatable, Sendable {
+    /// There was no repository and now there is.
+    case created
+    /// There already was one, and nothing was changed.
+    ///
+    /// Separate from `created` rather than folded into one success: `git init`
+    /// is idempotent, and a model that cannot tell "made you one" from "there
+    /// already was one" reports having started work it is midway through.
+    case alreadyThere = "already_there"
+}
+
 public enum GitHead: Equatable, Sendable {
     /// On a branch, with at least one commit.
     case branch(String)
@@ -178,6 +190,12 @@ enum CoreAnswer<Value: Decodable>: Decodable {
 /// the work happens.
 public protocol Repository: Sendable {
     /// Where `HEAD` points.
+    /// Make `workspace` into a repository, or say it already was one.
+    ///
+    /// The directory is created if it is not there, because a phone has no
+    /// shell to make one with first.
+    func makeRepository(at workspace: URL) throws(GitError) -> GitMade
+
     func head(of workspace: URL) throws(GitError) -> GitHead
 
     /// The working tree, against the index and the head.

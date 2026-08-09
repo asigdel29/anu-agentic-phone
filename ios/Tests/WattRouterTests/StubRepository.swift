@@ -30,6 +30,15 @@ final class StubRepository: Repository, @unchecked Sendable {
         self.refusal = refusal
     }
 
+    /// What `makeRepository` answers with, when it is not refusing.
+    var made: GitMade = .created
+
+    func makeRepository(at workspace: URL) throws(GitError) -> GitMade {
+        asked.append(workspace)
+        if let refusal { throw refusal }
+        return made
+    }
+
     func head(of workspace: URL) throws(GitError) -> GitHead {
         asked.append(workspace)
         if let refusal { throw refusal }

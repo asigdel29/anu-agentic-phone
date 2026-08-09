@@ -19,6 +19,8 @@ private class Tracked(private val answer: String?) : Worktree {
     var staged: List<String>? = null
     var message: String? = null
 
+    override fun init() = answer
+
     override fun head() = answer
 
     override fun status() = answer

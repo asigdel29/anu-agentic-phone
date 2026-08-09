@@ -27,6 +27,26 @@ use jni::JNIEnv;
 use jni::objects::{JClass, JString};
 use jni::sys::jstring;
 
+/// Make a directory into a repository, or say it already was one.
+///
+/// # Safety
+/// Called from Kotlin through `Repository.init`, which passes a path it owns.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeInit<'a>(
+    mut env: JNIEnv<'a>,
+    _class: JClass<'a>,
+    path: JString<'a>,
+) -> jstring {
+    guarded(std::ptr::null_mut(), || {
+        let Some(path) = owned(&mut env, &path) else {
+            return std::ptr::null_mut();
+        };
+        answered(&mut env, unsafe {
+            crate::ffi_git::wattrouter_git_init(path.as_ptr())
+        })
+    })
+}
+
 /// Where `HEAD` points.
 ///
 /// # Safety

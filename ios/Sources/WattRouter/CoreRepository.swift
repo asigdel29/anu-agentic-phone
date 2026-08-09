@@ -2,9 +2,10 @@
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
+//   2026-08-09  A. Sigdel  Took in init, so a phone can make a repository.
 //
 // Contents
-//   CoreRepository  The four operations, over the C ABI.
+//   CoreRepository  The five operations, over the C ABI.
 //
 // The only place in the app that touches the git entry points, and what it owns
 // is the string lifetime. Every one of them returns an allocation the caller
@@ -26,6 +27,10 @@ import WattRouterFFI
 /// calls, so there is nothing to own and one instance serves the whole app.
 public struct CoreRepository: Repository {
     public init() {}
+
+    public func makeRepository(at workspace: URL) throws(GitError) -> GitMade {
+        try answered(workspace) { path in wattrouter_git_init(path) }
+    }
 
     public func head(of workspace: URL) throws(GitError) -> GitHead {
         try answered(workspace) { path in wattrouter_git_head(path) }

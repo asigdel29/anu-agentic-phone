@@ -57,6 +57,15 @@ internal fun encodePaths(paths: List<String>): String = paths.joinToString(
  * should be told about a failed commit is a decision, made above this.
  */
 interface Worktree {
+    /**
+     * Make the directory into a repository, or say it already was one.
+     *
+     * The two successes are separate answers rather than one: `git init` is
+     * idempotent, and a model that cannot tell "made you one" from "there
+     * already was one" reports having started work it is midway through.
+     */
+    fun init(): String?
+
     fun head(): String?
 
     fun status(): String?
@@ -77,6 +86,15 @@ interface Worktree {
  *   mistake it looks like is not the one it is.
  */
 class Repository(val path: String) : Worktree {
+
+    /**
+     * Make [path] into a repository, or say it already was one.
+     *
+     * The directory is created if it is not there. On a fresh install
+     * `filesDir/work` is an empty directory and there is no shell to make one
+     * with, which is what #393 was about.
+     */
+    override fun init(): String? = nativeInit(path)
 
     /** Where `HEAD` points: a branch, a commit, or a branch with no commits
      *  yet. Answers the envelope, or null if the runtime could not allocate. */
@@ -110,6 +128,7 @@ class Repository(val path: String) : Worktree {
             System.loadLibrary("wattrouter")
         }
 
+        @JvmStatic private external fun nativeInit(path: String?): String?
         @JvmStatic private external fun nativeHead(path: String?): String?
         @JvmStatic private external fun nativeStatus(path: String?): String?
         @JvmStatic private external fun nativeAdd(path: String?, pathsJson: String?): String?
