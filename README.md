@@ -1,11 +1,38 @@
 # anu-agentic-stack
 
+[![CI](https://github.com/asigdel29/anu-agentic-stack/actions/workflows/ci.yml/badge.svg)](https://github.com/asigdel29/anu-agentic-stack/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+**An agent you talk to, that spends as little as it can answering — and on Android, one that
+can read and drive the other apps on the phone.** Every prompt is scored for difficulty and
+sent to the cheapest model that can handle it, by a Rust core that runs in all three places
+this is deployed.
+
 A personal agent stack. One routing core, in three places: a small aarch64 board, an iPhone
 and an Android phone. The board runs [Hermes
 Agent](https://github.com/NousResearch/hermes-agent) as the harness with
 [zeromem](https://github.com/ptaranat/zeromem) for memory that costs no tokens; the phones
 run their own turn loop over the same core. All three route to the cheapest model on
 [NeuralWatt](https://neuralwatt.com) that can still do the job.
+
+### Where this is up to
+
+One author, MIT, and public because there is no reason for it not to be. It is a personal
+stack rather than a product: it is built for one person's phone and one person's board, and
+the decisions in it were made on those terms.
+
+**Nothing here has run on a physical phone.** Every claim about either phone application is a
+host suite, an emulator or a simulator — [#188](../../issues/188) is the checklist for the
+first time hardware is attached, and the local inference tier is unmeasured until it is.
+
+Contributions are welcome and the gates are strict: every pull request references an issue and
+changes at most 300 lines, and the first of those is enforced. [`CONTRIBUTING.md`](CONTRIBUTING.md)
+has the four rules that would otherwise fail a first attempt. If you are here to read rather than
+to build, [`docs/decisions/INDEX.md`](docs/decisions/INDEX.md) is the better door: it routes a
+question to the change that argued it.
+
+Security matters more than usual here, because the Android build reads other applications'
+screens. [`SECURITY.md`](SECURITY.md) says what that means before you install anything.
 
 ```
   you ── CLI / chat ──►  Hermes Agent   (conversation, tools, coding)
@@ -336,14 +363,10 @@ Xcode, which is less than it looks.
 
 ## Security
 
-This application reads and acts on other applications' screens, and what it reads reaches the
-provider that answers the turn. [`SECURITY.md`](SECURITY.md) says what that means in practice —
-the threat model, what leaves the device, what is protected and what is not — and how to report
-a vulnerability privately.
-
-Two things from it worth knowing before installing anything: **`FLAG_SECURE` windows are
-readable through accessibility**, so a banking application is not hidden from this; and **the
-router has no authentication**, which is why it binds loopback.
+[`SECURITY.md`](SECURITY.md) has the threat model, what leaves the device, and how to report a
+vulnerability privately. Two things from it worth knowing before installing anything:
+**`FLAG_SECURE` windows are readable through accessibility**, so a banking application is not
+hidden from this; and **the router has no authentication**, which is why it binds loopback.
 
 ## Credits
 
