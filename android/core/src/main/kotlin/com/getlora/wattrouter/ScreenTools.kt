@@ -218,6 +218,9 @@ class ReadScreenTool(private val phone: Phone) : Tool {
             sighting.isPassword -> "password"
             sighting.isEditable -> "type    "
             sighting.isClickable -> "tap     "
+            // After tap: a node that is both is rarely a list, and tapping is
+            // the one that does something irreversible.
+            sighting.isScrollable -> "scroll  "
             else -> "        "
         }
     }

@@ -153,3 +153,47 @@ class PruneTest {
         assertEquals("more", seen.handle.viewId)
     }
 }
+
+class ScrollablePruneTest {
+    @Test
+    fun aListThatSaysNothingIsStillWorthNaming() {
+        // A RecyclerView holding a hundred rows has no text, no description
+        // and no click. Dropped as a container, its rows survive and there is
+        // no handle for the list itself — so nothing can be scrolled.
+        val list = Seen(
+            viewId = "app:id/messages",
+            role = "list",
+            isScrollable = true,
+            children = listOf(Seen(role = "text", text = "Rent is due")),
+        )
+
+        val seen = prune(Seen(role = "window", children = listOf(list)))
+
+        assertEquals(2, seen.size)
+        assertEquals("messages", seen.first().handle.viewId)
+        assertTrue("${seen.first()}", seen.first().isScrollable)
+    }
+
+    @Test
+    fun aScrollableThatIsAlsoATextIsNotDuplicated() {
+        // saysSomething gained a reason, not a second entry.
+        val scrolling = Seen(role = "scroll", text = "Terms", isScrollable = true)
+
+        assertEquals(1, prune(Seen(role = "window", children = listOf(scrolling))).size)
+    }
+
+    @Test
+    fun theRowsInsideItAreStillFlattenedUp() {
+        val list = Seen(
+            viewId = "app:id/messages",
+            role = "list",
+            isScrollable = true,
+            children = List(3) { at -> Seen(role = "text", text = "message $at") },
+        )
+
+        val seen = prune(Seen(role = "window", children = listOf(list)))
+
+        assertEquals(listOf(null, "message 0", "message 1", "message 2"), seen.map { it.label })
+        assertEquals(listOf(0, 1, 1, 1), seen.map { it.depth })
+    }
+}
