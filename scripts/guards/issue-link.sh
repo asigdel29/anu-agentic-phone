@@ -3,10 +3,11 @@
 #
 # History
 #   2026-08-05  A. Sigdel  Created.
+#   2026-08-09  A. Sigdel  Exempts dependabot, which cannot open an issue first.
 #
-# Reads PR_TITLE, PR_BODY and PR_HEAD_REF from the environment; the workflow
-# supplies them, and so can a developer running this by hand. Exits 0 when a
-# reference is found, 1 otherwise.
+# Reads PR_TITLE, PR_BODY, PR_HEAD_REF and PR_AUTHOR from the environment; the
+# workflow supplies them, and so can a developer running this by hand. Exits 0
+# when a reference is found, 1 otherwise.
 #
 # Accepts a reference anywhere in the body, title or branch name. GitHub only
 # closes an issue for a keyword in the body, but the rule here is traceability
@@ -21,6 +22,18 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 guard_pr_text
 branch="${PR_HEAD_REF:-}"
+
+# The one exemption, and it is narrow on purpose. A bot cannot open an issue
+# first, and inventing one per dependency bump is worse than not having the
+# rule — it would be an issue whose whole content is the pull request beside it.
+#
+# Only this guard. pr-size still applies and should: it already excludes
+# lockfiles, so a Cargo bump is a few lines of a manifest, and a dependency
+# change touching 300 lines of source is exactly one somebody should read.
+if [ "${PR_AUTHOR:-}" = "dependabot[bot]" ]; then
+    printf 'dependabot: exempt, see the header\n'
+    exit 0
+fi
 
 # `#12` in the title or body, or a leading `12-` in the branch name, which is the
 # shape `gh issue develop` and the convention here both produce.
