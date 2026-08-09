@@ -15,6 +15,7 @@
 
 package com.getlora.wattrouter.app
 
+import android.content.Context
 import com.getlora.wattrouter.Done
 import com.getlora.wattrouter.Generation
 import com.getlora.wattrouter.Handle
@@ -24,10 +25,11 @@ import com.getlora.wattrouter.Phone
 import com.getlora.wattrouter.Reading
 import com.getlora.wattrouter.Way
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 /** The screen of the phone this is running on. */
-class AndroidPhone : Phone {
+class AndroidPhone(private val context: Context) : Phone {
 
     override suspend fun read(): Reading? = withContext(Dispatchers.Default) {
         DrivingService.connected?.read()
@@ -52,10 +54,28 @@ class AndroidPhone : Phone {
             DrivingService.connected?.scroll(at, from, onward)
         }
 
-    // Unreadable until the conformance lands: the package manager needs a
-    // <queries> element before it will admit any app exists, and that is its
-    // own change. OpenAppTool already words this as "could not be read".
-    override suspend fun apps(): List<Launchable>? = null
+    // Not through DrivingService: reading the package manager and starting an
+    // activity need a Context and nothing else, so they work whether or not
+    // somebody has switched the accessibility service on. Only the screen
+    // afterwards needs it, and that answers null the way every read does.
+    override suspend fun apps(): List<Launchable> = withContext(Dispatchers.Default) {
+        installed(context)
+    }
 
-    override suspend fun open(packageName: String): Done? = null
+    override suspend fun open(packageName: String): Done? = withContext(Dispatchers.Default) {
+        if (!start(context, packageName)) {
+            Done.Refused("that app is installed and has nothing to open")
+        } else {
+            // Read after a moment. Answering immediately catches the screen the
+            // app was launched from, which reads as the launch having done
+            // nothing at all.
+            delay(SETTLING)
+            Done.Did(DrivingService.connected?.read())
+        }
+    }
+
+    private companion object {
+        /** Long enough for a launch to have started, short enough not to be a wait. */
+        const val SETTLING = 400L
+    }
 }

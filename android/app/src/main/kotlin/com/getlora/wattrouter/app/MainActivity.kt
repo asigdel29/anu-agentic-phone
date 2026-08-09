@@ -52,6 +52,7 @@ import com.getlora.wattrouter.GitStatusTool
 import com.getlora.wattrouter.LocationTool
 import com.getlora.wattrouter.Memory
 import com.getlora.wattrouter.NavigateTool
+import com.getlora.wattrouter.OpenAppTool
 import com.getlora.wattrouter.Permission
 import com.getlora.wattrouter.Tool
 import com.getlora.wattrouter.ReadScreenTool
@@ -229,13 +230,14 @@ class MainActivity : ComponentActivity() {
      * trap behind it — which is the only place somebody learns about either.
      */
     private fun driving(): List<Tool> {
-        val screen = AndroidPhone()
+        val screen = AndroidPhone(applicationContext)
         return listOf(
             ReadScreenTool(screen),
             TapTool(screen),
             TypeTextTool(screen),
             NavigateTool(screen),
             ScrollTool(screen),
+            OpenAppTool(screen),
         )
     }
 
