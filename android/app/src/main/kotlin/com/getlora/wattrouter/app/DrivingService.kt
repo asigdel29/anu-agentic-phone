@@ -8,6 +8,7 @@
 //   2026-08-09  A. Sigdel  Refuses to act where #440 says not to, which is why
 //                          it now consumes exactly one event.
 //   2026-08-09  A. Sigdel  Shows a banner while a turn is driving.
+//   2026-08-09  A. Sigdel  Answers the accessibility button, which is the summon.
 //
 // It keeps no model of the screen, which is the decision worth reading twice.
 // The obvious shape for an accessibility service is event-driven: track
@@ -33,8 +34,10 @@
 
 package com.getlora.wattrouter.app
 
+import android.accessibilityservice.AccessibilityButtonController
 import android.accessibilityservice.AccessibilityService
 import android.app.KeyguardManager
+import android.content.Intent
 import android.os.Bundle
 import android.view.Gravity
 import android.view.WindowManager
@@ -82,6 +85,26 @@ class DrivingService : AccessibilityService() {
         super.onServiceConnected()
         viewing = Viewing(Generations.fresh())
         connected = this
+        accessibilityButtonController.registerAccessibilityButtonCallback(summon)
+    }
+
+    /**
+     * The accessibility button, which is how the agent is reached from inside
+     * another app.
+     *
+     * It opens the conversation rather than starting anything. An expanded
+     * surface *is* the foreground app, so a summon that put the agent in front
+     * of the screen it was about to read would be summoning it onto the thing
+     * it wanted to look at — the design review's finding, and the reason the
+     * bubble is a surface for before and after a task rather than during one.
+     */
+    private val summon = object : AccessibilityButtonController.AccessibilityButtonCallback() {
+        override fun onClicked(controller: AccessibilityButtonController) {
+            startActivity(
+                Intent(this@DrivingService, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }
     }
 
     /**
@@ -160,6 +183,7 @@ class DrivingService : AccessibilityService() {
 
     override fun onDestroy() {
         hide()
+        runCatching { accessibilityButtonController.unregisterAccessibilityButtonCallback(summon) }
         connected = null
         viewing = null
         super.onDestroy()
