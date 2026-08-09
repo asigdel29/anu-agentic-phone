@@ -1,0 +1,9 @@
+# Everything, and nobody else yet.
+#
+# A declaration rather than an enforcement: scripts/protect-main.sh sets
+# require_code_owner_review to false on purpose, because a solo repository that
+# requires a review is one nobody can merge to. what-guards-main.md argues it.
+# The day a second person arrives, this file is already right and the ruleset is
+# one number to change.
+
+*       @asigdel29
