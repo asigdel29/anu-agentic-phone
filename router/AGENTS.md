@@ -26,6 +26,7 @@ true only here.
 | `memory.rs` | Bounding what a store loads at open, behind the `memory` feature. |
 | `ffi_memory.rs` | A memory store across the ABI, behind the same feature. |
 | `jni.rs` | The same core reached from Kotlin, behind the `android` feature. |
+| `jni_git.rs` | A repository from Kotlin, behind `android` and `git`. |
 | `jni_memory.rs` | The memory store from Kotlin, behind `android` and `memory`. |
 | `testenv.rs` | The environment, as the crate's tests are allowed to touch it. |
 
@@ -70,9 +71,14 @@ naming neither.
 
 Kotlin has the same problem and a different check. `jni.rs` exports symbols by name, so a
 rename is not a compile error on either side — it is an `UnsatisfiedLinkError` on a device. A
-test in `jni.rs` reads `android/src/main/kotlin/com/getlora/wattrouter/Core.kt` by path and
-holds the two in step, which also makes that path load-bearing: move the Kotlin and edit
-`jni.rs` in the same commit.
+test in `jni.rs` reads the Kotlin by path, now for three classes: `Core.kt`, `Memory.kt` and
+`Repository.kt`, all under `android/core/src/main/kotlin/com/getlora/wattrouter/`. That makes
+the path load-bearing — move the Kotlin and edit `jni.rs` in the same commit — and a fourth
+binding is a row in that test's `BINDINGS` rather than a second copy of it.
+
+What the test cannot do is link. It compares two files as text, so agreement there is a claim
+about spelling; that the names resolve is the instrumented suite's to make, and each binding
+has a test on a device that calls every entry point once.
 
 **Locks.** `cache.rs:91` and `embed.rs:335` hold one each. They are independent, no path takes
 both, and each documents one acquisition per method rather than an order across two. Add a path
