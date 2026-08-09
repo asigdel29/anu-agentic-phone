@@ -2,6 +2,8 @@
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
+//   2026-08-09  A. Sigdel  Taps as well, which is the only path that retains
+//                          framework nodes and has to give them back.
 //
 // Two settings here fail silently and neither logs anything useful: a service
 // without BIND_ACCESSIBILITY_SERVICE is never bound, and one whose config omits
@@ -26,11 +28,14 @@ import android.app.UiAutomation
 import android.os.ParcelFileDescriptor
 import android.provider.Settings
 import androidx.test.platform.app.InstrumentationRegistry
+import com.getlora.wattrouter.Done
+import com.getlora.wattrouter.Generation
 import com.getlora.wattrouter.Handle
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -118,6 +123,38 @@ class DrivingServiceDeviceTest {
         // the two reads — so the assertion is that it is not Lost, which would
         // mean the handle did not describe the node it was made from.
         assertTrue("$aim", aim !is com.getlora.wattrouter.Aim.Lost)
+    }
+
+    @Test
+    fun tappingSomethingThatTakesNoTapIsRefusedRatherThanEscalated() {
+        // The whole acting path over a real tree: retain, resolve, decline,
+        // release. Deliberately a line read_screen does not mark as tappable,
+        // so nothing on the device is actually pressed by the suite.
+        val service = waitForConnection()
+        assertNotNull(service)
+        val reading = service!!.read()!!
+        val quiet = reading.seen.firstOrNull { !it.isClickable && !it.isEditable && it.handle.isFindable }
+
+        assumeTrue("no read-only line on this screen to try", quiet != null)
+        val done = service.tap(quiet!!.handle, reading.generation)
+
+        // Moved is legitimate on a live screen; what must not happen is Did,
+        // which would mean something was pressed that nothing offered.
+        assertTrue("$done", done is Done.Refused || done is Done.Moved)
+    }
+
+    @Test
+    fun aTapAgainstAnOlderReadingIsRefused() {
+        val service = waitForConnection()
+        assertNotNull(service)
+        val reading = service!!.read()!!
+
+        val done = service.tap(
+            reading.seen.first { it.handle.isFindable }.handle,
+            Generation("some-other-life", reading.generation.counter),
+        )
+
+        assertTrue("$done", done is Done.Moved)
     }
 
     @Test

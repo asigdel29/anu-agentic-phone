@@ -2,6 +2,7 @@
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
+//   2026-08-09  A. Sigdel  Acts as well as reads.
 //
 // It listens to nothing, which is the decision worth reading twice. The obvious
 // shape for an accessibility service is event-driven: track
@@ -22,7 +23,9 @@ package com.getlora.wattrouter.app
 
 import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import com.getlora.wattrouter.Aim
+import com.getlora.wattrouter.Done
 import com.getlora.wattrouter.Generation
 import com.getlora.wattrouter.Generations
 import com.getlora.wattrouter.Handle
@@ -81,6 +84,52 @@ class DrivingService : AccessibilityService() {
     fun aim(at: Handle, from: Generation): Aim? {
         val tree = screen() ?: return null
         return viewing?.aim(tree, at, from)
+    }
+
+    /**
+     * Tap what a handle names.
+     *
+     * The tree is retained for this call and released before it returns, which
+     * is the only place in the app that owes the framework anything back. A
+     * copy is not something performAction can be called on, so acting needs the
+     * node the copy was made from — and needs it only until the click lands.
+     */
+    fun tap(at: Handle, from: Generation): Done? {
+        val viewing = viewing ?: return null
+        val live = snapshot(rootInActiveWindow, retain = true) ?: return null
+
+        return try {
+            when (val aim = viewing.aim(live, at, from)) {
+                is Aim.Moved -> Done.Moved(aim.now)
+                is Aim.Lost -> Done.Lost(aim.resolution)
+                is Aim.At -> click(aim.node)
+            }
+        } finally {
+            release(live)
+        }
+    }
+
+    /**
+     * Click a node, or say why not.
+     *
+     * A node that will not take a click is refused rather than escalated to
+     * whichever ancestor would. Walking up is what a person tapping a row's
+     * label effectively does, and it is also tapping something the model did
+     * not name — and read_screen already marks which lines can be tapped, so
+     * the refusal points at that column instead.
+     */
+    private fun click(node: Node): Done {
+        val source = (node as? Copied)?.source
+            ?: return Done.Refused("it could not be reached on the screen any more")
+
+        return if (source.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+            Done.Did(read())
+        } else {
+            Done.Refused(
+                "the app would not take a tap there. read_screen marks the lines " +
+                    "that can be tapped, and this is not one of them",
+            )
+        }
     }
 
     /**

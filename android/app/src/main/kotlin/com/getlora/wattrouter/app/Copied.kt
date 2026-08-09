@@ -2,6 +2,9 @@
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
+//   2026-08-09  A. Sigdel  Can keep the framework node beside its copy, because
+//                          a copy is not something performAction can be called
+//                          on and acting needs one.
 //
 // Contents
 //   roleOf    A class name as a role a model can act on.
@@ -55,8 +58,15 @@ internal fun roleOf(className: CharSequence?): String {
     }
 }
 
-/** A node, holding what was read rather than what can be read. */
-private data class Copied(
+/**
+ * A node, holding what was read rather than what can be read.
+ *
+ * @property source the framework node this came from, when the walk was asked
+ *   to keep it. Null otherwise, which is every read: holding one obliges the
+ *   caller to release it, and reading has nowhere sensible to do that.
+ */
+internal data class Copied(
+    val source: AccessibilityNodeInfo?,
     override val viewId: String?,
     override val role: String,
     override val text: String?,
@@ -73,26 +83,46 @@ private data class Copied(
  *
  * @param info the root. It stays the caller's — what this releases is only what
  *   it obtained itself.
+ * @param retain whether to keep each framework node beside its copy. Off for
+ *   every read; on only to act, which is one call long. The caller then owes
+ *   the tree a [release]. A second Node implementation reading lazily would
+ *   avoid the flag and reintroduce what this file exists to prevent: prune,
+ *   resolve and shapeOf each seeing a different screen.
  * @return the tree, or null when there was nothing to read, which is what the
  *   framework answers while no window is focused.
  */
-internal fun snapshot(info: AccessibilityNodeInfo?): Node? = copy(info, depth = 0)
+internal fun snapshot(info: AccessibilityNodeInfo?, retain: Boolean = false): Node? =
+    copy(info, depth = 0, retain = retain)
 
-private fun copy(info: AccessibilityNodeInfo?, depth: Int): Node? {
+/** Give back every framework node a retaining [snapshot] kept. */
+internal fun release(node: Node?) {
+    val pending = ArrayDeque(listOfNotNull(node))
+    while (pending.isNotEmpty()) {
+        val here = pending.removeFirst()
+        pending.addAll(here.children)
+        @Suppress("DEPRECATION")
+        (here as? Copied)?.source?.recycle()
+    }
+}
+
+private fun copy(info: AccessibilityNodeInfo?, depth: Int, retain: Boolean): Node? {
     if (info == null || depth > DEEPEST) return null
 
     val children = mutableListOf<Node>()
     for (at in 0 until info.childCount) {
         val child = info.getChild(at) ?: continue
-        copy(child, depth + 1)?.let { children += it }
-        // Released as the copy is made. recycle() is a no-op from API 33 and is
-        // not one on 29 through 32, which this app supports; a walk of a real
-        // screen obtains hundreds of these.
-        @Suppress("DEPRECATION")
-        child.recycle()
+        copy(child, depth + 1, retain)?.let { children += it }
+        // Released as the copy is made, unless the caller asked to keep it.
+        // recycle() is a no-op from API 33 and is not one on 29 through 32,
+        // which this app supports; a walk of a real screen obtains hundreds.
+        if (!retain) {
+            @Suppress("DEPRECATION")
+            child.recycle()
+        }
     }
 
     return Copied(
+        source = if (retain) info else null,
         viewId = info.viewIdResourceName,
         role = roleOf(info.className),
         text = info.text?.toString(),
