@@ -76,15 +76,22 @@ phone-driving tool is built, present, offered to the model, and does nothing at 
 error anywhere to point at. That is the worst shape a failure takes here, which is why this
 paragraph exists before the code does.
 
-## A blank screen and a hidden one are different answers
+## A blank screen and a hidden one would be different answers, if a hidden one existed
 
-`FLAG_SECURE` windows — banking apps, password managers, DRM video — expose nothing through
-accessibility. `what-android-allows.md` calls that a feature and it is.
+This section used to say that `FLAG_SECURE` windows expose nothing through accessibility, that
+`what-android-allows.md` called it a feature, and that the read therefore needed a third answer
+saying the application hides its contents — because reporting a secure window as *an empty
+screen* would tell a model there is nothing there, and a model told there is nothing there
+decides the page has not loaded and acts again.
 
-But reporting it as *an empty screen* tells a model there is nothing there, and a model told
-there is nothing there decides the page has not loaded and acts again. The read has to say the
-application hides its contents, in those words, so that the only correct next step — ask the
-person — is the one that follows.
+The reasoning is sound and the premise was wrong. `FLAG_SECURE` restricts screen capture and
+leaves the node tree alone. A secure window is read like any other, so there is no empty
+reading to mistake for a blank page, and `describe` needs no third state. #472 has the
+measurement and `what-android-allows.md` now carries the correction.
+
+Kept rather than deleted, because the shape of the argument still applies to the next thing
+that turns out to be unreadable — and because a record that quietly loses a claim it made for a
+milestone teaches nobody what went wrong. What was missing was a test, and there is one now.
 
 ## Nothing is logged
 
