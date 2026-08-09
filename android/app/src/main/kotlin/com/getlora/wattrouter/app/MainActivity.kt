@@ -41,6 +41,7 @@ import com.getlora.wattrouter.CalendarTool
 import com.getlora.wattrouter.ChainWalk
 import com.getlora.wattrouter.ContactsTool
 import com.getlora.wattrouter.Credential
+import com.getlora.wattrouter.LocationTool
 import com.getlora.wattrouter.Memory
 import com.getlora.wattrouter.Permission
 import com.getlora.wattrouter.Tool
@@ -144,6 +145,7 @@ class MainActivity : ComponentActivity() {
     private fun phone(): List<Tool> = listOf(
         CalendarTool(AndroidCalendars(this), permission),
         ContactsTool(AndroidContacts(this), permission),
+        LocationTool(AndroidWhereabouts(this), permission),
     )
 
     override fun onDestroy() {
