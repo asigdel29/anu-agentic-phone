@@ -43,11 +43,26 @@ android {
 
     sourceSets["main"].java.srcDirs("src/main/kotlin")
     sourceSets["main"].jniLibs.srcDirs("jniLibs")
+    sourceSets["test"].java.srcDirs("src/test/kotlin")
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+}
+
+dependencies {
+    // The runtime only, and no compiler plugin. `@Serializable` would need one,
+    // and the encoding here is hand-written anyway — what a message leaves out
+    // is a decision rather than a default, so `buildJsonObject` is the honest
+    // shape and the plugin would be a version to keep in step with AGP for
+    // nothing.
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+
+    // JUnit by explicit coordinate rather than kotlin("test"): AGP 9 bundles
+    // Kotlin and does not expose its version to that helper, so the helper
+    // resolves to nothing and every @Test is an unresolved reference.
+    testImplementation("junit:junit:4.13.2")
 }
 
 

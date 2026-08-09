@@ -98,6 +98,12 @@ android:
     cd android && ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}" \
         gradle assembleDebug --console=plain
 
+# Run the Kotlin tests. On the JVM, so no emulator and no core build: what they
+# check is the request a turn becomes, which touches nothing Android.
+android-test:
+    cd android && ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}" \
+        gradle test --console=plain
+
 # Check the stack end to end. Needs a router; `just up` first.
 verify:
     scripts/verify-stack.sh {{ "http://" + router_addr }}
