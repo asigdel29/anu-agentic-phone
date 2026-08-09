@@ -7,6 +7,7 @@
 //   2026-08-09  A. Sigdel  Holds a conversation once it is signed in.
 //   2026-08-09  A. Sigdel  Reads the calendar, which is the first tool needing
 //                          a permission and so the first needing an Activity.
+//   2026-08-09  A. Sigdel  Takes what another app shares, once.
 //
 // The core and the driver are built once and held for the process. The core
 // owns a native pointer and a decision cache, and a second one is a second
@@ -17,6 +18,7 @@ package com.getlora.wattrouter.app
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -28,6 +30,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,9 +66,19 @@ class MainActivity : ComponentActivity() {
     private var memory: Memory? = null
     private lateinit var permission: Permission
 
+    /**
+     * What another app shared, until a turn takes it.
+     *
+     * Compose state rather than a field, because the composition is what
+     * notices: a share arriving while the app is already open reaches
+     * [onNewIntent] and nothing recomposes on its own.
+     */
+    private val handed = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val credential = Credential(this)
+        take(intent)
 
         // Here rather than in the composition. AndroidAsking registers an
         // activity-result launcher, which has to happen before this Activity is
@@ -80,7 +93,7 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     when (val now = state) {
-                        is Startup.Ready -> Conversation(driverFor(now, credential))
+                        is Startup.Ready -> Conversation(driverFor(now, credential), handed)
                         Startup.NoCredential, Startup.CoreRefused ->
                             SignInScreen(refused = now == Startup.CoreRefused) { typed ->
                                 // store() answers false for an unusable key, and
@@ -170,6 +183,36 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    /**
+     * A share arriving while the app is already open.
+     *
+     * `setIntent` as well, because `getIntent` keeps answering with whatever
+     * started the Activity: without it a later recreation would read this same
+     * intent again. [take] then empties it, so the pair is what makes a share
+     * happen once — Inbox.drain's "a read removes", in the shape Android has.
+     */
+    override fun onNewIntent(incoming: Intent) {
+        super.onNewIntent(incoming)
+        setIntent(incoming)
+        take(incoming)
+    }
+
+    /** Read a share out of an intent, and leave nothing behind to read twice. */
+    private fun take(incoming: Intent?) {
+        handedIn(
+            incoming?.action,
+            incoming?.type,
+            incoming?.getStringExtra(Intent.EXTRA_TEXT),
+            incoming?.getStringExtra(Intent.EXTRA_SUBJECT),
+        )?.let { shared ->
+            handed.value = shared
+            // Emptied rather than remembered as handled. A rotation recreates
+            // the Activity and reads getIntent() again, and the same note
+            // shared twice is a conversation nobody had.
+            incoming?.action = null
+        }
+    }
+
     override fun onDestroy() {
         (started as? Startup.Ready)?.core?.close()
         memory?.close()
@@ -180,11 +223,21 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun Conversation(driver: TurnDriver) {
+private fun Conversation(driver: TurnDriver, handed: MutableState<String?>) {
     val rows by driver.rows.collectAsState()
     val isRunning by driver.isRunning.collectAsState()
     val routing by driver.routing.collectAsState()
     val context = LocalContext.current
+
+    // Cleared before sending, not after. send() starts a turn and returns, so
+    // clearing afterwards would still be inside this effect and correct — but
+    // clearing first is what makes a recomposition during the turn harmless.
+    LaunchedEffect(handed.value) {
+        handed.value?.let { shared ->
+            handed.value = null
+            driver.send(shared)
+        }
+    }
 
     // The service follows the driver rather than being started beside a send.
     // Every way a turn can end — answered, failed, interrupted — goes through
