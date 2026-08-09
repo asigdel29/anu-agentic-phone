@@ -37,7 +37,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly ROOT
 readonly MANIFEST="$ROOT/router/Cargo.toml"
-readonly OUT="${1:-$ROOT/android/core/jniLibs}"
+readonly OUT="${1:-$ROOT/android/core/src/main/jniLibs}"
 
 # arm64-v8a is Android's name for it; the Rust target and the directory Gradle
 # looks in disagree, and both are needed.
