@@ -8,7 +8,7 @@ again before arguing with a lint.
 `CLAUDE.md` beside this file is a symlink to it. One file, two names, no second copy.
 
 A subtree with an `AGENTS.md` of its own holds what is true only there, and overrides this file
-where they disagree. Three have one: `router/`, `ios/`, `hermes/`.
+where they disagree. Four have one: `router/`, `ios/`, `android/`, `hermes/`.
 
 ## What this is
 

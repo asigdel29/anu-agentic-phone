@@ -20,8 +20,12 @@ true only here.
 | `upstream.rs` | Forwarding a request to the provider. |
 | `metrics.rs` | Counting what the router did. |
 | `ffi.rs` | The C ABI the iOS app calls the core through. |
+| `ffi_answer.rs` | The envelope an allocating ABI call answers with, shared by the two below. |
 | `git.rs` | git operations without a subprocess, behind the `git` feature. |
 | `ffi_git.rs` | Those operations across the ABI, behind the same feature. |
+| `memory.rs` | Bounding what a store loads at open, behind the `memory` feature. |
+| `ffi_memory.rs` | A memory store across the ABI, behind the same feature. |
+| `jni.rs` | The same core reached from Kotlin, behind the `android` feature. |
 | `testenv.rs` | The environment, as the crate's tests are allowed to touch it. |
 
 ## Building and testing
@@ -62,6 +66,12 @@ here.
 and `include/module.modulemap` names the module `WattRouterFFI`, which must match the binary
 target in `ios/Package.swift`. Changing one without the other breaks the import with a message
 naming neither.
+
+Kotlin has the same problem and a different check. `jni.rs` exports symbols by name, so a
+rename is not a compile error on either side — it is an `UnsatisfiedLinkError` on a device. A
+test in `jni.rs` reads `android/src/main/kotlin/com/getlora/wattrouter/Core.kt` by path and
+holds the two in step, which also makes that path load-bearing: move the Kotlin and edit
+`jni.rs` in the same commit.
 
 **Locks.** `cache.rs:91` and `embed.rs:335` hold one each. They are independent, no path takes
 both, and each documents one acquisition per method rather than an order across two. Add a path
