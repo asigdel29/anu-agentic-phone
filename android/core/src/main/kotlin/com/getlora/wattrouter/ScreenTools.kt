@@ -17,6 +17,9 @@
 //   NavigateTool    Pressing one.
 //   Onward          Which way through a list.
 //   ScrollTool      Moving one.
+//   Launchable      An app that can be started.
+//   matching        Which one a name means.
+//   OpenAppTool     Starting it.
 //
 // The seam is why this is in core/ at all. DrivingService is an app-module
 // class holding framework types, and everything here is prose, rendering and
@@ -115,6 +118,63 @@ interface Phone {
      * involved anywhere on this path.
      */
     suspend fun scroll(at: Handle, from: Generation, onward: Onward): Done?
+
+    /**
+     * Every app that can be started from the launcher.
+     *
+     * # Rely
+     * Called from the turn loop. Reads the package manager, which is a list of
+     * a few hundred on a real phone.
+     *
+     * @return null when it cannot be read at all.
+     */
+    suspend fun apps(): List<Launchable>?
+
+    /**
+     * Start one, by package name.
+     *
+     * Package name rather than label, because choosing which app a label means
+     * is the part with decisions in it and it lives on this side of the seam
+     * where a test can reach it.
+     *
+     * # Rely
+     * As [tap]. Reads the screen afterwards, which will often catch the app
+     * mid-launch.
+     */
+    suspend fun open(packageName: String): Done?
+}
+
+/** An app that can be started. */
+data class Launchable(val label: String, val packageName: String)
+
+/** A name as a comparison sees it: no case, no spacing. */
+private fun plain(name: String) = name.lowercase().filterNot { it.isWhitespace() }
+
+/**
+ * Which apps a name means, best first.
+ *
+ * Three tiers, because models write app names the way people say them. Exact
+ * wins outright. Otherwise a prefix — "Maps" for "Maps Go" — and only then a
+ * substring, so "mail" finding Gmail is a last resort rather than a first
+ * guess. Case and spacing are ignored throughout: "WhatsApp", "whatsapp" and
+ * "Whats App" are one app to everybody except a string comparison.
+ *
+ * @return the best tier that matched anything, or empty. More than one is for
+ *   the caller to refuse rather than choose between — two apps called Calendar
+ *   is ordinary on a phone with a work profile, and picking the first is
+ *   picking somebody's employer at random.
+ */
+internal fun matching(name: String, apps: List<Launchable>): List<Launchable> {
+    val wanted = plain(name)
+    if (wanted.isEmpty()) return emptyList()
+
+    val exact = apps.filter { plain(it.label) == wanted }
+    if (exact.isNotEmpty()) return exact
+
+    val prefixed = apps.filter { plain(it.label).startsWith(wanted) }
+    if (prefixed.isNotEmpty()) return prefixed
+
+    return apps.filter { plain(it.label).contains(wanted) }
 }
 
 /**
@@ -423,5 +483,47 @@ class ScrollTool(private val phone: Phone) : Tool {
             ?: return "there is no direction called that. Try one of: ${Onward.words}."
 
         return TapTool.say(phone.scroll(handle, seen, onward))
+    }
+}
+
+/** Start an app by name. */
+class OpenAppTool(private val phone: Phone) : Tool {
+    override val name = "open_app"
+
+    override val purpose =
+        "Open an app by its name, as it appears under its icon. Answers with the " +
+            "screen afterwards, which will often catch the app still starting — " +
+            "read it again if it looks unfinished."
+
+    override val schema = """
+        {"type":"object","properties":{"name":{"type":"string",
+        "description":"The app's name, as a person would say it."}},"required":["name"]}
+    """.trimIndent().replace("\n", "")
+
+    /** # Rely
+     *  Obtains no capability, as [TapTool]. */
+    override suspend fun run(arguments: String): String {
+        val wanted = Tools.field(arguments, "name").trim()
+        if (wanted.isEmpty()) return "no app was named, so nothing was opened"
+
+        val installed = phone.apps()
+            ?: return "the list of apps could not be read"
+
+        return when (val found = matching(wanted, installed)) {
+            // Without listing the phone: a hundred installed apps is not an
+            // error message, and somebody looking at their own home screen can
+            // supply the exact name.
+            emptyList<Launchable>() ->
+                "there is no app called \"$wanted\" on this phone. Try its exact " +
+                    "name as it appears under its icon."
+
+            else -> if (found.size > 1) {
+                "more than one app matches \"$wanted\": " +
+                    found.joinToString(", ") { it.label } +
+                    ". Name one of those exactly."
+            } else {
+                TapTool.say(phone.open(found.single().packageName))
+            }
+        }
     }
 }

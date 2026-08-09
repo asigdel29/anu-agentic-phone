@@ -25,6 +25,10 @@ private class Showing(private val reading: Reading?) : Phone {
     override suspend fun navigate(way: Way): Done? = null
 
     override suspend fun scroll(at: Handle, from: Generation, onward: Onward): Done? = null
+
+    override suspend fun apps(): List<Launchable>? = null
+
+    override suspend fun open(packageName: String): Done? = null
 }
 
 class ScreenToolsTest {
@@ -148,6 +152,8 @@ private class Tapping(private val done: Done?, private val reading: Reading? = n
     var typed: String? = null
     var pressed: Way? = null
     var moved: Onward? = null
+    var opened: String? = null
+    var installed: List<Launchable>? = emptyList()
 
     override suspend fun read() = reading
 
@@ -160,6 +166,10 @@ private class Tapping(private val done: Done?, private val reading: Reading? = n
 
     override suspend fun scroll(at: Handle, from: Generation, onward: Onward) =
         done.also { asked = at to from; moved = onward }
+
+    override suspend fun apps() = installed
+
+    override suspend fun open(packageName: String) = done.also { opened = packageName }
 }
 
 class TapToolTest {
@@ -451,5 +461,91 @@ class ScrollToolTest {
         val said = TapTool.say(Done.Refused("it is already at the end, so nothing moved"))
 
         assertTrue(said, said.contains("already at the end"))
+    }
+}
+
+class OpenAppToolTest {
+    private val gmail = Launchable("Gmail", "com.google.android.gm")
+    private val maps = Launchable("Maps", "com.google.android.apps.maps")
+    private val mapsGo = Launchable("Maps Go", "com.google.android.apps.mapslite")
+    private val calendar = Launchable("Calendar", "com.android.calendar")
+    private val workCalendar = Launchable("Calendar", "com.work.calendar")
+
+    private fun phone(vararg apps: Launchable) =
+        Tapping(Done.Did(null)).also { it.installed = apps.toList() }
+
+    @Test
+    fun anExactNameWinsOutright() {
+        // Even though "Maps" is also a prefix of "Maps Go".
+        assertEquals(listOf(maps), matching("Maps", listOf(mapsGo, maps)))
+    }
+
+    @Test
+    fun caseAndSpacingAreNotWhatTellsAppsApart() {
+        val whatsApp = Launchable("WhatsApp", "com.whatsapp")
+
+        assertEquals(listOf(whatsApp), matching("whatsapp", listOf(whatsApp)))
+        assertEquals(listOf(whatsApp), matching("Whats App", listOf(whatsApp)))
+        assertEquals(listOf(whatsApp), matching("  WHATSAPP ", listOf(whatsApp)))
+    }
+
+    @Test
+    fun aPrefixIsTriedBeforeASubstring() {
+        // "mail" finding Gmail is a last resort rather than a first guess.
+        val mailbox = Launchable("Mailbox", "com.mailbox")
+
+        assertEquals(listOf(mailbox), matching("mail", listOf(gmail, mailbox)))
+        assertEquals(listOf(gmail), matching("mail", listOf(gmail)))
+    }
+
+    @Test
+    fun twoAppsWithOneNameAreNotChosenBetween() = runTest {
+        // Ordinary on a phone with a work profile, and picking the first is
+        // picking somebody's employer at random.
+        val phone = phone(calendar, workCalendar)
+
+        val said = OpenAppTool(phone).run("""{"name":"Calendar"}""")
+
+        assertTrue(said, said.contains("more than one app matches"))
+        assertNull("nothing should have opened", phone.opened)
+    }
+
+    @Test
+    fun oneMatchIsOpenedByItsPackage() = runTest {
+        val phone = phone(gmail, maps)
+
+        OpenAppTool(phone).run("""{"name":"gmail"}""")
+
+        assertEquals("com.google.android.gm", phone.opened)
+    }
+
+    @Test
+    fun nothingMatchingDoesNotListThePhone() = runTest {
+        // A hundred installed apps is not an error message.
+        val phone = phone(gmail, maps, calendar)
+
+        val said = OpenAppTool(phone).run("""{"name":"Ledger"}""")
+
+        assertTrue(said, said.contains("no app called \"Ledger\""))
+        assertTrue(said, !said.contains("Gmail"))
+        assertNull(phone.opened)
+    }
+
+    @Test
+    fun anEmptyNameIsNotEveryApp() = runTest {
+        // A blank pattern matching everything is the call this tool exists to
+        // not make, the same one Contacts.kt refuses.
+        val phone = phone(gmail, maps)
+
+        assertTrue(OpenAppTool(phone).run("""{"name":"  "}""").contains("no app was named"))
+        assertEquals(emptyList<Launchable>(), matching("", listOf(gmail, maps)))
+        assertNull(phone.opened)
+    }
+
+    @Test
+    fun aListThatCannotBeReadIsNotAnEmptyPhone() = runTest {
+        val phone = Tapping(Done.Did(null)).also { it.installed = null }
+
+        assertTrue(OpenAppTool(phone).run("""{"name":"Gmail"}""").contains("could not be read"))
     }
 }
