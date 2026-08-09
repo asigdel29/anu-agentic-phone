@@ -2,6 +2,8 @@
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
+//   2026-08-09  A. Sigdel  Serialised the three calls against each other, now
+//                          that they can run on different threads.
 //
 // Core.kt's shape, for the same reasons: a private constructor over a handle
 // the native side owns, AutoCloseable, and an idempotent close, because a
@@ -33,7 +35,13 @@ class Memory private constructor(private var handle: Long) : AutoCloseable {
      *   with no text is refused inside it rather than stored: nothing indexes
      *   it, so it could never be recalled and would still count against the
      *   horizon.
+     *
+     * # Atomic
+     * Free of interference with [close]. See [Core.decide]: until #474 every
+     * one of these ran on the main thread, and moving them off it makes an
+     * Activity destroyed mid-turn a free under a call in flight.
      */
+    @Synchronized
     fun remember(text: String, speaker: String, session: String, at: Long): String? {
         check(handle != 0L) { "this store has been closed" }
         return nativeRemember(handle, session, speaker, text, at)
@@ -45,12 +53,24 @@ class Memory private constructor(private var handle: Long) : AutoCloseable {
      * @param most how much evidence to return, or 0 for the store's own default
      *   rather than nothing.
      * @return the envelope, carrying the route taken and what was found.
+     *
+     * # Atomic
+     * As [remember].
      */
+    @Synchronized
     fun recall(query: String, most: Int = 0): String? {
         check(handle != 0L) { "this store has been closed" }
         return nativeRecall(handle, query, most.toLong())
     }
 
+    /**
+     * Release the store.
+     *
+     * # Atomic
+     * Waits for a [remember] or [recall] in flight rather than freeing under
+     * it. Idempotent, so a caller that closed it already need not check.
+     */
+    @Synchronized
     override fun close() {
         if (handle == 0L) return
         nativeFree(handle)

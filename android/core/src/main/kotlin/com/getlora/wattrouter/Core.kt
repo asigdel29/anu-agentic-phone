@@ -2,6 +2,8 @@
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
+//   2026-08-09  A. Sigdel  Serialised decide against close, now that they can
+//                          run on different threads.
 //
 // The declarations libwattrouter.so satisfies, and nothing else. There is no
 // Gradle module around this yet: `just android-core` produces the library and
@@ -71,7 +73,16 @@ class Core private constructor(private var handle: Long) : AutoCloseable {
      *   and the chain, or `{"error": "…"}`. Null only if the runtime could not
      *   allocate a string, which is an out-of-memory condition rather than an
      *   answer.
+     *
+     * # Atomic
+     * Free of interference with [close]. Until #474 both ran on the main
+     * thread and the ordering was the platform's; now the call blocks on
+     * whatever thread [Core.routing] moved it to, and an Activity being
+     * destroyed mid-turn would otherwise free the handle under it. Cancelling
+     * a coroutine does not interrupt a blocking native frame, so the lock is
+     * the only thing that makes the check above mean anything.
      */
+    @Synchronized
     fun decide(body: String, session: String = ""): String? {
         check(handle != 0L) { "this core has been closed" }
         return nativeDecide(handle, body, session)
@@ -82,7 +93,11 @@ class Core private constructor(private var handle: Long) : AutoCloseable {
      *
      * Idempotent, because a handle cleared twice is a thing that happens and a
      * double free is not a thing to allow.
+     *
+     * # Atomic
+     * Waits for a [decide] in flight rather than freeing under it.
      */
+    @Synchronized
     override fun close() {
         if (handle == 0L) return
         nativeFree(handle)

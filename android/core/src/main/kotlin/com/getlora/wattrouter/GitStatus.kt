@@ -2,6 +2,7 @@
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
+//   2026-08-09  A. Sigdel  Moved the read off the caller's thread.
 //
 // Contents
 //   GitHead        Where HEAD points.
@@ -20,6 +21,8 @@
 
 package com.getlora.wattrouter
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
@@ -122,8 +125,11 @@ class GitStatusTool(private val repository: Worktree) : Tool {
     /** # Rely
      *  Nothing. There is no capability to obtain: the repository is the app's
      *  own directory, and reading it is disk work rather than a dialog. */
+    // Dispatchers.IO here and in the two writes: libgit2 across JNI, over a
+    // working tree. #474 has why the switch is at each call rather than in the
+    // driver.
     override suspend fun run(arguments: String): String =
-        answer(GitStatus.from(repository.status()))
+        answer(withContext(Dispatchers.IO) { GitStatus.from(repository.status()) })
 
     companion object {
         /** An envelope as the model reads it, whichever half arrived. */

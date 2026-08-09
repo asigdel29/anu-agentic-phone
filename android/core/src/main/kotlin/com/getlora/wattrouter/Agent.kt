@@ -2,6 +2,7 @@
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
+//   2026-08-09  A. Sigdel  Routing suspends, so deciding leaves the UI free.
 //
 // Four properties, each a way this goes wrong quietly.
 //
@@ -20,10 +21,12 @@
 
 package com.getlora.wattrouter
 
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
 
 /** Why a turn stopped without answering. */
 sealed class AgentError(message: String) : Exception(message) {
@@ -43,11 +46,33 @@ sealed class AgentError(message: String) : Exception(message) {
  * slowest place to learn one of them is wrong. [Core.routing] is the real one.
  */
 fun interface Routing {
-    fun decide(body: String, session: String): Decision?
+    /**
+     * Where a request should go.
+     *
+     * # Rely
+     * Suspending, and that is the point rather than a formality. The real
+     * implementation is a blocking native call, the loop below runs in its
+     * collector's context, and MainActivity collects on the main thread — so a
+     * plain function here would embed a prompt on the UI thread once per round.
+     * #474 has the measurement. A fake in a test does not have to suspend and
+     * is not asked to.
+     */
+    suspend fun decide(body: String, session: String): Decision?
 }
 
-/** This core, as the loop sees it. */
-fun Core.routing() = Routing { body, session -> Decision.from(decide(body, session)) }
+/**
+ * This core, as the loop sees it.
+ *
+ * # Rely
+ * Runs the call on [Dispatchers.IO] rather than on the caller's thread.
+ * NeuralWattInference makes the same move with `flowOn` and gives the same
+ * reason: every call here blocks. The switch is at the seam rather than in
+ * TurnDriver because a scope is the caller's to choose, and TurnDriverTest
+ * relies on being able to choose it.
+ */
+fun Core.routing() = Routing { body, session ->
+    withContext(Dispatchers.IO) { Decision.from(decide(body, session)) }
+}
 
 /** One conversation, and the loop that advances it. */
 class Agent(

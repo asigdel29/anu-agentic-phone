@@ -2,6 +2,7 @@
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
+//   2026-08-09  A. Sigdel  Moved the writes off the caller's thread.
 //
 // Contents
 //   GitAddTool     Stage paths.
@@ -20,6 +21,8 @@
 
 package com.getlora.wattrouter
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -83,7 +86,9 @@ class GitAddTool(private val repository: Worktree) : Tool {
         // above as a complaint about the arguments it wrote correctly.
         if (paths.isEmpty()) return "no paths were named, so nothing was staged"
 
-        return GitStatusTool.answer(GitStatus.from(repository.add(paths)))
+        return GitStatusTool.answer(
+            withContext(Dispatchers.IO) { GitStatus.from(repository.add(paths)) },
+        )
     }
 }
 
@@ -114,6 +119,6 @@ class GitCommitTool(private val repository: Worktree) : Tool {
         // writes a commit whose tree matches its parent without complaint, and
         // a model doing that in a loop believes it is making progress. This
         // renders that refusal rather than second-guessing it.
-        return committed(repository.commit(message))
+        return committed(withContext(Dispatchers.IO) { repository.commit(message) })
     }
 }
