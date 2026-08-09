@@ -4,6 +4,9 @@
 # History
 #   2026-08-07  A. Sigdel  Created, from a row of the standard's enforcement table
 #                          that had named it for two months without it existing.
+#   2026-08-08  A. Sigdel  Reads Kotlin too. The six files that existed already
+#                          passed, which is the moment to add a gate rather than
+#                          the moment it is not needed.
 #
 # Usage
 #   scripts/lint/file-headers.sh [path ...]
@@ -12,12 +15,12 @@
 # carry a header, 1 otherwise, listing what is missing from which.
 #
 # The header shape differs by language and the difference is not cosmetic. Rust
-# uses `//!` because a module doc is an item attribute; Swift and shell use `//`
-# and `#`; Python uses a module docstring, and it does not repeat the filename
-# because the module is already named by the import that reaches it. A check
-# demanding one shape would be wrong about three of them, so each is read on its
-# own terms and only the two things that must be true everywhere are required:
-# the file says what it is, and it says when it changed.
+# uses `//!` because a module doc is an item attribute; Swift, Kotlin and shell
+# use `//` and `#`; Python uses a module docstring, and it does not repeat the
+# filename because the module is already named by the import that reaches it. A
+# check demanding one shape would be wrong about three of them, so each is read
+# on its own terms and only the two things that must be true everywhere are
+# required: the file says what it is, and it says when it changed.
 
 set -euo pipefail
 
@@ -77,7 +80,7 @@ if [ "$#" -gt 0 ]; then
 else
     while IFS= read -r -d '' path; do
         files+=("$path")
-    done < <(git ls-files -z '*.rs' '*.py' '*.swift' '*.sh')
+    done < <(git ls-files -z '*.rs' '*.py' '*.swift' '*.kt' '*.kts' '*.sh')
 fi
 
 printf 'file-headers: %s source file(s)\n' "${#files[@]}"

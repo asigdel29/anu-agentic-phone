@@ -2,9 +2,9 @@
 
 This repository follows Doug Lea's [Java Coding
 Standard](https://gee.cs.oswego.edu/dl/html/javaCodingStd.html). That document is written for
-Java; this repository is Rust, Python, shell and YAML. This file records the adaptation, so a
-reader can tell what is expected, what a tool will reject, and which rules were dropped on
-purpose rather than forgotten.
+Java; this repository is Rust, Swift, Kotlin, Python, shell and YAML. This file records the
+adaptation, so a reader can tell what is expected, what a tool will reject, and which rules
+were dropped on purpose rather than forgotten.
 
 The standard's premise is that a reader should be able to use a piece of code correctly
 without reading its body. Most of what follows serves that.
@@ -46,11 +46,14 @@ The standard specifies a formal shape for method documentation. Restated for thi
 | `GENERATE T` | Creates new entities | Stated in `# Returns` |
 | `PREV(obj)` | Pre-call state | Stated inline where needed |
 
-`# Rely` is required on every `pub async fn`, and `# Atomic` on every method touching shared
-state. Both are checked by `scripts/lint/doc-tags.sh`. They matter here because the router
-holds three pieces of shared mutable state — the ONNX session, the decision cache, and the
-upstream connection pool — and a caller cannot reason about a request path without knowing
-which operations are safe to interleave.
+`# Rely` is required on every suspending public function — `pub async fn` in Rust, `suspend
+fun` in Kotlin — and `# Atomic` on every method touching shared state. `# Rely` is checked by
+`scripts/lint/doc-tags.sh`; `# Atomic` is not, and the Enforcement section below says why.
+
+They matter here because the router holds three pieces of shared mutable state — the ONNX
+session, the decision cache, and the upstream connection pool — and a caller cannot reason
+about a request path without knowing which operations are safe to interleave. The phones hold
+the same count for the same reason: a turn loop, a permission seam, and a store.
 
 ```rust
 /// Score a prompt's difficulty as the probability that the strong model wins.
@@ -169,7 +172,7 @@ The standard is CI's business, not review's, wherever a machine can decide.
 |---|---|
 | File headers | `scripts/lint/file-headers.sh` |
 | Public items documented | `missing_docs` denied; ruff `D` |
-| `# Rely` on `pub async fn`, `# Errors` on a public `Result` | `scripts/lint/doc-tags.sh` |
+| `# Rely` on `pub async fn` and `suspend fun`, `# Errors` on a public `Result` | `scripts/lint/doc-tags.sh` |
 | Formatting | `cargo fmt --check`, `ruff format --check`, `shfmt`, `yamllint` |
 | Lints | `cargo clippy -D warnings`, `ruff check`, `shellcheck` |
 | Types | `mypy --strict` |
@@ -185,6 +188,11 @@ tags a script decides. Whether a function touches shared state needs to know wha
 holds and what its callees reach; whether it can panic needs the same walk, since a panic hides
 behind any callee. A gate that guessed at either would fail honest code or miss the cases that
 matter, and a wrong gate is worse than a stated gap.
+
+Kotlin's failures join them, for a different reason: there are no checked exceptions and
+nothing here returns `Result`, so a gate has no signature to read a failure off. The condition
+still has to be named. It is review that keeps it, which is a weaker guarantee than the Rust
+side has and is written down rather than left to be discovered.
 
 ## Commits, pull requests, prose
 
