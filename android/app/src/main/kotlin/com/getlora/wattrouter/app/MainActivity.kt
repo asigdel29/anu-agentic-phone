@@ -37,6 +37,9 @@ import androidx.compose.ui.platform.LocalContext
 import com.getlora.wattrouter.Agent
 import com.getlora.wattrouter.ChainWalk
 import com.getlora.wattrouter.Credential
+import com.getlora.wattrouter.Memory
+import com.getlora.wattrouter.RecallTool
+import com.getlora.wattrouter.RememberTool
 import com.getlora.wattrouter.NeuralWattInference
 import com.getlora.wattrouter.Row
 import com.getlora.wattrouter.Startup
@@ -46,6 +49,7 @@ import com.getlora.wattrouter.routing
 
 class MainActivity : ComponentActivity() {
     private var started: Startup? = null
+    private var memory: Memory? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -91,17 +95,36 @@ class MainActivity : ComponentActivity() {
                 Agent(
                     router = ready.core.routing(),
                     walk = ChainWalk(NeuralWattInference(credential.read().orEmpty())),
-                    // No tools yet. An empty array tells the model so, rather
-                    // than telling it nothing.
-                    tools = ToolBox(emptyList()),
+                    tools = ToolBox(remembering()),
                 ),
                 scope,
             )
         }
     }
 
+    /**
+     * The memory tools, if a store opened.
+     *
+     * An empty list rather than a refusal when it did not: a phone that cannot
+     * open a store can still hold a conversation, and a model offered a tool
+     * that always fails learns to apologise rather than to stop asking.
+     *
+     * The store lives in filesDir rather than cacheDir. Everything in cacheDir
+     * is the system's to delete when space is short, and this is the one file
+     * here nobody can reconstruct.
+     */
+    private fun remembering(): List<com.getlora.wattrouter.Tool> {
+        val where = java.io.File(filesDir, "memory").apply { mkdirs() }
+        val store = Memory.open(java.io.File(where, "memory.db").absolutePath)
+            ?: return emptyList()
+        memory = store
+        return listOf(RememberTool(store, session = "phone"), RecallTool(store))
+    }
+
     override fun onDestroy() {
         (started as? Startup.Ready)?.core?.close()
+        memory?.close()
+        memory = null
         started = null
         super.onDestroy()
     }
