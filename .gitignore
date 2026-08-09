@@ -56,6 +56,12 @@ ios/.build/
 # not something to track.
 android/jniLibs/
 
+# Gradle's own output and the SDK path it wants written down. local.properties is
+# machine-specific and is exactly the file somebody commits by accident.
+android/build/
+android/.gradle/
+android/local.properties
+
 # The Xcode project, generated from ios/project.yml by `just ios-project`. A
 # checked-in pbxproj is unreviewable under this repository's size limit: it is
 # generated, it reorders itself between Xcode versions, and it conflicts on every

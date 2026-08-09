@@ -75,6 +75,29 @@ ios-test:
 android-core:
     scripts/build-android-core.sh
 
+# Build the Android library, core first. The core is cargo's to build and Gradle
+# only packages it, so the order is not a convenience: an AAR assembled without
+# it installs and fails to load.
+android:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if ! command -v gradle >/dev/null 2>&1; then
+        cat >&2 <<'EOF'
+    gradle is not installed, and this project has no wrapper — a wrapper is a jar,
+    and this repository does not track binaries it cannot review. Install it with:
+
+      brew install gradle
+    EOF
+        exit 1
+    fi
+
+    scripts/build-android-core.sh >/dev/null
+    # Gradle wants the SDK by environment or by a local.properties, and
+    # local.properties is a machine-specific file somebody would commit.
+    cd android && ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}" \
+        gradle assembleDebug --console=plain
+
 # Check the stack end to end. Needs a router; `just up` first.
 verify:
     scripts/verify-stack.sh {{ "http://" + router_addr }}
@@ -142,10 +165,22 @@ toolchain:
     # Android is optional and reported rather than required: the board and the
     # phone build without it, and `just toolchain` failing over a milestone
     # somebody is not working on is a check people learn to ignore.
-    if [ -d "${ANDROID_NDK_HOME:-${ANDROID_HOME:-$HOME/Library/Android/sdk}/ndk}" ]; then
-        printf '  present  %-10s %s\n' "ndk" "build the core for Android"
+    for entry in \
+        "ndk|build the core for Android|${ANDROID_NDK_HOME:-${ANDROID_HOME:-$HOME/Library/Android/sdk}/ndk}" \
+        "sdk|build the Android library|${ANDROID_HOME:-$HOME/Library/Android/sdk}/platforms"
+    do
+        what="${entry%%|*}"; rest="${entry#*|}"
+        why="${rest%%|*}"; where="${rest##*|}"
+        if [ -d "$where" ]; then
+            printf '  present  %-10s %s\n' "$what" "$why"
+        else
+            printf '  absent   %-10s %s (optional)\n' "$what" "$why"
+        fi
+    done
+    if command -v gradle >/dev/null 2>&1; then
+        printf '  present  %-10s %s\n' "gradle" "build the Android library"
     else
-        printf '  absent   %-10s %s\n' "ndk" "build the core for Android (optional)"
+        printf '  absent   %-10s %s (optional)\n' "gradle" "build the Android library"
     fi
 
     # Python 3.11+ is Hermes's floor. Checked explicitly because an older
