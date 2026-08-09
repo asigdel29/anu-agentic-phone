@@ -21,6 +21,8 @@ private class Showing(private val reading: Reading?) : Phone {
     override suspend fun tap(at: Handle, from: Generation): Done? = null
 
     override suspend fun type(at: Handle, from: Generation, text: String): Done? = null
+
+    override suspend fun navigate(way: Way): Done? = null
 }
 
 class ScreenToolsTest {
@@ -142,6 +144,7 @@ class ScreenToolsTest {
 private class Tapping(private val done: Done?, private val reading: Reading? = null) : Phone {
     var asked: Pair<Handle, Generation>? = null
     var typed: String? = null
+    var pressed: Way? = null
 
     override suspend fun read() = reading
 
@@ -149,6 +152,8 @@ private class Tapping(private val done: Done?, private val reading: Reading? = n
 
     override suspend fun type(at: Handle, from: Generation, text: String) =
         done.also { asked = at to from; typed = text }
+
+    override suspend fun navigate(way: Way) = done.also { pressed = way }
 }
 
 class TapToolTest {
@@ -292,5 +297,59 @@ class TypeTextToolTest {
         // differently is two things for a model to learn about one event.
         assertEquals(TapTool.say(Done.Lost(Resolution.Missing)), TapTool.say(Done.Lost(Resolution.Missing)))
         assertTrue(TapTool.say(Done.Refused("that is a password field")).contains("password field"))
+    }
+}
+
+class NavigateToolTest {
+    @Test
+    fun eachWordReachesItsButton() = runTest {
+        Way.entries.forEach { way ->
+            val phone = Tapping(Done.Did(null))
+
+            NavigateTool(phone).run("""{"where":"${way.word}"}""")
+
+            assertEquals(way, phone.pressed)
+        }
+    }
+
+    @Test
+    fun aWordThatIsNotOneListsTheOnesThatAre() = runTest {
+        // The posture ToolBox takes on an unknown tool name. Guessing at a
+        // near miss is the mistake resolve refuses to make.
+        val phone = Tapping(Done.Did(null))
+
+        val said = NavigateTool(phone).run("""{"where":"go_back"}""")
+
+        assertTrue(said, said.contains("back, home, recents, notifications"))
+        assertNull("nothing should have been pressed", phone.pressed)
+    }
+
+    @Test
+    fun aCallWithNoButtonIsTheSameRefusal() = runTest {
+        val phone = Tapping(Done.Did(null))
+
+        assertTrue(NavigateTool(phone).run("{}").contains("Try one of"))
+        assertTrue(NavigateTool(phone).run("not json").contains("Try one of"))
+        assertNull(phone.pressed)
+    }
+
+    @Test
+    fun aWordWithSpaceAroundItStillWorks() = runTest {
+        // The same forgiveness decode gives a token. Models pad things.
+        val phone = Tapping(Done.Did(null))
+
+        NavigateTool(phone).run("""{"where":" home "}""")
+
+        assertEquals(Way.HOME, phone.pressed)
+    }
+
+    @Test
+    fun thePurposeSaysBackDependsOnWhereItIsPressed() {
+        // From an app's first screen it leaves the app; over a keyboard it
+        // closes the keyboard. The tool cannot know which, so it says so.
+        val said = NavigateTool(Tapping(null)).purpose
+
+        assertTrue(said, said.contains("leaves the app"))
+        assertTrue(said, said.contains("keyboard"))
     }
 }

@@ -13,6 +13,8 @@
 //   ReadScreenTool  Looking.
 //   TapTool         Touching.
 //   TypeTextTool    Filling something in.
+//   Way             A button the system owns.
+//   NavigateTool    Pressing one.
 //
 // The seam is why this is in core/ at all. DrivingService is an app-module
 // class holding framework types, and everything here is prose, rendering and
@@ -93,6 +95,42 @@ interface Phone {
      *   is a thing somebody asks for.
      */
     suspend fun type(at: Handle, from: Generation, text: String): Done?
+
+    /**
+     * Press one of the system's own buttons.
+     *
+     * # Rely
+     * As [tap]. Takes no generation: a global action names no node, so there
+     * is nothing about it that can go stale.
+     */
+    suspend fun navigate(way: Way): Done?
+}
+
+/**
+ * A button the system owns.
+ *
+ * Closed, and the refusal lists it. A model writing `go_back` should be told
+ * the words that work, the way ToolBox answers an unknown tool with the names
+ * that exist — guessing at a near miss is the mistake resolve refuses to make.
+ */
+enum class Way(val word: String) {
+    /**
+     * Back. What it does depends on where it is pressed: from an app's first
+     * screen it leaves the app, over a keyboard it closes that instead. The
+     * tool cannot know which, so the answer is the screen afterwards.
+     */
+    BACK("back"),
+    HOME("home"),
+    RECENTS("recents"),
+    NOTIFICATIONS("notifications"),
+    ;
+
+    companion object {
+        fun of(word: String?): Way? = entries.firstOrNull { it.word == word?.trim() }
+
+        /** The words that work, for a refusal to name. */
+        val words: String get() = entries.joinToString(", ") { it.word }
+    }
 }
 
 /** A generation as the model reads one: `k3f9.4`. */
@@ -292,5 +330,31 @@ class TypeTextTool(private val phone: Phone) : Tool {
         }
 
         return TapTool.say(phone.type(handle, seen, text))
+    }
+}
+
+/** Press one of the system's own buttons. */
+class NavigateTool(private val phone: Phone) : Tool {
+    override val name = "navigate"
+
+    override val purpose =
+        "Press one of the phone's own buttons: back, home, recents, or " +
+            "notifications. What back does depends on where you press it — from " +
+            "an app's first screen it leaves the app, and over a keyboard it " +
+            "closes the keyboard. Read the answer to see where you ended up."
+
+    override val schema = """
+        {"type":"object","properties":{"where":{"type":"string",
+        "enum":["back","home","recents","notifications"],
+        "description":"Which button to press."}},"required":["where"]}
+    """.trimIndent().replace("\n", "")
+
+    /** # Rely
+     *  Obtains no capability, as [TapTool]. */
+    override suspend fun run(arguments: String): String {
+        val way = Way.of(Tools.field(arguments, "where"))
+            ?: return "there is no button called that. Try one of: ${Way.words}."
+
+        return TapTool.say(phone.navigate(way))
     }
 }
