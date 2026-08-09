@@ -380,4 +380,10 @@ et al., arXiv:2607.29377).
 
 ## License
 
-MIT.
+MIT — [`LICENSE`](LICENSE).
+
+The applications statically link a great deal that is not MIT-licensed by us, and
+[`THIRD-PARTY.md`](THIRD-PARTY.md) is the notice that has to travel with a binary. It is
+generated from the dependency graph by `scripts/notices.sh`; the part worth reading is the
+preamble, which covers the three things the metadata gets wrong — libgit2 is GPL-2.0 with a
+linking exception, SQLite is public domain, and one transitive crate is MPL-2.0.
