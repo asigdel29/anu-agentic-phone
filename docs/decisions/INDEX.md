@@ -23,6 +23,7 @@ nothing in a diff records it, so no pull request body can either.
 | [what-android-allows.md](what-android-allows.md) | What can an Android agent do that an iOS one cannot, and what stops each of those things? |
 | [memory-on-a-phone-forgets.md](memory-on-a-phone-forgets.md) | What bounds the memory store on a phone, and why is it not a fork? |
 | [what-computer-use-means.md](what-computer-use-means.md) | Which of three products is "the agent takes control of a computer", and what are the other two for? |
+| [how-the-agent-drives.md](how-the-agent-drives.md) | How does the agent read and act on another app's screen, and why does the model never see a coordinate? |
 
 ## Decisions argued in a pull request
 
