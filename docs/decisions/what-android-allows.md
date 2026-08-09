@@ -69,16 +69,26 @@ doing over the top of it.
 
 ## Long work has somewhere to run
 
-A foreground service with a persistent notification runs for as long as it is useful, with
-no system-imposed ceiling beyond the user dismissing it.
+A foreground service with a persistent notification runs for as long as it is useful — with a
+ceiling that depends on which kind it says it is, and the answer has changed since this was
+written.
 
 iOS has nothing equivalent — `beginBackgroundTask` buys seconds, not minutes — which is why
 `TurnDriver.isLong` exists there to warn somebody before they walk away rather than to keep
 working. On Android the same tier can simply finish, and the notification is where the turn
 reports itself.
 
-Android 14 requires a declared `foregroundServiceType`; `dataSync` is the honest one for an
-agent turn.
+Android 14 requires a declared `foregroundServiceType`. This said `dataSync` was the honest
+one for an agent turn, and Android 15 has partly overtaken that: `dataSync` is capped at six
+hours in any twenty-four, after which `onTimeout()` fires and the service must stop or be
+killed. `specialUse` is uncapped, and needs no Play justification for a build that is
+sideloaded, so it is the honest one now.
+
+Worth being precise about what the service buys, too, because it is less than the section
+title suggests. What keeps a turn running is a process the system is not looking to reclaim;
+what the service actually adds is a notification saying so, with somewhere to cancel from. An
+`AccessibilityService` is bound by the system and outside background restrictions already, so
+the phone-driving work in #233 does not need one of these to survive.
 
 ## A shell, and the constraint that shapes it
 
