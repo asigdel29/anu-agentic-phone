@@ -649,3 +649,78 @@ class WaitForChangeToolTest {
         assertEquals(2, phone.looks)
     }
 }
+
+class FindOnScreenToolTest {
+    private val generation = Generation("k3f9", 4)
+
+    private fun line(label: String, at: Int) = Sighting(
+        handle = Handle("row", "text", label, null, at),
+        role = "text",
+        label = label,
+    )
+
+    private fun screen(vararg labels: String) = Changing(
+        listOf(Reading(generation, labels.mapIndexed { at, it -> line(it, at) })),
+    )
+
+    @Test
+    fun itSearchesPastWhatReadScreenPrints() = runTest {
+        // The point of the tool. The handles beyond the limit exist; they are
+        // only not on the page.
+        val many = List(ReadScreenTool.LIMIT + 20) { "row $it" } + "Notifications"
+
+        val said = FindOnScreenTool(screen(*many.toTypedArray())).run("""{"text":"Notifications"}""")
+
+        assertTrue(said, said.contains("Notifications"))
+        assertEquals(2, said.lines().size)
+    }
+
+    @Test
+    fun itMatchesWhatTheScreenSaysRatherThanTheHandle() = runTest {
+        val said = FindOnScreenTool(screen("Wi-Fi & networks", "Bluetooth"))
+            .run("""{"text":"wifi"}""")
+
+        // "wifi" does not appear in "Wi-Fi & networks", so this is the honest
+        // answer rather than a fuzzy match nobody asked for.
+        assertTrue(said, said.contains("nothing on this screen says"))
+    }
+
+    @Test
+    fun caseIsNotWhatTellsALineApart() = runTest {
+        val said = FindOnScreenTool(screen("Bluetooth", "Display")).run("""{"text":"bluetooth"}""")
+
+        assertTrue(said, said.contains("h:row|text|Bluetooth||0"))
+    }
+
+    @Test
+    fun theAnswerCarriesTheScreenIdSoTheHandlesCanBeUsed() = runTest {
+        val said = FindOnScreenTool(screen("Bluetooth")).run("""{"text":"blue"}""")
+
+        assertTrue(said, said.startsWith("screen k3f9.4"))
+    }
+
+    @Test
+    fun nothingMatchingIsNotAnUnreadableScreen() = runTest {
+        val said = FindOnScreenTool(screen("Bluetooth", "Display")).run("""{"text":"Ledger"}""")
+
+        assertTrue(said, said.contains("nothing on this screen says \"Ledger\""))
+        assertTrue(said, said.contains("2 things on it"))
+        assertTrue(said, !said.contains("Accessibility"))
+    }
+
+    @Test
+    fun aBlankSearchIsNotEveryLine() = runTest {
+        // read_screen with extra steps, and on a long screen read_screen
+        // without the limit.
+        val said = FindOnScreenTool(screen("Bluetooth")).run("""{"text":"  "}""")
+
+        assertTrue(said, said.contains("no words were given"))
+    }
+
+    @Test
+    fun anUnreadableScreenBorrowsTheSameSentence() = runTest {
+        val said = FindOnScreenTool(Changing(listOf(null))).run("""{"text":"Bluetooth"}""")
+
+        assertEquals(ReadScreenTool.describe(null), said)
+    }
+}
