@@ -124,12 +124,3 @@ class ConversationTest {
         assertTrue(held[0].content == "first")
     }
 }
-
-// TEMPORARY — proves the android job can turn `Required` red. Reverted in the
-// next commit; see the pull request body for the run this produced.
-class DeliberateFailureTest {
-    @org.junit.Test
-    fun theAggregatorNoticesWhenThisFails() {
-        org.junit.Assert.assertEquals("this must fail", 1, 2)
-    }
-}
