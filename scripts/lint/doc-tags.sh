@@ -7,13 +7,22 @@
 #   2026-08-08  A. Sigdel  Reads Kotlin as well, before the Android work makes it
 #                          most of the codebase. Also fixed a count that reported
 #                          each finding twice.
+#   2026-08-09  A. Sigdel  Exits 2 when it could not run, instead of 0.
 #
 # Usage
 #   scripts/lint/doc-tags.sh [path ...]
 #
 # With no arguments it reads every tracked Rust and Kotlin file. Exits 0 when
 # every suspending public function documents `# Rely` and every public Rust
-# function returning a `Result` documents `# Errors`, 1 otherwise.
+# function returning a `Result` documents `# Errors`, 1 when something is
+# missing one, and 2 when the check could not be made at all.
+#
+# The third code is the point of #478. Both loops below used to read a process
+# substitution, whose failure `set -euo pipefail` cannot see: awk dying wrote to
+# stderr, the loop read nothing, and the script reported every file clean and
+# exited 0. That happened — a singly escaped pattern through `-v` — and it was
+# noticed by luck. "Nothing was found" and "nothing was looked at" are different
+# answers and this now says which.
 #
 # `# Rely` is Lea's RELY: the execution context a caller must supply. The standard
 # requires it on every `pub async fn` because the router holds shared mutable
@@ -50,11 +59,23 @@ files=()
 if [ "$#" -gt 0 ]; then
     files=("$@")
 else
+    # Through a temporary rather than a process substitution, so a git that
+    # fails is an error rather than an empty list reported as a clean tree.
+    listing="$(mktemp)"
+    trap 'rm -f "$listing" "${report:-}"' EXIT
+    if ! git ls-files -z '*.rs' '*.kt' >"$listing"; then
+        printf 'doc-tags: could not list files; nothing was checked\n' >&2
+        exit 2
+    fi
+
     # Null-delimited: `mapfile` is bash 4, and the bash macOS ships is 3.2.
     while IFS= read -r -d '' path; do
         files+=("$path")
-    done < <(git ls-files -z '*.rs' '*.kt')
+    done <"$listing"
 fi
+
+report="${report:-$(mktemp)}"
+trap 'rm -f "${listing:-}" "$report"' EXIT
 
 printf 'doc-tags: %s source file(s)\n' "${#files[@]}"
 
@@ -90,13 +111,10 @@ for path in "${files[@]}"; do
     # A finding arrives as two lines — where it is, then what it wants — so only
     # the first is counted. Counting both reported twice as many items as there
     # were, which is a gate arguing with its own output.
-    while IFS= read -r finding; do
-        printf '  %s\n' "$finding"
-        case "$finding" in
-            ' '*) ;;
-            *) findings=$((findings + 1)) ;;
-        esac
-    done < <(awk -v file="$path" -v lang="$lang" -v doc="$doc" '
+    # Into a file, then checked. A pipe with `pipefail` would also carry the
+    # status and would put the loop in a subshell, which loses `findings` on
+    # every iteration — so the temporary is the option that keeps the count.
+    if ! awk -v file="$path" -v lang="$lang" -v doc="$doc" '
         function documents(tag,   j, line) {
             for (j = NR - 1; j >= 1; j--) {
                 line = seen[j]
@@ -128,7 +146,18 @@ for path in "${files[@]}"; do
             complain("wants # Rely: what the caller must supply")
         }
         { seen[NR] = $0 }
-    ' "$path")
+    ' "$path" >"$report"; then
+        printf 'doc-tags: could not read %s; nothing was checked\n' "$path" >&2
+        exit 2
+    fi
+
+    while IFS= read -r finding; do
+        printf '  %s\n' "$finding"
+        case "$finding" in
+            ' '*) ;;
+            *) findings=$((findings + 1)) ;;
+        esac
+    done <"$report"
 done
 
 if [ "$findings" -eq 0 ]; then
