@@ -270,40 +270,70 @@ fn name(raw: *const std::ffi::c_char) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    /// The Kotlin the library has to satisfy.
-    const KOTLIN: &str =
-        include_str!("../../android/core/src/main/kotlin/com/getlora/wattrouter/Core.kt");
+    /// One Kotlin class, and the Rust that has to satisfy it.
+    ///
+    /// A list rather than a second copy of the test: a third binding should be
+    /// a row here, and a copied test is a copy somebody forgets to update.
+    struct Binding {
+        class: &'static str,
+        kotlin: &'static str,
+        rust: &'static str,
+        /// One name known to be there, so a scan that finds nothing fails
+        /// rather than agreeing vacuously with an empty set.
+        anchor: &'static str,
+    }
+
+    const BINDINGS: &[Binding] = &[
+        Binding {
+            class: "Core",
+            kotlin: include_str!(
+                "../../android/core/src/main/kotlin/com/getlora/wattrouter/Core.kt"
+            ),
+            rust: include_str!("jni.rs"),
+            anchor: "nativeNew",
+        },
+    ];
 
     #[test]
     fn the_symbols_match_the_kotlin() {
         // Nothing checks this at build time. A name that disagrees is an
         // UnsatisfiedLinkError the first time somebody runs the app, which is
         // the worst place to find out and the easiest thing to hold in step.
-        let declared: std::collections::BTreeSet<String> = KOTLIN
+        for binding in BINDINGS {
+            let declared = declared_in(binding.kotlin);
+
+            assert!(
+                declared.contains(binding.anchor),
+                "the scan of {}.kt found nothing, which would make agreement vacuous",
+                binding.class
+            );
+            assert_eq!(
+                declared,
+                exported_by(binding.rust, binding.class),
+                "{}.kt and its Rust disagree",
+                binding.class
+            );
+        }
+    }
+
+    /// Every `external fun` a Kotlin file declares.
+    fn declared_in(kotlin: &str) -> std::collections::BTreeSet<String> {
+        kotlin
             .lines()
             .filter_map(|line| {
                 let at = line.find("external fun ")? + "external fun ".len();
                 let rest = &line[at..];
                 Some(rest[..rest.find('(')?].to_owned())
             })
-            .collect();
-
-        assert!(
-            declared.contains("nativeNew"),
-            "the scan found nothing, which would make agreement vacuous"
-        );
-        assert_eq!(declared, symbols(), "Core.kt and jni.rs disagree");
+            .collect()
     }
 
-    /// The same set, read out of the Rust rather than the Kotlin.
-    fn symbols() -> std::collections::BTreeSet<String> {
-        let source = include_str!("jni.rs");
-        source
-            .match_indices("pub extern \"system\" fn Java_com_getlora_wattrouter_Core_")
+    /// Every entry point a Rust file exports for one class.
+    fn exported_by(rust: &str, class: &str) -> std::collections::BTreeSet<String> {
+        let prefix = format!("pub extern \"system\" fn Java_com_getlora_wattrouter_{class}_");
+        rust.match_indices(&prefix)
             .filter_map(|(at, _)| {
-                let rest = &source[at..];
-                let start = rest.find("Core_")? + "Core_".len();
-                let tail = &rest[start..];
+                let tail = &rust[at + prefix.len()..];
                 let end = tail.find(|c: char| !c.is_ascii_alphanumeric() && c != '_')?;
                 Some(tail[..end].to_owned())
             })
@@ -358,14 +388,19 @@ mod tests {
     fn the_kotlin_frees_what_it_opens() {
         // A handle the Kotlin never releases is a leak nothing here can see, and
         // one it releases twice is a double free. Both are prevented by close()
-        // being idempotent, which is worth asserting is still written that way.
-        assert!(
-            KOTLIN.contains("if (handle == 0L) return"),
-            "close is not idempotent"
-        );
-        assert!(
-            KOTLIN.contains("handle = 0L"),
-            "close does not clear the handle"
-        );
+        // being idempotent, which is worth asserting is still written that way —
+        // for every class that owns a handle, not only the first one to.
+        for binding in BINDINGS {
+            assert!(
+                binding.kotlin.contains("if (handle == 0L) return"),
+                "{}.close is not idempotent",
+                binding.class
+            );
+            assert!(
+                binding.kotlin.contains("handle = 0L"),
+                "{}.close does not clear the handle",
+                binding.class
+            );
+        }
     }
 }
