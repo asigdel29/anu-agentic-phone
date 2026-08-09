@@ -4,34 +4,37 @@
 //   2026-08-08  A. Sigdel  Created. Reported whether the core loaded.
 //   2026-08-08  A. Sigdel  Signs in, so it reports which of Startup's three
 //                          states it reached instead.
+//   2026-08-09  A. Sigdel  Holds a conversation once it is signed in.
 //
-// The core is held for the process rather than opened per screen. It owns a
-// native pointer and a decision cache, and a second one is a second cache that
-// disagrees with the first — the same reasoning WattRouterApp.swift gives for
-// building its driver once into @State and never reassigning.
+// The core and the driver are built once and held for the process. The core
+// owns a native pointer and a decision cache, and a second one is a second
+// cache that disagrees with the first — the same reasoning WattRouterApp.swift
+// gives for building its driver once into @State and never reassigning.
 
 package com.getlora.wattrouter.app
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import com.getlora.wattrouter.Agent
+import com.getlora.wattrouter.ChainWalk
 import com.getlora.wattrouter.Credential
+import com.getlora.wattrouter.NeuralWattInference
 import com.getlora.wattrouter.Startup
+import com.getlora.wattrouter.ToolBox
+import com.getlora.wattrouter.TurnDriver
+import com.getlora.wattrouter.routing
 
 class MainActivity : ComponentActivity() {
     private var started: Startup? = null
@@ -47,12 +50,12 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     when (val now = state) {
-                        is Startup.Ready -> Running()
+                        is Startup.Ready -> Conversation(driverFor(now, credential))
                         Startup.NoCredential, Startup.CoreRefused ->
                             SignInScreen(refused = now == Startup.CoreRefused) { typed ->
                                 // store() answers false for an unusable key, and
-                                // leaving the state alone is what keeps the field
-                                // on screen rather than flashing past it.
+                                // leaving the state alone keeps the field on
+                                // screen rather than flashing past it.
                                 if (credential.store(typed)) {
                                     state = Startup.begin(this@MainActivity)
                                 }
@@ -63,6 +66,32 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * The driver, built once and kept.
+     *
+     * Keyed on the core, so a sign-in that replaces one does not leave a driver
+     * holding the old handle. rememberCoroutineScope rather than lifecycleScope:
+     * it needs no dependency, and it cancels a turn with the composition that
+     * started it. A turn that should outlive the screen is #233's item on long
+     * work, and wants a foreground service rather than a wider scope here.
+     */
+    @Composable
+    private fun driverFor(ready: Startup.Ready, credential: Credential): TurnDriver {
+        val scope = rememberCoroutineScope()
+        return remember(ready.core) {
+            TurnDriver(
+                Agent(
+                    router = ready.core.routing(),
+                    walk = ChainWalk(NeuralWattInference(credential.read().orEmpty())),
+                    // No tools yet. An empty array tells the model so, rather
+                    // than telling it nothing.
+                    tools = ToolBox(emptyList()),
+                ),
+                scope,
+            )
+        }
+    }
+
     override fun onDestroy() {
         (started as? Startup.Ready)?.core?.close()
         started = null
@@ -70,17 +99,19 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** Signed in, with nothing yet to do about it. */
 @Composable
-private fun Running() {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text("WattRouter", style = MaterialTheme.typography.headlineMedium)
-        Text("signed in; the router is up", style = MaterialTheme.typography.bodyMedium)
-    }
+private fun Conversation(driver: TurnDriver) {
+    val rows by driver.rows.collectAsState()
+    val isRunning by driver.isRunning.collectAsState()
+    val routing by driver.routing.collectAsState()
+
+    ChatScreen(
+        rows = rows,
+        isRunning = isRunning,
+        routing = routing,
+        onSend = driver::send,
+        onInterrupt = driver::interrupt,
+    )
 }
 
 /**
