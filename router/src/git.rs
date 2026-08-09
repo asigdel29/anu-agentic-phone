@@ -83,6 +83,46 @@ pub enum Head {
     },
 }
 
+/// What `init` found, which is not always what it did.
+#[derive(Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum Made {
+    /// There was no repository and now there is.
+    Created,
+    /// There already was one, and nothing was changed.
+    ///
+    /// `git init` is idempotent and re-running it is harmless, so this could
+    /// have been an `Ok(())` like any other. It is not, and #393 says why: a
+    /// model that cannot tell "made you one" from "there already was one" will
+    /// report having started work it is in the middle of.
+    AlreadyThere,
+}
+
+/// Make a directory into a repository, or say it already was one.
+///
+/// The directory is created if it is not there. `git init` does that too, and a
+/// phone has no shell to make one with first.
+///
+/// # Returns
+/// [`Made::Created`] or [`Made::AlreadyThere`], which are different answers
+/// rather than one success.
+///
+/// # Errors
+/// [`Error::Refused`] IF the directory cannot be made or the repository cannot
+/// be initialised there — a path inside a file, or one nothing may write to.
+pub fn init(path: &Path) -> Result<Made, Error> {
+    // Asked before anything is created, so an existing repository is reported
+    // rather than re-initialised. `Repository::init` on one is harmless and
+    // would answer Created, which is the distinction this function exists for.
+    if git2::Repository::open(path).is_ok() {
+        return Ok(Made::AlreadyThere);
+    }
+
+    std::fs::create_dir_all(path).map_err(|why| Error::Refused(why.to_string()))?;
+    git2::Repository::init(path).map_err(|why| Error::Refused(why.message().to_owned()))?;
+    Ok(Made::Created)
+}
+
 /// Open a repository.
 ///
 /// # Errors
@@ -391,6 +431,52 @@ mod tests {
         let borrowed: Vec<&git2::Commit> = parents.iter().collect();
         repo.commit(Some("HEAD"), &who, &who, "a commit", &tree, &borrowed)
             .unwrap()
+    }
+
+    #[test]
+    fn init_makes_a_repository_where_there_was_none() {
+        let scratch = Scratch::new("init-fresh");
+        let made = init(scratch.path()).expect("init refused a writable directory");
+
+        assert_eq!(Made::Created, made);
+        assert!(
+            open(scratch.path()).is_ok(),
+            "init did not leave a repository"
+        );
+    }
+
+    #[test]
+    fn init_over_an_existing_repository_says_it_was_already_there() {
+        // The decision #393 asked for. `git init` is idempotent and this could
+        // have answered Created twice; a model that cannot tell the two apart
+        // reports having started work it is in the middle of.
+        let scratch = Scratch::new("init-twice");
+        assert_eq!(Made::Created, init(scratch.path()).unwrap());
+        assert_eq!(Made::AlreadyThere, init(scratch.path()).unwrap());
+    }
+
+    #[test]
+    fn init_makes_the_directory_it_was_pointed_at() {
+        // A phone has no shell to make one with first, and on a fresh install
+        // the working directory does not exist.
+        let scratch = Scratch::new("init-missing");
+        let nested = scratch.path().join("work");
+        assert!(!nested.exists());
+
+        assert_eq!(Made::Created, init(&nested).unwrap());
+        assert!(open(&nested).is_ok());
+    }
+
+    #[test]
+    fn init_where_nothing_can_be_written_is_refused() {
+        // A path inside a file. Reported rather than panicking, because the
+        // model chose the path and can choose another.
+        let scratch = Scratch::new("init-blocked");
+        let blocking = scratch.path().join("afile");
+        std::fs::create_dir_all(scratch.path()).unwrap();
+        std::fs::write(&blocking, "x").unwrap();
+
+        assert!(init(&blocking.join("under")).is_err());
     }
 
     #[test]
