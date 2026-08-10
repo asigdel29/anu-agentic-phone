@@ -27,7 +27,7 @@
 //! nothing here should be reimplementing.
 
 use crate::jni::read;
-use crate::jni_answer::guarded;
+use crate::jni_answer::{guarded, handed};
 use jni::JNIEnv;
 use jni::objects::{JClass, JString};
 use jni::sys::jstring;
@@ -127,19 +127,4 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeCommit<'a>(
         };
         handed(&mut env, crate::ffi_git::commit(Path::new(&path), &message))
     })
-}
-
-/// Hand JSON to Kotlin.
-///
-/// `jni_answer::answered` is the same idea over a `*mut c_char` that it also
-/// frees. There is no Rust allocation to free here any more, so this is that
-/// helper minus the free. The two converge when `jni_memory` stops needing the
-/// pointer form, which is #565's last envelope change.
-///
-/// # Returns
-/// Null IF the JVM would not allocate, which is an out-of-memory condition with
-/// nothing useful to say to it.
-fn handed(env: &mut JNIEnv<'_>, json: String) -> jstring {
-    env.new_string(json)
-        .map_or(std::ptr::null_mut(), jni::objects::JString::into_raw)
 }

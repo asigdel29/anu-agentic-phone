@@ -19,9 +19,8 @@
 //! rebuilding it per question is the cost this milestone exists to avoid. Behind
 //! a mutex, because `ingest_turn` takes `&mut self`.
 
-use crate::ffi_answer::{borrowed, guarded, refused, rendered, unusable};
+use crate::ffi_answer::{refused, rendered};
 use crate::memory;
-use std::ffi::c_char;
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -130,68 +129,6 @@ impl Memory {
         let mut store = self.inner.lock().map_err(|_| Failed::Poisoned)?;
         body(&mut store)
     }
-}
-
-/// Put a turn in, for a caller holding a pointer.
-///
-/// A delegate to [`Memory::remember`]. `jni_memory` still holds a pointer, so
-/// this is what it calls until it stops; when it does, this and the C helpers
-/// behind it go together. Two reviewable changes rather than one over the size
-/// limit, and nothing is orphaned in between.
-///
-/// # Returns
-/// An owned JSON string to pass to `wattrouter_string_free`, or null IF any
-/// pointer was null or not UTF-8.
-///
-/// # Safety
-/// Every pointer must be null or a valid NUL-terminated string outliving the
-/// call, and `memory` must come from [`open`] by way of a `Box`.
-///
-/// # Atomic
-/// Serialised on the store's lock.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn wattrouter_memory_remember(
-    memory: *const Memory,
-    session: *const c_char,
-    speaker: *const c_char,
-    text: *const c_char,
-    ts: i64,
-) -> *mut c_char {
-    guarded(|| {
-        let (Some(memory), Some(session), Some(speaker), Some(text)) = (
-            unsafe { memory.as_ref() },
-            unsafe { borrowed(session) },
-            unsafe { borrowed(speaker) },
-            unsafe { borrowed(text) },
-        ) else {
-            return unusable();
-        };
-        memory.remember(session, speaker, text, ts)
-    })
-}
-
-/// Ask the store something, for a caller holding a pointer.
-///
-/// A delegate to [`Memory::recall`], on [`wattrouter_memory_remember`]'s terms.
-///
-/// # Safety
-/// As [`wattrouter_memory_remember`].
-///
-/// # Atomic
-/// Serialised on the store's lock.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn wattrouter_memory_recall(
-    memory: *const Memory,
-    query: *const c_char,
-    top_k: usize,
-) -> *mut c_char {
-    guarded(|| {
-        let (Some(memory), Some(query)) = (unsafe { memory.as_ref() }, unsafe { borrowed(query) })
-        else {
-            return unusable();
-        };
-        memory.recall(query, top_k)
-    })
 }
 
 #[cfg(test)]
