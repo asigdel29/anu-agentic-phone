@@ -3,32 +3,30 @@
 //! History
 //!   2026-08-09  A. Sigdel  Created, from `jni_git.rs` and `jni_memory.rs`,
 //!                          which held identical copies of the first two.
+//!   2026-08-10  A. Sigdel  Down to one helper with #541. `owned` went when the
+//!                          crossing stopped using C strings; `guarded` went
+//!                          when jni 0.22 started catching panics itself.
 //!
 //! Contents
-//!   `owned`     A Java string as a C string.
-//!   `answered`  Hand an envelope to Kotlin and free the Rust copy.
-//!   `guarded`   Turn a panic into a refusal rather than undefined behaviour.
+//!   `handed`  Hand an envelope to Kotlin.
 //!
-//! `answer.rs` beside this is the same module for the C ABI, and it exists
-//! for the reason recorded in its header: two envelopes that agree today, and a
-//! caller unwrapping two shapes the day one changes. The JNI half had that
-//! duplication — `owned` and `answered` were byte-identical in two files — and
-//! neither copy applied the three rules `jni.rs` states for this boundary.
+//! This existed because `jni_git.rs` and `jni_memory.rs` held byte-identical
+//! copies of two helpers, and neither copy applied the rules `jni.rs` states for
+//! this boundary. #468 says none of them was a live failure; they were rules the
+//! file next door followed and these two did not.
 //!
-//! None of the three was a live failure, and #468 says so with the measurement.
-//! They are rules the file next door follows and these two did not.
+//! Two of the three are gone rather than fixed. `owned` produced a `CString`,
+//! which nothing crossing here needs since #565. `guarded` turned a panic into a
+//! refusal, which `EnvUnowned::with_env` now does for every entry point in the
+//! crate — it arrived in #482 to close exactly that gap and the dependency
+//! closed it a second time.
 //!
 //! Not a reach into `jni_git` from `jni_memory`, which would make the memory
 //! feature require the git feature. Gated on `android` with either of them, the
 //! way `answer` is gated on either alone.
 //!
 //! `jni.rs` does not use this and that is deliberate. It answers with a
-//! `Decided` it serialises itself rather than with a C string somebody else
-//! allocated, and its `read` already does what `owned` does.
-//!
-//! `guarded` arrived after the other two, in #482. It was the third rule those
-//! files did not follow and it was left out of #469 because wrapping eight
-//! bodies in a closure re-indents both, which put that change over the limit.
+//! `Decided` it serialises itself, and its `read` is what the other two call.
 
 use jni::Env;
 use jni::sys::jstring;

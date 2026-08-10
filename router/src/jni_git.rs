@@ -19,12 +19,12 @@
 //! handle, no `AutoCloseable`, no close. That ceremony would invent a lifetime
 //! which does not exist, and hand somebody a `close` to forget.
 //!
-//! What is left here is five translations and nothing else. `guarded` is
+//! What is left here is five translations and nothing else. `handed` is
 //! `jni_answer.rs`'s, because the copy that used to be at the bottom of this file
 //! was identical to the one at the bottom of `jni_memory.rs` and neither applied
 //! the rules `jni.rs` states — see #468 and #482. `read` is `jni.rs`'s, for the
-//! same reason: it clears a pending exception, which `owned` also did and which
-//! nothing here should be reimplementing.
+//! same reason: it clears a pending exception, and nothing here should be
+//! reimplementing that.
 
 use crate::jni::read;
 use crate::jni_answer::handed;

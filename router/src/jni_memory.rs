@@ -5,21 +5,15 @@
 //!   2026-08-09  A. Sigdel  Moved the two helpers to `jni_answer.rs`.
 //!   2026-08-09  A. Sigdel  Guarded the four entry points.
 //!
-//! The C ABI beside this is what Swift links; Kotlin cannot use it, so these
-//! wrap the same calls in the shape JNI wants. They go through
-//! `wattrouter_memory_*` rather than `crate::memory` directly, so both phones
-//! reach the store by the same path and a change to one is a change to both.
+//! These go through `core_memory` rather than `crate::memory` directly, so the
+//! envelope a model reads is built in one place.
 //!
 //! A store is a handle with a lifetime, which is the second thing Kotlin owns
 //! and must free — `Core` was the first, and `Memory.kt` copies its shape: a
 //! private constructor over a `Long`, `AutoCloseable`, an idempotent `close`.
 //!
-//! Every allocating call here frees the Rust string before returning. A Kotlin
-//! `String` is a copy by the time `new_string` returns, so there is nothing to
-//! keep and leaving it would leak once per call.
-//!
-//! `owned`, `answered` and `guarded` are `jni_answer.rs`'s. The copy that used
-//! to be at the bottom of this file was identical to `jni_git.rs`'s and neither
+//! `handed` is `jni_answer.rs`'s and `read` is `jni.rs`'s. The copies that used
+//! to be at the bottom of this file were identical to `jni_git.rs`'s and neither
 //! applied the rules `jni.rs` states — see #468 and #482.
 
 use crate::core_memory::Memory;
