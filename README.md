@@ -108,125 +108,151 @@ immediately in a live session.
 
 Set `x-wattrouter-tier` on a request to override the decision entirely.
 
-## Configuration
+## Installing it
 
-One credential: `NEURALWATT_API_KEY`. Supply it through the environment or a systemd
-`EnvironmentFile` — never a tracked file. `.env.example` carries the names and no values.
+**Not from the Play Store.** Play policy forbids an accessibility service used for general
+automation, so this is sideloaded and is not trying to be otherwise. You are trusting a build
+you made or a Release you chose to install, which is the right way round for something with
+these capabilities.
 
-Everything else has a default that works, and these are the ones worth knowing about.
+You need an **arm64 phone running Android 10 or newer**. The APK carries one ABI.
 
-| Variable | Default | What it decides |
-|---|---|---|
-| `NEURALWATT_API_KEY` | — | The one credential. Required. |
-| `WATTROUTER_ADDR` | `127.0.0.1:8080` | Where the router listens. Loopback on purpose; see below. |
-| `WATTROUTER_UPSTREAM` | `https://api.neuralwatt.com/v1` | Where requests go. |
-| `WATTROUTER_MODEL_<TIER>` | the six names in the table above | Overrides one tier's model. |
-| `WATTROUTER_BACKEND_<TIER>` | `remote` | `local` or `remote`, per tier. An unrecognised value refuses to start rather than quietly sending work off the machine. |
-| `WATTROUTER_EMBEDDER` | hashing | `hash` or `onnx`. Changing it means refitting the head — a head is only readable by the embedder that produced its training vectors, and it is checked at load. |
-| `WATTROUTER_MODEL_CACHE` | `~/.hermes/memory/zeromem-models` | Shared with zeromem, so the model is fetched once. |
-| `WATTROUTER_HEAD` | `<model cache>/head.json` | The scoring head. Absent is not an error; the policy has an unscored path. |
-| `HERMES_HOME` | `~/.hermes` | Hermes state: config, plugins, memory, skills. |
+Then, in this order — the app's own checklist screen walks you through it, and the order
+matters:
 
-### What it serves
+1. **Sign in.** The key goes to the Android Keystore; nothing else is stored.
+2. **Allow restricted settings** — Settings › Apps › WattRouter › ⋮. Sideloaded builds need
+   this before the next step is even possible.
+3. **Turn on the accessibility service** — Settings › Accessibility › WattRouter.
+4. **Allow notifications**, so a turn that outlives the screen is visible and stoppable.
+5. Calendar, contacts and location are optional, and the checklist says so.
 
-| Route | |
-|---|---|
-| `POST /v1/chat/completions` | The one that matters. OpenAI-shaped, streaming both ways. |
-| `GET /v1/models` | The tiers, as models. |
-| `GET /healthz` | |
-| `GET /metrics` | Prometheus. |
-
-**None of them is authenticated**, which is why the default binds loopback. `SECURITY.md` says
-what follows from that.
-
-Set `x-wattrouter-tier` on a request to override the routing decision entirely.
-
-### Cargo features, which change what you get
-
-| Feature | Default | |
-|---|---|---|
-| `onnx` | **on** | The ONNX embedder. Off gives a router that only ever hashes, which is the right build for the container, because the phone scores and the server does not. |
-| `git` | off | libgit2, for the phone. A machine with a shell does not need it linked in. |
-| `memory` | off | The bounded memory store. Only a phone needs one. |
-| `android` | off | The JNI entry points. |
-
-So `cargo build --release` gives you ONNX and **neither git nor memory** — while `just ios-core`
-and CI build `--no-default-features --features git`. The same asymmetry applies to the tests:
-`cargo test --all-targets` does not compile `git2`, `rusqlite` or the JNI layer at all, so a
-change to any of them wants `--all-features` before it is called tested.
-
-## What you need
-
-Every floor below is pinned in a file; this is the one place they are all together.
-
-| | |
-|---|---|
-| **Rust** | 1.95, edition 2024 |
-| **Targets** | `aarch64-linux-android` for the phone, `aarch64-unknown-linux-gnu` cross-built and gated in CI. |
-| **Python** | 3.11, which is Hermes's floor. Only `train/` and the Hermes plugins need it. |
-| **Java** | 21, for `android/`. |
-| **Gradle** | 9.7. No wrapper — a wrapper is a jar, and this repository does not track binaries it cannot review, so it is installed rather than checked in. |
-| **Android SDK** | `compileSdk 37.1`, `targetSdk 35`, `minSdk 29` — so Android 10 and up. |
-| **Android ABI** | **`arm64-v8a` only.** The APK carries no other, which is every phone since about 2017 and no emulator image that is not arm64. |
-
-`just toolchain` reports which of these are present and exits non-zero if one is missing or too
-old. It treats the Android toolchain as optional rather than failing over it: a check that fails
-over a milestone nobody is working on is a check people learn to ignore.
-
-## Getting started
-
-### Android
-
-Needs the Android SDK, the NDK and Gradle; `just toolchain` says which are absent rather
-than failing inside a build. There is no Gradle wrapper — a wrapper is a jar, and this
-repository does not track binaries it cannot review.
+## Building it
 
 ```sh
-just android                          # the core, then the debug app
-just android-test                     # the JVM suite: everything that touches nothing Android
-just android-device-test              # the emulator suite: the only one that loads the .so
-just android-release                  # the APK a person installs, signed from the environment
+just toolchain        # what is missing, before a build fails deep inside one
+just android          # the Rust core, then the debug app
+just android-test     # the JVM suite
+just android-device-test   # the emulator suite — the only one that loads the .so
 ```
 
-The two test recipes make different claims and `android/AGENTS.md` is emphatic about it: the
-`.so` is built for `aarch64-linux-android` and will not load on the host at all, so a change
-to `Core.kt` or `jni.rs` claiming only `just android-test` has claimed nothing.
+`just --list` is current where this table is not. There is no Gradle wrapper: a wrapper is a
+jar, and this repository does not track binaries it cannot review — `just android` says how to
+install Gradle instead.
 
-Signing reads `WATTROUTER_KEYSTORE`, `WATTROUTER_KEYSTORE_PASSWORD`, `WATTROUTER_KEY_ALIAS`
-and `WATTROUTER_KEY_PASSWORD`. Without them the release build assembles unsigned and says so,
-and an unsigned APK cannot be installed. The keystore is yours and is never tracked.
+For a release build you need your own signing keystore, which is never tracked:
 
-Installed, the app asks for one thing that is not a normal permission: an accessibility
-service, from Settings. On a sideloaded build that switch is greyed out until restricted
-settings are allowed — the app's own checklist screen walks through it, because nothing else
-on the phone explains why the switch does not work.
+```sh
+export WATTROUTER_KEYSTORE=~/.android/wattrouter-release.jks
+export WATTROUTER_KEYSTORE_PASSWORD=... WATTROUTER_KEY_ALIAS=... WATTROUTER_KEY_PASSWORD=...
+just android-release
+```
 
-`android/AGENTS.md` says which of the two test recipes may claim what, and the difference
-matters: only the emulator suite can load the native library at all.
+Verify the result against the artefact rather than the log — `apksigner verify --print-certs`
+on the APK. The recipe reports the shell's environment and Gradle reads its own
+([#514](../../issues/514)).
+
+### Running the server
+
+```sh
+docker build -t wattrouter .
+docker run -p 8080:8080 \
+  -e PORT=8080 \
+  -e NEURALWATT_API_KEY=... \
+  -e WATTROUTER_TOKENS=phone:$(openssl rand -base64 32) \
+  wattrouter
+```
+
+`WATTROUTER_TOKENS` is `label:token` pairs. **Absent means nobody** — every request to `/v1` is
+refused, which is noisy and safe; the alternative is an unmetered proxy to a paid provider on
+the internet. `/healthz` is the one endpoint left open, because a platform health check arrives
+with no credential.
+
+`railway.toml` deploys the same image. Secrets go in the dashboard, never in the repository.
+
+### Testing without a provider
+
+Every tool runs only because a model decided to call it, so the interesting part of this
+application would otherwise need a paid third party to exercise. It does not:
+
+```sh
+just stub                                        # answers turns from a script
+WATTROUTER_UPSTREAM=http://10.0.2.2:8099/v1 just android
+```
+
+The stub speaks the provider's wire format and logs every request the app made, which is how
+the next script gets written. Only a debug build can reach it — a release build has no
+cleartext exemption at all.
+
+## Configuration
+
+| Variable | What |
+|---|---|
+| `NEURALWATT_API_KEY` | The one provider credential. Server-side only. |
+| `WATTROUTER_TOKENS` | `label:token` pairs. Who may call the server. |
+| `WATTROUTER_ADDR` | Where to bind. Loopback by default. |
+| `PORT` | What a platform assigns; becomes `0.0.0.0:PORT`. |
+| `WATTROUTER_UPSTREAM` | Where requests go. Also the Android build-time endpoint. |
+| `WATTROUTER_EMBEDDER` | `hash` or `onnx`. Scoring needs `onnx`. |
+| `WATTROUTER_HEAD` | Weights for the scoring head. |
+| `WATTROUTER_MODEL_<TIER>` | Override a tier's model. |
+
+[`.env.example`](.env.example) documents the names and carries no values.
+
+### Cargo features
+
+`onnx` is on by default; `git`, `memory` and `android` are not. So `cargo build --release`
+gives you the embedder and **no git and no memory** — the phone build turns those on, and the
+container turns ONNX off, because the phone routes and the server does not score.
+
+## Repository
+
+| Path | What |
+|---|---|
+| `android/` | Two modules: `core/`, the routing core as a library, and `app/`, the assistant over it. |
+| `router/` | The Rust core: scoring, routing, the C ABI and the JNI layer, and the server. |
+| `hermes/` | Configuration for the same router from a terminal — the reference for what the phone has to match. |
+| `scripts/` | Everything `just` calls, plus `scripts/guards/` for pull requests. |
+| `docs/` | The coding standard, and the decision records. |
+| `train/` | Builds the training set for the scoring head. |
+
+Each subtree with its own `AGENTS.md` holds what is true only there.
 
 ## Security
 
-[`SECURITY.md`](SECURITY.md) has the threat model, what leaves the device, and how to report a
-vulnerability privately. Two things from it worth knowing before installing anything:
-**`FLAG_SECURE` windows are readable through accessibility**, so a banking application is not
-hidden from this; and **the router has no authentication**, which is why it binds loopback.
+It can read a banking application's balance. `FLAG_SECURE` stops screen *capture* and leaves
+the accessibility tree readable, because a screen reader has to work in a banking application —
+[#472](../../issues/472) has the measurement, and two decision records that claimed otherwise
+were corrected.
+
+Anything on another app's screen becomes model input, which makes screen-sourced prompt
+injection the headline threat. What stands against it, what does not, and what leaves the
+device are all in [`SECURITY.md`](SECURITY.md). Report a vulnerability through a private
+advisory, not an issue.
+
+## Contributing
+
+Every pull request references an issue and changes at most 300 lines, and both are enforced.
+[`CONTRIBUTING.md`](CONTRIBUTING.md) has the rules that would otherwise fail a first attempt;
+[`AGENTS.md`](AGENTS.md) is the working guide and [`docs/coding-standard.md`](docs/coding-standard.md)
+is what the lints are asking for.
+
+`docs/decisions/INDEX.md` routes a question — why is a round committed atomically, why does the
+agent refuse an ambiguous match — to the pull request that argued it.
+
+One rule worth knowing before you write a claim down: **state where it ran.** A change that
+compiled in CI, one that passed the JVM suite, one that ran on an emulator and one that was
+watched on a phone are four different claims.
 
 ## Credits
 
-The routing approach follows [RouteLLM](https://github.com/lm-sys/RouteLLM) (Ong et al.,
-LMSYS) — win-rate scoring against a strong/weak model pair, with thresholds calibrated to a
-target traffic split. The implementation here is independent: it embeds locally instead of
-calling a hosted embedding API, and it thresholds into several tiers rather than two.
+[NeuralWatt](https://neuralwatt.com) for inference. [zeromem](https://github.com/ptaranat/zeromem)
+for memory that costs no tokens. [Hermes Agent](https://github.com/NousResearch/hermes-agent) as
+the terminal harness this is measured against.
 
-Memory is [zeromem](https://github.com/ptaranat/zeromem), an implementation of Zero-Mem (Xiao
-et al., arXiv:2607.29377).
+`v0.1.0-multiplatform` is tagged at the last commit containing the iOS application and the
+board deployment, both removed in [#545](../../pull/545) when the project became one thing.
 
 ## License
 
-MIT — [`LICENSE`](LICENSE).
-
-The applications statically link a great deal that is not MIT-licensed by us, and
-[`THIRD-PARTY.md`](THIRD-PARTY.md) is the notice that has to travel with a binary. It is
-generated from the dependency graph by `scripts/notices.sh`; the part worth reading is the
-preamble, which covers the three things the metadata gets wrong — libgit2 is GPL-2.0 with a
-linking exception, SQLite is public domain, and one transitive crate is MPL-2.0.
+MIT. See [LICENSE](LICENSE).
