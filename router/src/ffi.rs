@@ -1,27 +1,32 @@
-//! ffi.rs — the C-shaped core the JNI layer calls through.
+//! ffi.rs — the decision core, as anything in this process calls it.
 //!
 //! History
 //!   2026-08-06  A. Sigdel  Created.
 //!   2026-08-10  A. Sigdel  Stopped naming iOS with #564. The header and the
 //!                          module map went with it; the shape here did not,
 //!                          and #565 is where that is argued.
+//!   2026-08-10  A. Sigdel  Nothing here is a C interface any more with #565.
+//!                          The name is the last of it and goes separately, so
+//!                          that a rename is a rename rather than the tail of a
+//!                          rewrite.
 //!
 //! Contents
-//!   `Router`, `Decision`, and the `wattrouter_*` entry points.
+//!   `Router`   Build one, decide with it, read a tier's chain off it.
+//!   `Decision` Which tier, why, and how hard the prompt looked.
 //!
 //! In a process with the agent there is one address space, so the proxy the
 //! server binary is would be the wrong shape here: no socket, no TLS, no
 //! connection pool.
 //!
-//! The C envelope outlived the C caller. `jni.rs` and its three neighbours are
-//! what call these functions now, in-process, and the pointers and NUL-terminated
-//! strings below are a translation they pay for rather than one anything asks
-//! for. Removing it is #565, not this file's business today.
+//! **There is no boundary in this file.** There was, and everything about the
+//! shape was owed to it: pointers a caller had to free, a struct returned by
+//! value with a reserved failure value inside it, numeric codes for names, and
+//! a `catch_unwind` on every entry because a panic crossing into C is undefined
+//! behaviour. The caller those were for left in #545 and the last of the
+//! machinery in #565.
 //!
-//! No panic may cross this boundary — that is undefined behaviour. Every
-//! `wattrouter_*` entry point still catches and reports failure as a value.
-//! `Router::decide` no longer does: it is ordinary Rust with an ordinary
-//! caller, and `jni.rs` guards its own boundary already.
+//! What guards the real boundary is `jni.rs`, which owns the handle it hands
+//! Kotlin and catches its own panics. This is the ordinary Rust behind it.
 
 use crate::backend::Backend;
 use crate::cache::DecisionCache;
@@ -32,8 +37,7 @@ use crate::embed::{Embedder, HashEmbedder};
 use crate::head::Head;
 use crate::policy::{Reason, Thresholds, decide};
 use crate::tier::Tier;
-use std::ffi::{CStr, c_char};
-use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::path::Path;
 
 /// Everything a decision needs; opaque to C.
 pub struct Router {
@@ -86,43 +90,27 @@ pub struct Decision {
     pub score: Option<f32>,
 }
 
-/// Borrow a C string as UTF-8; null and invalid encoding both read as absent.
-///
-/// # Safety
-/// `ptr` must be null or a valid NUL-terminated string outliving the call.
-unsafe fn borrow<'a>(ptr: *const c_char) -> Option<&'a str> {
-    if ptr.is_null() {
-        return None;
-    }
-    unsafe { CStr::from_ptr(ptr) }.to_str().ok()
-}
-
-/// Build a router, configured from the environment as the server is — one way to
-/// configure the core rather than two that can disagree.
-///
-/// # Returns
-/// A pointer the caller passes to [`wattrouter_free`], or null IF configuration
-/// was rejected.
-///
-/// # Safety
-/// `head_path` must be null or a valid NUL-terminated string. The returned
-/// pointer must not be used after `wattrouter_free`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn wattrouter_new(head_path: *const c_char) -> *mut Router {
-    catch_unwind(|| {
-        let Ok(config) = Config::from_env() else {
-            return std::ptr::null_mut();
-        };
+impl Router {
+    /// Build a router, configured from the environment as the server is: one way
+    /// to configure the core rather than two that can disagree.
+    ///
+    /// # Arguments
+    /// * `head_path` — where to load the scoring head from. [`None`] takes the
+    ///   configured default. The app passes a path because it keeps weights in
+    ///   its own sandbox, which that default cannot reach.
+    ///
+    /// # Returns
+    /// [`None`] IF configuration was rejected. A missing head is not that: the
+    /// policy has an unscored path and a phone has no head to load.
+    pub(crate) fn new(head_path: Option<&Path>) -> Option<Self> {
+        let config = Config::from_env().ok()?;
         let embedder = HashEmbedder::new();
 
-        // Explicit wins over configured: the app keeps weights in its sandbox,
-        // which the configured default cannot reach.
-        let path = unsafe { borrow(head_path) }.map_or_else(
+        let path = head_path.map_or_else(
             || config.head_path().to_path_buf(),
-            std::path::PathBuf::from,
+            std::path::Path::to_path_buf,
         );
 
-        // A missing head is not a failure; the policy has an unscored path.
         let head = Head::load(&path, &embedder.id()).ok();
         let thresholds = head
             .as_ref()
@@ -140,31 +128,15 @@ pub unsafe extern "C" fn wattrouter_new(head_path: *const c_char) -> *mut Router
                 .collect()
         });
 
-        Box::into_raw(Box::new(Router {
+        Some(Self {
             chains,
             thresholds,
             embedder,
             cache: DecisionCache::new(),
             head,
-        }))
-    })
-    .unwrap_or(std::ptr::null_mut())
-}
-
-/// Release a router.
-///
-/// # Safety
-/// `router` must come from [`wattrouter_new`] and not already be freed. Null is
-/// accepted and ignored.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn wattrouter_free(router: *mut Router) {
-    if router.is_null() {
-        return;
+        })
     }
-    let _ = catch_unwind(AssertUnwindSafe(|| drop(unsafe { Box::from_raw(router) })));
-}
 
-impl Router {
     /// Decide which tier serves a request: classify, score, apply policy, apply
     /// session stickiness. The server's ordering, because it is the server's
     /// code.
@@ -255,29 +227,25 @@ mod tests {
         assert_shareable::<Router>();
     };
 
-    /// Build a router as the app would, and free it as the app must.
+    /// Build a router as the app would. Dropping it is the whole of releasing it
+    /// now, so nothing here has to remember to.
     ///
     /// Holds the crate-wide environment lock for the whole of `body`, not just
-    /// the construction. `wattrouter_new` reads the environment, and so does any
+    /// the construction. `Router::new` reads the environment, and so does any
     /// `Config::from_env` a body makes to compare against — the credential
     /// vanishing between the two is what failed CI, and a stray
     /// `WATTROUTER_MODEL_*` from a concurrent test would have been worse, since
     /// that compares two different configurations and reports a wrong answer
     /// rather than a missing one.
-    fn with_router<T>(body: impl FnOnce(*mut Router) -> T) -> T {
+    fn with_router<T>(body: impl FnOnce(&Router) -> T) -> T {
         with_env(&[("NEURALWATT_API_KEY", Some("ffi-test"))], || {
-            let router = unsafe { super::wattrouter_new(std::ptr::null()) };
-            assert!(!router.is_null(), "router builds without a head");
-            let out = body(router);
-            unsafe { super::wattrouter_free(router) };
-            out
+            let router = Router::new(None).expect("router builds without a head");
+            body(&router)
         })
     }
 
-    fn decide(router: *mut Router, json: &str, pin: Option<&str>, sess: &str) -> Decision {
-        unsafe { &*router }
-            .decide(json, pin, sess)
-            .expect("a decidable request")
+    fn decide(router: &Router, json: &str, pin: Option<&str>, sess: &str) -> Decision {
+        router.decide(json, pin, sess).expect("a decidable request")
     }
 
     #[test]
@@ -326,15 +294,15 @@ mod tests {
         // now, which a caller cannot mistake for a tier.
         //
         // A null router is no longer one of the cases: `decide` takes `&self`,
-        // so the condition is unrepresentable rather than handled.
+        // so the condition is unrepresentable rather than handled. Nor is
+        // freeing one twice, which this used to assert was survivable: the
+        // handle and its `Box` live in `jni.rs` now, and `Core.kt` is what may
+        // clear a field twice.
         with_router(|router| {
-            let router = unsafe { &*router };
             for bad in ["not json", ""] {
                 assert!(router.decide(bad, None, "").is_none(), "for {bad:?}");
             }
         });
-        // Freeing null must still be a no-op rather than a fault.
-        unsafe { super::wattrouter_free(std::ptr::null_mut()) };
     }
 
     #[test]
@@ -377,7 +345,6 @@ mod tests {
         with_router(|router| {
             // `with_router` has already set the credential the config needs.
             let config = crate::config::Config::from_env().expect("valid");
-            let router = unsafe { &*router };
 
             // Every tier, not one: a chain is reached by tier code, and a code
             // mishandled in particular would be invisible in a check of a single
