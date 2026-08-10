@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  AndroidManifest.xml — what the app is allowed to do, and where it starts.
+  AndroidManifest.xml: what the app is allowed to do, and where it starts.
 
   History
     2026-08-08  A. Sigdel  Created with one permission and one activity.
@@ -8,7 +8,7 @@
 
   INTERNET is the only permission the app can grant itself. Everything else
   arrives with the code that explains it, because a permission declared ahead of
-  its reason is one nobody can weigh — and, less obviously, one declared behind
+  its reason is one nobody can weigh and, less obviously, one declared behind
   its reason cannot be asked for at all: checkSelfPermission refuses it, the
   dialog does not appear, and the app reports a permanent denial naming a
   Settings row that is not there.
@@ -22,7 +22,7 @@
     <!--
       Without this the package manager admits almost nothing exists, and
       open_app answers "there is no app called that" for every app on the
-      phone — a total failure whose message reads like a spelling mistake.
+      phone: a total failure whose message reads like a spelling mistake.
 
       Scoped to apps with a launcher icon, which is exactly the set open_app
       offers. QUERY_ALL_PACKAGES would also work, is a restricted permission,
@@ -77,7 +77,7 @@
           exists and delivers through onNewIntent.
 
           Not singleTask, which would also finish anything above it. There is
-          nothing above it — one activity — so that is a behaviour to adopt when
+          nothing above it, only one activity, so that is a behaviour to adopt when
           there is something for it to do, which is the overlay work in #233.
         -->
         <activity
@@ -104,7 +104,7 @@
               The assist gesture: long-press home, or whatever the device maps
               it to. #527 overturns the design review's refusal of this, and the
               argument is worth having here because the refusal was right at the
-              time — the role was wanted then as a way to read the screen, and
+              time: the role was wanted then as a way to read the screen, and
               AssistStructure is a read-only snapshot where the accessibility
               service has the live tree. As an invocation that objection does
               not apply.
@@ -131,7 +131,7 @@
         <!--
           BIND_ACCESSIBILITY_SERVICE is the system's guarantee that only it can
           bind this, and its absence is silent: the service is simply never
-          bound. exported must be true — the binder is the system, which is
+          bound. exported must be true, because the binder is the system, which is
           another process.
         -->
         <service

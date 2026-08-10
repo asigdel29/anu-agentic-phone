@@ -1,4 +1,4 @@
-// DrivingService.kt — the only thing that can read another app's screen.
+// DrivingService.kt: the only thing that can read another app's screen.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -21,7 +21,7 @@
 // It does consume one event, and this header used to say it consumed none. The
 // activity's class name is what tells the accessibility settings page from the
 // display settings page, #440 bars the first and not the second, and that name
-// arrives only on TYPE_WINDOW_STATE_CHANGED — rootInActiveWindow gives a package
+// arrives only on TYPE_WINDOW_STATE_CHANGED, since rootInActiveWindow gives a package
 // and no more. So one string is recorded, compared against a deny list, and used
 // for nothing else. The argument above is about keeping a model of the screen in
 // step; this is not that, and leaving the header claiming otherwise would be
@@ -112,7 +112,7 @@ class DrivingService : AccessibilityService() {
      * It opens the conversation rather than starting anything. An expanded
      * surface *is* the foreground app, so a summon that put the agent in front
      * of the screen it was about to read would be summoning it onto the thing
-     * it wanted to look at — the design review's finding, and the reason the
+     * it wanted to look at: the design review's finding, and the reason the
      * bubble is a surface for before and after a task rather than during one.
      */
     private val summon = object : AccessibilityButtonController.AccessibilityButtonCallback() {
@@ -127,7 +127,7 @@ class DrivingService : AccessibilityService() {
     /**
      * Which window is in front, and nothing else.
      *
-     * Not a model of the screen — one string, compared against #440's deny
+     * Not a model of the screen, but one string, compared against #440's deny
      * list. Everything about what is *on* the screen is still read when it is
      * needed, for the reason the header gives.
      */
@@ -143,7 +143,7 @@ class DrivingService : AccessibilityService() {
      * Show what the agent is doing, over whatever it is doing it to.
      *
      * @param what the person's own words. Null takes the banner away, which is
-     *   what the end of a turn does — however it ended.
+     *   what the end of a turn does, however it ended.
      */
     fun showing(what: String?) {
         if (what == null) {
@@ -199,7 +199,7 @@ class DrivingService : AccessibilityService() {
      *
      * @param onAnswer called once, with what was chosen. Not called at all if
      *   the overlay is refused a place on the display or if [stopAsking] takes
-     *   it away first — [AndroidConsent] is what turns either into an answer.
+     *   it away first. [AndroidConsent] is what turns either into an answer.
      */
     fun ask(question: String, onAnswer: (Boolean) -> Unit) {
         val put = Asked(this, question) { yes ->
@@ -249,7 +249,7 @@ class DrivingService : AccessibilityService() {
      * Put it on the display.
      *
      * TYPE_ACCESSIBILITY_OVERLAY, which needs no permission on any release
-     * this app runs on — it is available to an accessibility service and to
+     * this app runs on: it is available to an accessibility service and to
      * nothing else, which is exactly what this is. #446 planned for
      * SYSTEM_ALERT_WINDOW below API 34 on the belief that the free route was
      * attachAccessibilityOverlayToDisplay and so new; that call takes a
@@ -301,7 +301,7 @@ class DrivingService : AccessibilityService() {
      * What is on screen now.
      *
      * @return null when the service is not connected, or while no window has
-     *   focus — which the framework answers for a moment after a launch and
+     *   focus, which the framework answers for a moment after a launch and
      *   whenever the screen is off.
      */
     fun read(): Reading? {
@@ -317,7 +317,7 @@ class DrivingService : AccessibilityService() {
      * page tells the model exactly which button says Allow. The refusal it
      * would then get from tap is one it can plan around.
      *
-     * The keyguard is read now rather than remembered — a phone locks while a
+     * The keyguard is read now rather than remembered, because a phone locks while a
      * turn is running, which is the case this is for.
      */
     fun barredNow(): Barred? = barred(
@@ -344,7 +344,7 @@ class DrivingService : AccessibilityService() {
      * The tree is retained for this call and released before it returns, which
      * is the only place in the app that owes the framework anything back. A
      * copy is not something performAction can be called on, so acting needs the
-     * node the copy was made from — and needs it only until the click lands.
+     * node the copy was made from, and needs it only until the click lands.
      */
     fun tap(at: Handle, from: Generation): Done? {
         barredNow()?.let { return Done.Refused(it.why) }
@@ -367,7 +367,7 @@ class DrivingService : AccessibilityService() {
      *
      * The same retain-and-release as [tap]. A node action rather than a
      * gesture, so canPerformGestures stays out of driving.xml and no
-     * coordinate is involved anywhere on this path — which is stronger than
+     * coordinate is involved anywhere on this path, which is stronger than
      * how-the-agent-drives.md promised, and worth keeping.
      */
     fun scroll(at: Handle, from: Generation, onward: Onward): Done? {
@@ -438,7 +438,7 @@ class DrivingService : AccessibilityService() {
         )
 
         // The screen is read after the press rather than before, and it is the
-        // only way to say where that ended up — what back does depends on where
+        // only way to say where that ended up: what back does depends on where
         // it was pressed.
         return if (pressed) Done.Did(read()) else Done.Refused("the system would not do that here")
     }
@@ -473,7 +473,7 @@ class DrivingService : AccessibilityService() {
      * that also types would otherwise have to remember this one, and the ninth
      * one would not. prune never carries a password's value out, so a model
      * asked to fill one in is typing something it invented or something the
-     * person said out loud — and the person can type their own password.
+     * person said out loud, and the person can type their own password.
      */
     private fun write(node: Node, text: String): Done {
         if (node.isPassword) {
@@ -508,7 +508,7 @@ class DrivingService : AccessibilityService() {
      * A node that will not take a click is refused rather than escalated to
      * whichever ancestor would. Walking up is what a person tapping a row's
      * label effectively does, and it is also tapping something the model did
-     * not name — and read_screen already marks which lines can be tapped, so
+     * not name, and read_screen already marks which lines can be tapped, so
      * the refusal points at that column instead.
      */
     private fun click(node: Node): Done {

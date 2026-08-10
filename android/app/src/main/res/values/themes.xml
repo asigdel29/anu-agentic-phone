@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  themes.xml — the window Compose draws into.
+  themes.xml: the window Compose draws into.
 
   History
     2026-08-08  A. Sigdel  Created.

@@ -1,4 +1,4 @@
-// build.gradle.kts — the core, as an Android library.
+// build.gradle.kts: the core, as an Android library.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
@@ -6,7 +6,7 @@
 //
 // What this module is: `Core.kt` and the shared object it declares. The library
 // itself is built by `just android-core` from the same crate iOS links, and is
-// not built by Gradle — cargo already knows how, and an NDK build driven from
+// not built by Gradle, since cargo already knows how, and an NDK build driven from
 // here would be a second way to produce one artefact.
 //
 // So `jniLibs.srcDirs` points at what that script wrote. A build with nothing
@@ -69,7 +69,7 @@ android {
 
 dependencies {
     // The runtime only, and no compiler plugin. `@Serializable` would need one,
-    // and the encoding here is hand-written anyway — what a message leaves out
+    // and the encoding here is hand-written anyway: what a message leaves out
     // is a decision rather than a default, so `buildJsonObject` is the honest
     // shape and the plugin would be a version to keep in step with AGP for
     // nothing.

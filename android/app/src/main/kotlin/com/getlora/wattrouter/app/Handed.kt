@@ -1,4 +1,4 @@
-// Handed.kt — what another app shared, and what to make of it.
+// Handed.kt: what another app shared, and what to make of it.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -28,7 +28,7 @@ package com.getlora.wattrouter.app
  *   the model cannot open and will describe as though it had.
  * @param text `EXTRA_TEXT`.
  * @param subject `EXTRA_SUBJECT`. A browser shares a page's title and its URL
- *   as two extras, and the title is half of what was meant — so it goes above
+ *   as two extras, and the title is half of what was meant, so it goes above
  *   the text when both are there and differ. Identical is the common case for
  *   a plain note, and repeating it reads as a mistake.
  */

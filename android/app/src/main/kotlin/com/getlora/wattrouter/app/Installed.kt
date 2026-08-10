@@ -1,4 +1,4 @@
-// Installed.kt — the apps this phone can start, and starting one.
+// Installed.kt: the apps this phone can start, and starting one.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -9,13 +9,13 @@
 //
 // The manifest's <queries> element is what makes any of this work. Since
 // targetSdk 30 an app sees its own package and almost nothing else, so without
-// it every lookup answers "there is no app called that" — a total failure whose
+// it every lookup answers "there is no app called that": a total failure whose
 // message reads like a spelling mistake.
 //
 // The scoped filter is the right one: ACTION_MAIN with CATEGORY_LAUNCHER grants
 // visibility of exactly the apps that have an icon, which is exactly the set
 // open_app offers. QUERY_ALL_PACKAGES would also work, asks for far more than is
-// needed, and is a restricted permission — a sideloaded build could carry it,
+// needed, and is a restricted permission, and a sideloaded build could carry it,
 // which is not a reason to.
 
 package com.getlora.wattrouter.app

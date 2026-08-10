@@ -1,4 +1,4 @@
-// Banner.kt — what the agent shows over the app it is driving.
+// Banner.kt: what the agent shows over the app it is driving.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -13,7 +13,7 @@
 //
 // Untouchable except for the button, and that is not a nicety. An overlay that
 // swallows a tap makes the agent's own actions fail in a way that looks like the
-// app refusing them — which is the hardest kind of failure to attribute, because
+// app refusing them, which is the hardest kind of failure to attribute, because
 // nothing in the transcript is wrong.
 
 package com.getlora.wattrouter.app
@@ -60,7 +60,7 @@ internal class Banner(context: Context, private val onStop: () -> Unit) {
      * Say what is happening.
      *
      * @param what the person's own words rather than a tier name or a tool
-     *   name — the same call TurnService.begin makes, and for the same reason:
+     *   name: the same call TurnService.begin makes, and for the same reason:
      *   "Working" tells them nothing they did not know when they pressed send.
      */
     fun say(what: String) {
