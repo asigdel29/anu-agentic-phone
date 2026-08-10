@@ -32,6 +32,7 @@ use wattrouter::head::Head;
 use wattrouter::metrics::Metrics;
 use wattrouter::policy::{Decision, Reason, Thresholds, decide};
 use wattrouter::tier::Tier;
+use wattrouter::tokens::{Listed, Tokens, presented};
 use wattrouter::upstream::Upstream;
 
 /// Shared application state.
@@ -56,6 +57,10 @@ struct AppState {
     /// has a defined unscored path, and every rule not depending on difficulty
     /// still applies.
     head: Option<Head>,
+    /// Who may ask. Boxed for the reason `embedder` is: the next unit replaces
+    /// a list from the environment with accounts in Postgres, and nothing above
+    /// this should be able to tell which it got.
+    tokens: Box<dyn Tokens>,
 }
 
 /// Report liveness.
@@ -274,6 +279,7 @@ fn app(
     upstream: Upstream,
     head: Option<Head>,
     embedder: Box<dyn Embedder>,
+    tokens: Box<dyn Tokens>,
 ) -> Router {
     // A head's scores occupy a narrow band around 0.5, so the absolute defaults
     // would strand whole tiers. When the head carries thresholds calibrated
@@ -293,14 +299,62 @@ fn app(
         cache: DecisionCache::new(),
         metrics: Metrics::new(),
         head,
+        tokens,
     });
 
-    Router::new()
-        .route("/healthz", get(healthz))
+    // Everything but liveness. route_layer rather than layer: a layer would run
+    // on requests that matched no route, so an unauthenticated request for a
+    // path that does not exist would be told 401 instead of 404 -- which tells
+    // an observer that the path exists.
+    let guarded = Router::new()
         .route("/v1/models", get(list_models))
         .route("/v1/chat/completions", post(chat_completions))
+        // Closed, and it was the one that leaked: counts by tier say what is
+        // being asked and how often. It was open because everything was.
         .route("/metrics", get(metrics))
+        .route_layer(axum::middleware::from_fn_with_state(
+            Arc::clone(&state),
+            guard,
+        ));
+
+    Router::new()
+        // Open, and it has to be: a platform health check arrives with no
+        // credential, and a health endpoint that needs one is a service that
+        // never comes up. It answers whether the process is alive and nothing
+        // else -- no version, no configuration, no counts.
+        .route("/healthz", get(healthz))
+        .merge(guarded)
         .with_state(state)
+}
+
+/// Refuse anything that does not carry a token we issued.
+///
+/// Before the handler, so an unauthenticated request cannot make the server
+/// embed a prompt, consult a cache or open an upstream connection. The cost of
+/// a refusal should be a string comparison.
+///
+/// The refusal says nothing about why. "No token" and "wrong token" are one
+/// answer here: distinguishing them tells somebody probing which half of their
+/// guess was right, and neither is actionable to a caller who has a valid one.
+async fn guard(
+    State(state): State<Arc<AppState>>,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response {
+    let header = request
+        .headers()
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok());
+
+    match presented(header).and_then(|token| state.tokens.caller(token)) {
+        Some(_) => next.run(request).await,
+        None => (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({"error": {"message": "a valid token is required",
+                                  "type": "authentication_error"}})),
+        )
+            .into_response(),
+    }
 }
 
 /// Build the embedding backend the configuration asked for.
@@ -416,6 +470,17 @@ async fn main() -> Result<(), ConfigError> {
         tracing::warn!("no calibrated thresholds; using defaults, which suit no head");
     }
 
+    // Read before binding, so a deployment with none is told at startup rather
+    // than by every request afterwards. Not fatal: a router with no tokens is
+    // useless and safe, and refusing to start would take a service down over a
+    // variable somebody is midway through setting.
+    let tokens = Listed::from_env();
+    if tokens.is_empty() {
+        tracing::warn!("no tokens in WATTROUTER_TOKENS; every request to /v1 will be refused");
+    } else {
+        tracing::info!(tokens = tokens.len(), "tokens loaded");
+    }
+
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .unwrap_or_else(|e| panic!("cannot bind {addr}: {e}"));
@@ -424,10 +489,13 @@ async fn main() -> Result<(), ConfigError> {
     // then finds a live connection instead of paying for DNS, TCP and TLS.
     upstream.prewarm().await;
 
-    axum::serve(listener, app(config, upstream, head, embedder))
-        .with_graceful_shutdown(shutdown())
-        .await
-        .unwrap_or_else(|e| panic!("server failed: {e}"));
+    axum::serve(
+        listener,
+        app(config, upstream, head, embedder, Box::new(tokens)),
+    )
+    .with_graceful_shutdown(shutdown())
+    .await
+    .unwrap_or_else(|e| panic!("server failed: {e}"));
 
     Ok(())
 }
@@ -475,7 +543,76 @@ mod tests {
             test_upstream(),
             None,
             Box::new(HashEmbedder::new()),
+            Box::new(Listed::parse("test:t0ken")),
         )
+    }
+
+    /// The token `test_app` accepts. Every request below carries it, so the
+    /// guard is on the path of every test rather than only its own.
+    const TOKEN: &str = "Bearer t0ken";
+
+    /// Ask for something without presenting anything.
+    async fn unauthenticated(uri: &str) -> axum::response::Response {
+        test_app()
+            .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn nothing_under_v1_answers_without_a_token() {
+        // The whole of #533: deploying this without the guard hands a stranger
+        // an unmetered proxy to a paid provider.
+        for uri in ["/v1/models", "/v1/chat/completions"] {
+            assert_eq!(
+                unauthenticated(uri).await.status(),
+                StatusCode::UNAUTHORIZED,
+                "{uri} answered without a token"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn metrics_is_closed_too() {
+        // It was open because everything was, and it is the one that leaks:
+        // counts by tier say what is being asked and how often.
+        assert_eq!(
+            unauthenticated("/metrics").await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+    }
+
+    #[tokio::test]
+    async fn liveness_answers_to_nobody_in_particular() {
+        // A platform health check arrives with no credential. A health endpoint
+        // that requires one is a service that never comes up.
+        assert_eq!(unauthenticated("/healthz").await.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn a_token_we_did_not_issue_is_no_better_than_none() {
+        let response = test_app()
+            .oneshot(
+                Request::builder()
+                    .header(axum::http::header::AUTHORIZATION, "Bearer wrong")
+                    .uri("/v1/models")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn a_path_that_does_not_exist_says_so_rather_than_401() {
+        // Why the guard is a route_layer and not a layer. Answering 401 for an
+        // unrouted path tells an observer the path exists.
+        assert_eq!(
+            unauthenticated("/v1/nothing-here").await.status(),
+            StatusCode::NOT_FOUND
+        );
     }
 
     async fn body_json(response: axum::response::Response) -> Value {
@@ -488,6 +625,7 @@ mod tests {
         let response = test_app()
             .oneshot(
                 Request::builder()
+                    .header(axum::http::header::AUTHORIZATION, TOKEN)
                     .uri("/healthz")
                     .body(Body::empty())
                     .unwrap(),
@@ -511,6 +649,7 @@ mod tests {
         // not matter here: the header is read before anything is forwarded.
         for session in [Some("verify-1"), None] {
             let mut request = Request::builder()
+                .header(axum::http::header::AUTHORIZATION, TOKEN)
                 .method("POST")
                 .uri("/v1/chat/completions")
                 .header("content-type", "application/json");
@@ -527,6 +666,7 @@ mod tests {
         let response = app
             .oneshot(
                 Request::builder()
+                    .header(axum::http::header::AUTHORIZATION, TOKEN)
                     .uri("/metrics")
                     .body(Body::empty())
                     .unwrap(),
@@ -547,6 +687,7 @@ mod tests {
         let response = test_app()
             .oneshot(
                 Request::builder()
+                    .header(axum::http::header::AUTHORIZATION, TOKEN)
                     .uri("/v1/models")
                     .body(Body::empty())
                     .unwrap(),
@@ -587,6 +728,7 @@ mod tests {
         let response = test_app()
             .oneshot(
                 Request::builder()
+                    .header(axum::http::header::AUTHORIZATION, TOKEN)
                     .method("POST")
                     .uri("/v1/chat/completions")
                     .header("content-type", "application/json")
@@ -617,6 +759,7 @@ mod tests {
         let response = test_app()
             .oneshot(
                 Request::builder()
+                    .header(axum::http::header::AUTHORIZATION, TOKEN)
                     .method("POST")
                     .uri("/v1/chat/completions")
                     .header("content-type", "application/json")
