@@ -54,6 +54,7 @@ printf 'test-gates: the gates report what they could not do\n\n'
 # the thing they call is replaced, not the call.
 broken="$(mktemp -d)"
 trap 'rm -rf "$broken"' EXIT
+scratch=
 
 make_broken() {
     printf '#!/bin/sh\nexit 3\n' >"$broken/$1"
@@ -123,6 +124,52 @@ check "issue-link exempts dependabot" 0 \
 check "issue-link still applies to a person" 1 \
     env PR_AUTHOR="somebody" PR_TITLE="bump x" PR_BODY="" \
     PR_HEAD_REF="some-branch" bash "$root/scripts/guards/issue-link.sh"
+
+# --- a removal is one question, and an edit beside it is not (#542) ---
+#
+# Built as a real repository rather than asserted against a fixture: the rule is
+# about what `git diff --diff-filter=D` reports, and a test that does not run git
+# is testing an assumption about git.
+
+scratch="$(mktemp -d)"
+trap 'rm -rf "$broken" "$scratch"' EXIT
+
+# One repository per case, rather than a revert chaining them: a revert that
+# fails takes the whole script down under `set -e`, and it did.
+#
+# $1 is where, $2 is whether the surviving file is also edited.
+plant() {
+    local where="$1" edit="$2"
+    mkdir -p "$where"
+    git -C "$where" init -q .
+    git -C "$where" config user.email t@example.com
+    git -C "$where" config user.name t
+    # 400 lines, over the limit on its own.
+    seq 1 400 >"$where/big.txt"
+    printf 'one line\n' >"$where/small.txt"
+    git -C "$where" add -A
+    git -C "$where" commit -qm base
+    git -C "$where" rm -q big.txt
+    if [ "$edit" = "edit" ]; then
+        seq 1 400 >>"$where/small.txt"
+        git -C "$where" add -A
+    fi
+    git -C "$where" commit -qm change
+}
+
+sized() {
+    local where="$1"
+    env BASE_SHA="$(git -C "$where" rev-parse HEAD~1)" \
+        HEAD_SHA="$(git -C "$where" rev-parse HEAD)" \
+        GIT_DIR="$where/.git" GIT_WORK_TREE="$where" \
+        bash "$root/scripts/guards/pr-size.sh"
+}
+
+plant "$scratch/gone" plain >/dev/null 2>&1
+check "a subtree leaving does not count" 0 sized "$scratch/gone"
+
+plant "$scratch/hidden" edit >/dev/null 2>&1
+check "an edit beside a removal still counts" 1 sized "$scratch/hidden"
 
 printf '\n'
 if [ "$failures" -eq 0 ]; then

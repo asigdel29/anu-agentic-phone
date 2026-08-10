@@ -10,6 +10,17 @@
 # Lockfiles and vendored data are excluded: they are generated, nobody reads them
 # line by line, and counting them would push changes over the limit for reasons
 # unrelated to how much there is to review.
+#
+# A file deleted outright is excluded too, and #542 argues why. The limit exists
+# because review quality falls off with size, which is a claim about lines
+# somebody has to read. A removed subtree is not sixteen thousand things to
+# review; it is one question -- should this go -- and the answer does not get
+# harder as the subtree grows. Counting it made "remove a feature" inexpressible,
+# and a repository that cannot delete things accretes.
+#
+# A file that still exists counts in full, added and removed. That keeps the
+# protection worth keeping: a pull request that removes a subtree and quietly
+# edits something that stays cannot hide the edit behind the removal.
 
 set -euo pipefail
 
@@ -25,7 +36,34 @@ guard_range
 # branch after this one opened do not count towards its size.
 stat=$(git diff --numstat "$base...$head" -- "${GUARD_EXCLUDES[@]}")
 
-total=$(printf '%s' "$stat" | awk '{a += $1; d += $2} END {print a + d + 0}')
+# Which paths left entirely. --diff-filter=D is the whole of the rule: a file
+# that still exists is not in this list, however much of it changed.
+gone=$(git diff --name-only --diff-filter=D "$base...$head" -- "${GUARD_EXCLUDES[@]}")
+
+# Into a file and read from one, rather than a process substitution: scripts/lint
+# /test-gates.sh exists because that construction hides its command's failure
+# from `set -e`, and this guard reporting a small diff because git died is the
+# same class of mistake it was written to catch.
+removed=$(mktemp)
+trap 'rm -f "$removed"' EXIT
+printf '%s\n' "$gone" >"$removed"
+
+total=$(printf '%s' "$stat" | awk -v removed="$removed" '
+    BEGIN {
+        while ((getline path < removed) > 0) {
+            if (path != "") deleted[path] = 1
+        }
+    }
+    # $3 is the path. Binary files report - for both counts and add nothing.
+    !($3 in deleted) { a += $1; d += $2 }
+    END { print a + d + 0 }
+')
+
+# Said rather than left implicit: a total that ignores a 16,000-line removal is
+# surprising unless the reason is on the screen beside it.
+if [ -n "$gone" ]; then
+    printf 'files removed entirely (not counted): %s\n' "$(printf '%s\n' "$gone" | grep -c .)"
+fi
 
 printf 'changed lines: %s (limit %s)\n' "$total" "$LIMIT"
 
