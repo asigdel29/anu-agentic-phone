@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import com.getlora.wattrouter.Autonomy
 import com.getlora.wattrouter.Decision
 import com.getlora.wattrouter.Row
 
@@ -46,14 +47,19 @@ import com.getlora.wattrouter.Row
  * @param onSend what the person typed. Blank text is the driver's to refuse,
  *   not this function's — one place deciding what counts as a message.
  * @param onInterrupt stop the turn in flight.
+ * @param mode how involved this person wants to be. Above the field rather
+ *   than behind a settings screen: it changes what the next send does, so it
+ *   belongs where the next send is typed.
  */
 @Composable
 fun ChatScreen(
     rows: List<Row>,
     isRunning: Boolean,
     routing: Decision?,
+    mode: Autonomy,
     onSend: (String) -> Unit,
     onInterrupt: () -> Unit,
+    onMode: (Autonomy) -> Unit,
 ) {
     var typed by remember { mutableStateOf("") }
     val scroll = rememberLazyListState()
@@ -84,8 +90,10 @@ fun ChatScreen(
             items(rows, key = { it.id }) { Line(it) }
         }
 
+        ModeRow(mode, onMode)
+
         LayoutRow(
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
