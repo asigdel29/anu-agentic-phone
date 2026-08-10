@@ -1,4 +1,4 @@
-// Modes.kt — where the autonomy mode is kept, and how it is picked.
+// Modes.kt: where the autonomy mode is kept, and how it is picked.
 //
 // History
 //   2026-08-10  A. Sigdel  Created with #558.
@@ -15,7 +15,7 @@
 //
 // It defaults to Auto, which is what this app has always done. A default of Ask
 // would be safer for exactly one turn and then be switched off by everybody, so
-// it is not the safer choice — it is the one that teaches people to dismiss the
+// it is not the safer choice: it is the one that teaches people to dismiss the
 // question without reading it.
 
 package com.getlora.wattrouter.app

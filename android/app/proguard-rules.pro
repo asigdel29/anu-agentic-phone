@@ -1,4 +1,4 @@
-# proguard-rules.pro — what R8 may not rename.
+# proguard-rules.pro: what R8 may not rename.
 #
 # History
 #   2026-08-09  A. Sigdel  Created.
@@ -9,7 +9,7 @@
 # router/src/jni.rs exports symbols that encode the package, the class and the
 # method: Java_com_getlora_wattrouter_Core_nativeNew, and the same shape for
 # Memory and Repository. Renamed, they are an UnsatisfiedLinkError at
-# Startup.begin — after the app has compiled, installed and launched.
+# Startup.begin, after the app has compiled, installed and launched.
 #
 # AGP's proguard-android-optimize.txt ALREADY KEEPS THESE. It is line 30 of
 # build/outputs/mapping/release/configuration.txt, which is the merged config

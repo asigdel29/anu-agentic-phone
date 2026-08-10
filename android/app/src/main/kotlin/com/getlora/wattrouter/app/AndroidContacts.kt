@@ -1,17 +1,17 @@
-// AndroidContacts.kt — the address book as the provider holds it.
+// AndroidContacts.kt: the address book as the provider holds it.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
 //
 // Two queries rather than one. Selecting from Data and folding by contact id is
 // the shorter way to write this and it silently drops anybody with no phone row
-// and no email row — and those are people Contacts.kt renders on purpose, saying
+// and no email row, and those are people Contacts.kt renders on purpose, saying
 // what is missing, because an entry that vanishes reads as somebody who is not
 // in the address book. So: Contacts for who matches, Data for how to reach the
 // ones that did.
 //
 // LIKE is the other thing. A name carrying % or _ is a wildcard to SQLite, so
-// looking up "50%" matches rows nobody asked about — and "%" on its own matches
+// looking up "50%" matches rows nobody asked about, and "%" on its own matches
 // every contact, which is the single answer Contacts.kt exists to prevent. The
 // escaping belongs here because this is the layer that knows a name becomes SQL.
 
@@ -65,7 +65,7 @@ class AndroidContacts(private val context: Context) : Directory {
                 arrayOf(ContactsContract.Data.CONTACT_ID, ContactsContract.Data.MIMETYPE, VALUE),
                 // The ids are interpolated because a bind list cannot be. They
                 // are the provider's own longs, read out of the first query and
-                // never anything a model wrote, so there is nothing to escape —
+                // never anything a model wrote, so there is nothing to escape,
                 // which is not true one line above, and is why that one binds.
                 "${ContactsContract.Data.CONTACT_ID} IN (${named.keys.joinToString(",")}) " +
                     "AND ${ContactsContract.Data.MIMETYPE} IN (?,?)",

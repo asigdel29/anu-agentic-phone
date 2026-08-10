@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  driving.xml — what the accessibility service is allowed to do.
+  driving.xml: what the accessibility service is allowed to do.
 
   History
     2026-08-09  A. Sigdel  Created.
@@ -14,12 +14,12 @@
   needs it, for the reason its header gives.
 
   No canPerformGestures, and none is coming. Every action turned out to be a
-  node action — click, set text, scroll forward — so no coordinate enters the
+  node action (click, set text, scroll forward) so no coordinate enters the
   app at all, which is stronger than how-the-agent-drives.md promised.
 
   flagRequestAccessibilityButton is one of three ways in, and the only one that
   belongs to this service. The bubble (#523) is the second. The third is the
-  assist gesture, which this comment used to say had been declined — #527
+  assist gesture, which this comment used to say had been declined. #527
   overturned that and the manifest now declares ACTION_ASSIST, so the sentence
   is corrected here rather than left to contradict it.
 

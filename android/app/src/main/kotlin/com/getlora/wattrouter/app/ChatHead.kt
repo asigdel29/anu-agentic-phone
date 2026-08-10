@@ -1,4 +1,4 @@
-// ChatHead.kt — the way back to the agent from inside another app.
+// ChatHead.kt: the way back to the agent from inside another app.
 //
 // History
 //   2026-08-09  A. Sigdel  Created with #522.
@@ -54,7 +54,7 @@ internal class ChatHead(context: Context, private val onOpen: () -> Unit) {
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             // As Banner. NOT_FOCUSABLE keeps the keyboard with the app
             // underneath; NOT_TOUCH_MODAL lets every tap outside the bubble
-            // through to it. The bubble itself still receives its own touches —
+            // through to it. The bubble itself still receives its own touches;
             // these flags are about everywhere it is not.
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
@@ -94,7 +94,7 @@ internal class ChatHead(context: Context, private val onOpen: () -> Unit) {
      * enough that neither is surprising.
      *
      * SuppressLint("ClickableViewAccessibility"): the view is not clickable and
-     * has no click listener to call — the tap is decided here, from the same
+     * has no click listener to call: the tap is decided here, from the same
      * gesture that might have been a drag, and performClick would fire on drags
      * too. The content description above is what a screen reader reads.
      */

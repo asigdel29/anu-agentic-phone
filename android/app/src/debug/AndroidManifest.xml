@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  AndroidManifest.xml (debug) — points a debug build at the config beside it.
+  AndroidManifest.xml (debug): points a debug build at the config beside it.
 
   History
     2026-08-09  A. Sigdel  Created with #513.

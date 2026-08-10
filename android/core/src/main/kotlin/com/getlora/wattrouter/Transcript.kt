@@ -1,4 +1,4 @@
-// Transcript.kt — a turn's events, folded into what a person reads.
+// Transcript.kt: a turn's events, folded into what a person reads.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
@@ -9,7 +9,7 @@
 //
 // Every rule below exists because the naive version looks wrong on screen, and
 // putting them in a composable would mean deciding per event whether to open a
-// bubble or extend one — in a function that also has to lay one out.
+// bubble or extend one, in a function that also has to lay one out.
 //
 // Ids come from a counter rather than a position in the list, so a row that
 // grows keeps its identity. A LazyColumn keyed on position re-creates every

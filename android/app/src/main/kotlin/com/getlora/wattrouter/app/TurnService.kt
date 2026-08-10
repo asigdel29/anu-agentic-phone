@@ -1,4 +1,4 @@
-// TurnService.kt — a turn that outlives the screen that started it.
+// TurnService.kt: a turn that outlives the screen that started it.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -19,7 +19,7 @@
 // is told it is running, and where they cancel it from.
 //
 // That last clause was untrue until #470. STOP called stopSelf() and nothing
-// else, so the button removed the notification and left the turn running — with
+// else, so the button removed the notification and left the turn running, with
 // the one sign that it was running now gone, which is worse than not offering a
 // button at all.
 //

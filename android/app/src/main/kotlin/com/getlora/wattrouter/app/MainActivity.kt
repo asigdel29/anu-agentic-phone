@@ -1,4 +1,4 @@
-// MainActivity.kt — the launch, and which of three states it lands in.
+// MainActivity.kt: the launch, and which of three states it lands in.
 //
 // History
 //   2026-08-08  A. Sigdel  Created. Reported whether the core loaded.
@@ -14,7 +14,7 @@
 //
 // The core and the driver are built once and held for the process. The core
 // owns a native pointer and a decision cache, and a second one is a second
-// cache that disagrees with the first — the same reasoning WattRouterApp.swift
+// cache that disagrees with the first: the same reasoning WattRouterApp.swift
 // gives for building its driver once into @State and never reassigning.
 
 package com.getlora.wattrouter.app
@@ -119,7 +119,7 @@ class MainActivity : ComponentActivity() {
 
         // Here rather than in the composition. AndroidAsking registers an
         // activity-result launcher, which has to happen before this Activity is
-        // STARTED, and setContent's first composition is not before it — built
+        // STARTED, and setContent's first composition is not before it, and built
         // there it throws about a lifecycle state rather than about the line.
         permission = Permission(AndroidAsking(this))
 
@@ -174,7 +174,7 @@ class MainActivity : ComponentActivity() {
                     router = ready.core.routing(),
                     // BuildConfig rather than the client's default, so where a
                     // turn goes is decided when the application is built and
-                    // cannot be moved at runtime — by anybody, including the
+                    // cannot be moved at runtime by anybody, including the
                     // agent, which can drive this application's own screen.
                     walk = ChainWalk(
                         NeuralWattInference(
@@ -227,7 +227,7 @@ class MainActivity : ComponentActivity() {
      *
      * `filesDir/work`, made if it is not there. A directory is not a repository
      * and the core has no `init` (#393), so until one arrives here these three
-     * answer that it is not one — which is true and actionable, and the whole
+     * answer that it is not one, which is true and actionable, and the whole
      * of what is missing is a single entry point rather than anything above it.
      */
     private fun working(): List<Tool> {
@@ -246,7 +246,7 @@ class MainActivity : ComponentActivity() {
      * `setIntent` as well, because `getIntent` keeps answering with whatever
      * started the Activity: without it a later recreation would read this same
      * intent again. [take] then empties it, so the pair is what makes a share
-     * happen once — Inbox.drain's "a read removes", in the shape Android has.
+     * happen once: Inbox.drain's "a read removes", in the shape Android has.
      */
     override fun onNewIntent(incoming: Intent) {
         super.onNewIntent(incoming)
@@ -276,7 +276,7 @@ class MainActivity : ComponentActivity() {
      * Offered whether or not the accessibility service is on. A model that
      * cannot see the tools cannot be told why they are unavailable, and
      * read_screen's own answer names the switch and the restricted-settings
-     * trap behind it — which is the only place somebody learns about either.
+     * trap behind it, which is the only place somebody learns about either.
      */
     private fun driving(): List<Tool> {
         // Confirmed outside Budgeted, which #553 argues: the other way round
@@ -338,7 +338,7 @@ class MainActivity : ComponentActivity() {
      * Take somebody to the screen a row names.
      *
      * The restricted-settings row names a menu inside a page rather than a
-     * page, and there is no intent for a menu — so it opens the page and the
+     * page, and there is no intent for a menu, so it opens the page and the
      * row's own words say which item to press.
      */
     private fun open(step: Needed) {
@@ -377,7 +377,7 @@ private fun Conversation(
     val context = LocalContext.current
 
     // Cleared before sending, not after. send() starts a turn and returns, so
-    // clearing afterwards would still be inside this effect and correct — but
+    // clearing afterwards would still be inside this effect and correct, but
     // clearing first is what makes a recomposition during the turn harmless.
     LaunchedEffect(handed.value) {
         handed.value?.let { shared ->
@@ -387,7 +387,7 @@ private fun Conversation(
     }
 
     // The service follows the driver rather than being started beside a send.
-    // Every way a turn can end — answered, failed, interrupted — goes through
+    // Every way a turn can end (answered, failed, interrupted) goes through
     // isRunning, and a notification left behind by one of them is a turn the
     // person believes is still running.
     LaunchedEffect(isRunning) {

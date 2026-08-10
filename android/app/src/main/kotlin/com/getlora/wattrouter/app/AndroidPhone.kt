@@ -1,4 +1,4 @@
-// AndroidPhone.kt — the screen tools, joined to the service that can reach one.
+// AndroidPhone.kt: the screen tools, joined to the service that can reach one.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
