@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# slopgate.sh — reject the register that arrives with unreviewed generated prose.
+# slopgate.sh: reject the register that arrives with unreviewed generated prose.
 #
 # History
 #   2026-08-07  A. Sigdel  Created.
@@ -12,7 +12,7 @@
 #
 # It reads three surfaces, because the standard governs prose in all three: the
 # lines a diff adds, the commit messages in the range, and the pull request's own
-# title and body. Removed lines are not read — a change that deletes a banned word
+# title and body. Removed lines are not read: a change that deletes a banned word
 # should not be the change blamed for it.
 #
 # Every check runs even after one has found something, so a contributor sees the
@@ -34,8 +34,8 @@ guard_pr_text
 
 # The word lists live beside this file rather than in it. They are the only thing
 # here that must contain the words it rejects, and keeping them separate is what
-# lets the guard read the rest of this script — two hundred lines of prose about
-# the register — instead of exempting it.
+# lets the guard read the rest of this script, two hundred lines of prose about
+# the register, instead of exempting it.
 # shellcheck source=scripts/guards/slopgate.patterns
 . "$here/slopgate.patterns"
 
@@ -51,7 +51,7 @@ guard_pr_text
 readonly EMOJI=$'\xf0\x9f|\xe2\x9c\x85|\xe2\x9d\x8c|\xe2\x9a\xa0'
 
 # Program source, where a non-ASCII literal is usually data under test. Everything
-# else carries prose — Markdown, YAML, unit files, shell, the justfile — and none
+# else carries prose (Markdown, YAML, unit files, shell, the justfile) and none
 # of those end in `.md`, which is all an earlier version of this read. Anchored
 # against the `path:line:text` shape a finding is reported in.
 readonly SOURCE_LINE='^[^:]*\.(rs|swift|py):'
@@ -61,7 +61,7 @@ readonly SOURCE_LINE='^[^:]*\.(rs|swift|py):'
 all_hits=''
 
 # Record one check's hits. Takes them as an argument rather than on stdin, so that
-# it runs in this shell and what it accumulates survives — a pipeline would put it
+# it runs in this shell and what it accumulates survives: a pipeline would put it
 # in a subshell and the additions would be lost.
 check() {
     local what="$1"
@@ -134,7 +134,7 @@ printf 'slopgate: %s added line(s), %s line(s) of prose\n' \
 
 # Every check reads with `-a` under LC_ALL=C. A diff carries whatever bytes an
 # added line held, and a stream grep decides is binary is answered with a single
-# "binary file matches" — which `check` would then report as the finding, hiding
+# "binary file matches", which `check` would then report as the finding, hiding
 # every real hit in that run behind a line naming nothing.
 #
 # The three word-list checks read the same stream the same way, so they read it
@@ -145,13 +145,13 @@ over_everything() {
     printf '%s\n' "$both" | LC_ALL=C grep -aiE "$1" || true
 }
 
-check 'Marketing register — say the thing instead of describing it' \
+check 'Marketing register: say the thing instead of describing it' \
     "$(over_everything "$REGISTER")"
 
-check 'Chat-context shorthand — the reader was not in the conversation' \
+check 'Chat-context shorthand: the reader was not in the conversation' \
     "$(over_everything "$SHORTHAND")"
 
-check 'Attribution trailer — the repository has one authorial voice' \
+check 'Attribution trailer: the repository has one authorial voice' \
     "$(over_everything "$ATTRIBUTION")"
 
 # A marker naming an issue is a plan; one naming nothing is a note to somebody who
@@ -161,20 +161,20 @@ check 'Attribution trailer — the repository has one authorial voice' \
 # whether the marker names an issue rather than whether the line holds a hash
 # followed by a digit anywhere. A colour literal earlier in the line is not an
 # issue number.
-check 'Marker with no issue — name one (#123), or do the work' \
+check 'Marker with no issue: name one (#123), or do the work' \
     "$(printf '%s\n' "$diff_text" | LC_ALL=C grep -aE "$MARKER" |
         LC_ALL=C grep -avE "$MARKER"'[^#]*#[0-9]+' || true)"
 
 prose_files=$(printf '%s\n' "$diff_text" | LC_ALL=C grep -avE "$SOURCE_LINE" || true)
 
-check 'Emoji outside source — a register, not a decision' \
+check 'Emoji outside source: a register, not a decision' \
     "$(printf '%s\n%s\n' "$prose_files" "$prose_text" | LC_ALL=C grep -aE "$EMOJI" || true)"
 
 # Distinct lines: `sort -u` collapses a line two checks caught, and `grep -c .`
 # counts what is left without the blank `all_hits` starts life as.
 #
 # The `|| true` is load-bearing under `set -o pipefail`. `grep` exits 1 when it
-# matches nothing, which is the ordinary case of a clean run — without it the
+# matches nothing, which is the ordinary case of a clean run. Without it the
 # substitution fails, `set -e` ends the script here, and a clean guard reports
 # failure having printed no finding at all.
 findings=$(printf '%s\n' "$all_hits" | sort -u | LC_ALL=C grep -ac . || true)
@@ -195,7 +195,7 @@ people to route around gates rather than to write more carefully.
 
 So read each line above and decide. If a word is right where it is, keep it and
 say so in review. If a list is wrong, the lists are at the top of this file and a
-word comes out in one line — subject to the rule stated there: a word belongs on
+word comes out in one line, subject to the rule stated there: a word belongs on
 a list only while this repository's own prose does not use it.
 EOF
 exit 1

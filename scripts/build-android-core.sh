@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# build-android-core.sh — build the routing core as a library JNI can load.
+# build-android-core.sh: build the routing core as a library JNI can load.
 #
 # History
 #   2026-08-08  A. Sigdel  Created.
@@ -10,19 +10,19 @@
 #
 # A shared object rather than an archive. JNI loads a library by name at runtime;
 # there is no link step of the app's own to hand a `.a` to. That is a per-build
-# choice rather than a manifest one — `crate-type = [..., "cdylib"]` in
+# choice rather than a manifest one: `crate-type = [..., "cdylib"]` in
 # Cargo.toml makes every target build a dynamic library, and the iOS slices then
 # fail to link one they neither want nor can produce. `cargo rustc --crate-type`
 # says it here, where it is true.
 #
 # One ABI. arm64-v8a covers every device worth shipping to and, on an Apple
-# silicon machine, the emulator as well — the same reasoning that gives the iOS
+# silicon machine, the emulator as well, the same reasoning that gives the iOS
 # script one simulator slice. x86_64-linux-android is one entry in the loop below
 # and belongs there the day somebody builds on an Intel host.
 #
 # API 24 as the floor for the *toolchain*, which is not the app's minSdk. The NDK
-# wrapper picks the platform headers to compile the vendored C against — libgit2
-# and SQLite — and choosing a low one there costs nothing and keeps the .so
+# wrapper picks the platform headers to compile the vendored C against (libgit2
+# and SQLite) and choosing a low one there costs nothing and keeps the .so
 # loadable wherever the app is allowed to install. What the app targets is
 # Gradle's to say, and #229 has the constraints that decide it.
 #
@@ -80,7 +80,7 @@ fi
 readonly NDK
 
 # One prebuilt directory per host, and it is named for the host that built the
-# NDK rather than the one running it — darwin-x86_64 is correct on Apple silicon.
+# NDK rather than the one running it: darwin-x86_64 is correct on Apple silicon.
 BIN="$(echo "$NDK"/toolchains/llvm/prebuilt/*/bin)"
 readonly BIN
 if [ ! -x "$BIN/llvm-ar" ]; then
@@ -93,7 +93,7 @@ if ! rustup target list --installed | grep -qx "$TARGET"; then
     rustup target add "$TARGET"
 fi
 
-# cc and ar for the vendored C — libgit2 and SQLite both build one — and the
+# cc and ar for the vendored C (libgit2 and SQLite both build one) and the
 # linker for the Rust half. Named per target, which is how cargo and cc-rs each
 # find theirs.
 export CC_aarch64_linux_android="$BIN/aarch64-linux-android$API-clang"
@@ -103,7 +103,7 @@ export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$CC_aarch64_linux_android"
 printf 'building %s\n' "$TARGET"
 # git and memory because a phone has no shell
 # and cannot afford the ONNX embedder, whichever phone it is. android for the JNI
-# entry points, which is the half iOS does not want — it links the archive
+# entry points, which is the half iOS does not want: it links the archive
 # directly and has no JVM to be reached from.
 cargo rustc --manifest-path "$MANIFEST" --target "$TARGET" \
     --release --lib --no-default-features --features git,memory,android \
@@ -118,7 +118,7 @@ cp "$ROOT/router/target/$TARGET/release/libwattrouter.so" "$OUT/$ABI/"
 # nobody here owns yet, so it would be found by somebody else.
 #
 # NDK r28 and later align to 16 KB by default, so this holds today by default
-# rather than by intent — which is the reason to check it. An older NDK found by
+# rather than by intent, which is the reason to check it. An older NDK found by
 # resolve_ndk on another machine would quietly undo it, and the build would look
 # exactly the same.
 assert_page_alignment() {
@@ -148,7 +148,7 @@ assert_page_alignment() {
 $so is aligned for a $worst-byte page, and Android 15 and later may use $want.
 
 It will not load there. The toolchain decides this: NDK r28 and later align to
-16 KB by default, so an older NDK is the likely cause —
+16 KB by default, so an older NDK is the likely cause:
 
   $NDK
 

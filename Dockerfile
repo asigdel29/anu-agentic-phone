@@ -1,4 +1,4 @@
-# Dockerfile — the router as something a platform can run.
+# Dockerfile: the router as something a platform can run.
 #
 # History
 #   2026-08-09  A. Sigdel  Created with #537.

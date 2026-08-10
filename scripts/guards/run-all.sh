@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run-all.sh — run every guard in registry.json and report as one result.
+# run-all.sh: run every guard in registry.json and report as one result.
 #
 # History
 #   2026-08-05  A. Sigdel  Created.
@@ -13,7 +13,7 @@
 # The guard list comes through a file rather than a process substitution, and
 # #478 says why this one mattered most of the four that did it. A registry with
 # a trailing comma made jq exit non-zero, the loop below run zero times, and
-# this print "All hard guards passed" over three guards that had not run — on
+# this print "All hard guards passed" over three guards that had not run, on
 # the gate that decides whether a pull request may merge.
 #
 # Usage
