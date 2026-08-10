@@ -4,15 +4,23 @@
 
   History
     2026-08-09  A. Sigdel  Created to hold a FLAG_SECURE activity.
+    2026-08-10  A. Sigdel  And an accessibilityDataSensitive one.
 
   Merged into the test APK alone, so nothing here ships. An activity is the
   only way to ask what an accessibility service sees of a window somebody else
   marked secure, and no app on the emulator is guaranteed to have one.
+
+  Both are the same question a release apart. FLAG_SECURE is what an
+  application set before it learned the node tree is untouched;
+  accessibilityDataSensitive is what it reaches for afterwards.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
         <activity
             android:name="com.getlora.wattrouter.app.SecureActivity"
+            android:exported="true" />
+        <activity
+            android:name="com.getlora.wattrouter.app.SensitiveActivity"
             android:exported="true" />
     </application>
 </manifest>
