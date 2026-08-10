@@ -84,6 +84,19 @@ check "run-all with no jq" 2 \
     env PATH="$broken:$PATH" bash "$root/scripts/guards/run-all.sh"
 rm -f "$broken/jq"
 
+# --- no-google, when Gradle cannot resolve ---
+#
+# The only case here whose tool is optional. A machine without an Android SDK is
+# an ordinary machine in this repository, so the difference between "resolved and
+# found nothing" and "could not resolve" is the difference between a check and a
+# green tick over nothing. The clean-run half is not tested here: it needs an SDK,
+# which the CI job calling this does not have.
+
+make_broken gradle
+check "no-google with no gradle" 2 \
+    env PATH="$broken:$PATH" bash "$root/scripts/lint/no-google.sh"
+rm -f "$broken/gradle"
+
 # --- and each still finds what it is for ---
 #
 # Without this the four above would pass against a script that exited 2
