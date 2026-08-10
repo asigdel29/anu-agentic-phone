@@ -170,11 +170,17 @@ class Confirmed(
         consent.mayI(intent) -> act()
         else -> Done.Refused(
             // Named as a person rather than as a policy. A model told a rule
-            // refused it looks for another way through; a model told somebody
-            // said no stops and says so, which is the point of asking.
-            "the person using the phone was asked whether to " +
-                "${intent.verb} ${intent.what}, and said no. Do not try it " +
-                "another way. Say what you were going to do and why.",
+            // refused it looks for another way through; a model told a person
+            // did not allow it stops and says so, which is the point of asking.
+            //
+            // "did not allow" rather than "said no", because #556 found a case
+            // where nobody could be asked at all: the question is an overlay on
+            // the accessibility service, and open_app does not need one. Both
+            // are the same refusal and only one of them is somebody answering.
+            "the person using the phone did not allow that. They decide " +
+                "each action in this mode, and ${intent.verb} " +
+                "${intent.what} was not approved. Do not try it another " +
+                "way. Say what you were going to do and why.",
         )
     }
 }
