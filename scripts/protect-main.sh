@@ -31,7 +31,49 @@ BRANCH="${BRANCH:-main}"
 NAME="main is reached through a pull request"
 
 dry=""
-[ "${1:-}" = "--dry-run" ] && dry=1
+enforcement="active"
+
+# Two flags, and only one of them is ordinary. `--enforcement evaluate` reports
+# what every rule would have done and blocks nothing, which is GitHub's own
+# rehearsal mode and the only way past this ruleset: there is no implicit
+# administrator bypass, so a change the rules refuse cannot be merged by
+# somebody with the power to change the rules without changing them.
+#
+# It is a hole while it is open, and a wider one than it looks. `evaluate`
+# relaxes the whole ruleset rather than the rule in the way: required checks,
+# linear history and the requirement of a pull request all stop applying
+# together. So it is a flag rather than a variable somebody exports and forgets,
+# it prints what it set, and the only use written down for it is a merge that is
+# one decision repeated too many times to divide (#582).
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --dry-run) dry=1 ;;
+        --enforcement)
+            # Guarded rather than a bare `shift`: with no value left, shifting
+            # twice ends the script on `set -e` with a status and no sentence,
+            # which is the failure telling somebody least about itself.
+            [ "$#" -ge 2 ] || {
+                printf 'protect-main: --enforcement needs a value\n' >&2
+                exit 2
+            }
+            enforcement="$2"
+            shift
+            ;;
+        *)
+            printf 'protect-main: unknown argument %s\n' "$1" >&2
+            exit 2
+            ;;
+    esac
+    shift
+done
+
+case "$enforcement" in
+    active | evaluate | disabled) ;;
+    *)
+        printf 'protect-main: enforcement must be active, evaluate or disabled\n' >&2
+        exit 2
+        ;;
+esac
 
 # The two checks are DISPLAY names — the `name:` field of each job, not its id.
 # `required` and `guards` are the ids, and a ruleset naming those waits forever
@@ -43,7 +85,12 @@ dry=""
 # stall on every candidate. what-guards-main.md says so at more length, because
 # enabling one is the tidy-looking change somebody makes later.
 rules() {
-    cat <<'JSON'
+    # One value substituted rather than the heredoc unquoted. `<<'JSON'` means
+    # nothing inside it can expand, which is what a document describing who may
+    # write to `main` should be: a ruleset is not somewhere to find out that a
+    # `$` or a backtick meant something. So the delimiter stays quoted and the
+    # single line that varies is replaced after the fact.
+    cat <<'JSON' | sed "s/\"enforcement\": \"active\"/\"enforcement\": \"$enforcement\"/"
 {
   "name": "main is reached through a pull request",
   "target": "branch",
@@ -127,6 +174,14 @@ fi
 
 settings | gh api --method PATCH "repos/$REPO" --input - >/dev/null
 printf 'set the repository settings\n'
+
+# Said at the end rather than the start, because the end is what somebody reads
+# after running it, and an open ruleset is not a thing to mention in passing.
+if [ "$enforcement" != "active" ]; then
+    printf '\n*** %s is enforcing NOTHING (%s) ***\n' "$BRANCH" "$enforcement"
+    printf 'Every rule below is being reported and none is being applied.\n'
+    printf 'Put it back with: scripts/protect-main.sh\n'
+fi
 
 printf '\n=== %s now requires ===\n' "$BRANCH"
 gh api "repos/$REPO/rules/branches/$BRANCH" --jq '.[] | .type' | sort -u | sed 's/^/  /'
