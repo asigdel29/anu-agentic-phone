@@ -106,4 +106,19 @@ trap cleanup EXIT
 
 "$ROOT/scripts/build-android-core.sh" >/dev/null
 cd "$ROOT/android"
-ANDROID_HOME="$SDK" gradle connectedDebugAndroidTest --console=plain
+
+# --rerun-tasks for the reason ci.yml gives about the other suite: Gradle reports
+# a cached test task as UP-TO-DATE and exits zero having run nothing. This ran
+# green on main having never executed :app:connectedDebugAndroidTest at all, one
+# run after that same task had failed, which is how #571 was found.
+#
+# It matters more here than there. Gradle's declared inputs are the sources and
+# the classpath; what this suite actually depends on is the emulator, its API
+# level, its system image, and the accessibility services the tests switch on
+# with `settings put secure`. Every one of those changes what a run proves while
+# leaving the inputs Gradle compares identical, so it is not that the caching is
+# imprecise -- it is measuring a different thing from the one under test.
+#
+# The cost is minutes on every invocation. That is the price of the only gate
+# that can load the library saying something true.
+ANDROID_HOME="$SDK" gradle connectedDebugAndroidTest --rerun-tasks --console=plain
