@@ -3,27 +3,22 @@
 [![CI](https://github.com/asigdel29/anu-agentic-phone/actions/workflows/ci.yml/badge.svg)](https://github.com/asigdel29/anu-agentic-phone/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**An agent you talk to, that spends as little as it can answering — and on Android, one that
-can read and drive the other apps on the phone.** Every prompt is scored for difficulty and
-sent to the cheapest model that can handle it, by a Rust core that runs in all three places
-this is deployed.
+**An Android assistant that uses your phone the way you would**, and spends as little as it
+can doing it. It reads whatever is on screen and taps, types and scrolls its way through the
+apps you already have. Every prompt is scored for difficulty first and sent to the cheapest
+model that can handle it.
 
-A personal agent stack. One routing core, in three places: a small aarch64 board, an iPhone
-and an Android phone. The board runs [Hermes
-Agent](https://github.com/NousResearch/hermes-agent) as the harness with
-[zeromem](https://github.com/ptaranat/zeromem) for memory that costs no tokens; the phones
-run their own turn loop over the same core. All three route to the cheapest model on
-[NeuralWatt](https://neuralwatt.com) that can still do the job.
+The scoring is a Rust core linked into the application, so it happens on the phone. Inference
+goes to [NeuralWatt](https://neuralwatt.com) through a small server that holds the key.
 
 ### Where this is up to
 
 One author, MIT, and public because there is no reason for it not to be. It is a personal
-stack rather than a product: it is built for one person's phone and one person's board, and
-the decisions in it were made on those terms.
+project rather than a finished product, and it is being built so that people other than its
+author can install it.
 
-**Nothing here has run on a physical phone.** Every claim about either phone application is a
-host suite, an emulator or a simulator — [#188](../../issues/188) is the checklist for the
-first time hardware is attached, and the local inference tier is unmeasured until it is.
+**Nothing here has run on a physical phone.** Every claim is a host suite or an emulator —
+[#510](../../issues/510) is the checklist for the first time hardware is attached.
 
 Contributions are welcome and the gates are strict: every pull request references an issue and
 changes at most 300 lines, and the first of those is enforced. [`CONTRIBUTING.md`](CONTRIBUTING.md)
@@ -53,10 +48,8 @@ socket. `router/src/ffi.rs` says why.
 
 ## The pieces
 
-**Hermes Agent** is the thing you talk to on the board, and the only agent there. It holds
-the conversation, keeps long-term memory, and does the coding itself. It used to delegate
-that to a second harness; `docs/decisions/retiring-the-second-harness.md` records why it no
-longer does.
+**Hermes Agent** is the same router reached from a terminal, and the reference this is
+measured against: the product statement is what a person with a terminal can do.
 
 **zeromem** is the memory provider. Its point is in the name: indexing and retrieval are
 deterministic, so remembering something costs zero tokens. It keeps raw conversation turns
@@ -64,47 +57,21 @@ with provenance rather than LLM-written summaries, which means recall returns wh
 actually said, not a paraphrase of it.
 
 **wattrouter** is the core, and the one thing every deployment shares. It scores each prompt
-for difficulty and routes it to the cheapest tier that can handle it. On the board it is a
-local proxy speaking the OpenAI wire protocol in both directions, so anything that can talk
-to OpenAI can sit in front of it. On a phone it is the same crate as a static library.
+for difficulty and routes it to the cheapest tier that can handle it. In the application it is
+a library reached over JNI. In a container it is a proxy speaking the OpenAI wire protocol in
+both directions, which is what holds the provider key.
 
 ## Where it runs
-
-Three deployments, one core. What differs is everything above it.
-
-### The board
-
-`deploy/` bootstraps it and `hermes/` configures it. Hermes holds the conversation, zeromem
-holds the memory, and the router is a service on `127.0.0.1`. This is the deployment the
-rest of this README describes.
-
-### iOS — `ios/`
-
-A Swift app with its own turn loop, linking the router as an xcframework. It does not use
-Hermes: a phone has no shell, so the tools are written rather than shelled out to, and the
-loop is `Agent.swift` rather than a harness.
-
-What exists: the turn loop with atomic rounds, streaming, interruption and resumption;
-eighteen tools — files and todos over a workspace boundary, calendar and reminders over
-EventKit, contacts, location, Shortcuts, git, and memory across the same store the board
-uses — each behind a permission seam; the transcript; the routing panel. `ios/AGENTS.md` has
-the layout and, more usefully, what can and cannot be verified without Xcode.
-
-What is blocked: local inference, permanently until a physical device exists —
-`docs/decisions/inference-needs-a-phone.md` records why the simulator gives no signal at all.
 
 ### Android — `android/`
 
 Two Gradle modules: `core/`, the routing core as a library over four JNI entry points, and
-`app/`, a Compose chat over it. Same turn loop as iOS, arrived at in Kotlin rather than
-shared — `Agent.kt` is `Agent.swift`'s four properties argued out again, because a second
-implementation that agrees is worth more than a shared one that has to.
+`app/`, a Compose chat over it.
 
 What exists: sign-in over the Android Keystore; a streaming turn that survives backgrounding
-in a foreground service, which iOS cannot do; memory across JNI into the same store;
-calendar, contacts and location behind a permission seam that is deliberately *not* iOS's —
-Android's permissions are revocable, so nothing is cached and a permanent denial has its own
-name; git over the same libgit2 the phone already links; and `ACTION_SEND` intake.
+in a foreground service; memory across JNI; calendar, contacts and location behind a
+permission seam that caches nothing, because Android's permissions are revocable and a
+permanent denial has its own name; git over libgit2; and `ACTION_SEND` intake.
 
 And the part only Android can do: **it reads and drives other apps.** An `AccessibilityService`
 behind eight tools — read the screen, tap, type, scroll, navigate, open an app, wait for a
@@ -124,39 +91,12 @@ What is missing: a screenshot tool, blocked because nothing in the stack carries
 (#439); and a confirmation prompt, deferred because every rule for when it should fire is a
 guess (#452).
 
-### What the two phones do not share
-
-Built unless the row says otherwise — and **built** here means the emulator or the simulator.
-Nothing in this section has run on a physical phone; #188 is the checklist for the first time
-one is attached.
-
-| | iOS | Android |
-|---|---|---|
-| Read and drive other apps | Not possible for a third party, at all | **Built.** Eight tools over an `AccessibilityService`, by handle rather than coordinate |
-| What stops it | The API does not exist | Play policy, not the API — so this build is sideloaded, and pays for it in restricted settings |
-| Saying what it is doing over another app | — | **Built.** `TYPE_ACCESSIBILITY_OVERLAY`, which needs no permission at all |
-| Long turns in the background | Seconds, so the app warns and stops | **Built.** A `specialUse` foreground service, uncapped |
-| Summoned from anywhere | — | **Built.** The accessibility button; the assistant role was declined |
-| A shell | No | *Predicted, not built.* Possible if the tools ship as native libraries — an app cannot `exec` its own data directory |
-| Content handed in | Share extension, App Intents, Siri and Shortcuts | **Built.** `ACTION_SEND`, `singleTop` so a share reuses the one instance |
-
-The routing core is identical on both. A second routing policy written in Kotlin would agree
-with the first until the day it did not, which is the argument
-`retiring-the-second-harness.md` already made about a second harness.
-
-The tools are not identical, and the table above does not show it. Android registers sixteen
-and iOS eighteen. Only iOS has `read_file`, `write_file`, `patch`, `search_files`, `todo`,
-`clarify`, `add_event`, `add_reminder`, `read_reminders` and `run_shortcut`; only Android has
-the eight screen tools. And the same three git operations are `git_status`, `git_add` and
-`git_commit` on one phone and `read_repository`, `stage_paths` and `commit` on the other —
-which is a divergence nobody decided, recorded here rather than quietly fixed.
-
 ## Routing
 
 These six names are defaults in `router/src/tier.rs`, each overridable by
-`WATTROUTER_MODEL_<TIER>`. Nothing in this repository establishes that they exist upstream or
-that the context windows below are right — the table is the map the router was built to, and
-#188 is what would turn it into a measurement.
+`WATTROUTER_MODEL_<TIER>`. All six were checked against the provider's live catalogue during
+the emulator run in [#510](../../issues/510) and every one exists. The context windows below
+are still the map the router was built to rather than a measurement.
 
 | Tier | Model | Context | Used for |
 |------|-------|---------|----------|
@@ -178,21 +118,6 @@ disabled and `-flex` variants that are cheaper but held serially. Interactive tr
 immediately in a live session.
 
 Set `x-wattrouter-tier` on a request to override the decision entirely.
-
-## Resource floor
-
-The stack is built for generic aarch64 Linux. Memory is what binds, and the deciding factor is
-whether zeromem runs its ONNX embedder or falls back to hashing. `use_model` below is zeromem's
-own setting rather than one of this repository's, and neither figure has been measured on a
-board — they are the sizes the model and the runtime are documented to want.
-
-| RAM | Embedder | Notes |
-|-----|----------|-------|
-| 8GB+ | ONNX bge-small-en-v1.5 | Recommended. Best recall quality. |
-| 4GB | Hash fallback (`use_model: false`) | Skips the 130MB model. Lower recall, much lower RSS. |
-
-The router and zeromem share one model cache directory, so the model is downloaded once rather
-than once per process.
 
 ## Configuration
 
@@ -231,8 +156,8 @@ Set `x-wattrouter-tier` on a request to override the routing decision entirely.
 
 | Feature | Default | |
 |---|---|---|
-| `onnx` | **on** | The ONNX embedder. Off gives a router that only ever hashes, which is the right build for a memory-tight board. |
-| `git` | off | libgit2, for the phones. A board has a shell and does not need it linked in. |
+| `onnx` | **on** | The ONNX embedder. Off gives a router that only ever hashes, which is the right build for the container, because the phone scores and the server does not. |
+| `git` | off | libgit2, for the phone. A machine with a shell does not need it linked in. |
 | `memory` | off | The bounded memory store. Only a phone needs one. |
 | `android` | off | The JNI entry points. |
 
@@ -248,89 +173,18 @@ Every floor below is pinned in a file; this is the one place they are all togeth
 | | |
 |---|---|
 | **Rust** | 1.95, edition 2024 |
-| **Targets** | `aarch64-unknown-linux-gnu` for the board, `aarch64-apple-ios` for the phone. Those two, cross-built and gated in CI. |
+| **Targets** | `aarch64-linux-android` for the phone, `aarch64-unknown-linux-gnu` cross-built and gated in CI. |
 | **Python** | 3.11, which is Hermes's floor. Only `train/` and the Hermes plugins need it. |
-| **Xcode** | 26 and one simulator runtime, for `ios/`. |
 | **Java** | 21, for `android/`. |
 | **Gradle** | 9.7. No wrapper — a wrapper is a jar, and this repository does not track binaries it cannot review, so it is installed rather than checked in. |
 | **Android SDK** | `compileSdk 37.1`, `targetSdk 35`, `minSdk 29` — so Android 10 and up. |
 | **Android ABI** | **`arm64-v8a` only.** The APK carries no other, which is every phone since about 2017 and no emulator image that is not arm64. |
 
 `just toolchain` reports which of these are present and exits non-zero if one is missing or too
-old. It treats the Android and iOS toolchains as optional rather than failing over them: a check
-that fails over a milestone nobody is working on is a check people learn to ignore.
+old. It treats the Android toolchain as optional rather than failing over it: a check that fails
+over a milestone nobody is working on is a check people learn to ignore.
 
 ## Getting started
-
-### The board
-
-Any aarch64 Linux with systemd. It is called the board because that is what it runs on here;
-nothing depends on the hardware. `deploy/bootstrap-pi.sh` installs two services —
-`wattrouter` and `hermes` — so this is a machine you are willing to have run things.
-
-```sh
-just toolchain                        # are the required tools present
-cargo build --release --manifest-path router/Cargo.toml
-sudo NEURALWATT_API_KEY=nw-... deploy/bootstrap-pi.sh
-deploy/install-zeromem.sh             # memory; compiles a Rust extension
-```
-
-Then point Hermes at the router, which is the step that makes the diagram above true and is
-otherwise the easiest thing in this repository to leave undone:
-
-```sh
-just install-hermes                   # this repository's plugins where Hermes finds them
-just hermes-config                    # what pointing Hermes at the router would change
-just hermes-config-apply              # do it. `just hermes-unconfig` puts it back
-```
-
-`hermes-config` changes nothing and prints the diff, because rewriting somebody's agent
-configuration unasked is not a thing to do quietly. Both are reversible leaf by leaf.
-
-To check it end to end you need a router answering. On the board the service is already up;
-anywhere else, start one:
-
-```sh
-just up                               # detached, and waits until it answers
-just status                           # is one serving, and which process
-just verify                           # the stack, end to end
-just down
-```
-
-`just verify` is the wrapper that passes the address from `WATTROUTER_ADDR`. Running
-`scripts/verify-stack.sh` by hand verifies whatever the default happens to be, which is not
-the same claim.
-
-`just router` runs it in the foreground until Ctrl-C, which is what you want while changing it.
-
-The router runs without a scoring head, taking the policy's unscored path. To fit
-one:
-
-```sh
-uv run --with datasets python train/fetch_dataset.py
-cargo run --release --manifest-path router/Cargo.toml --bin train-head \
-  -- train/prompts.jsonl > ~/.hermes/memory/zeromem-models/head.json
-```
-
-The head carries thresholds calibrated against its own score distribution, so
-they cannot drift apart from the weights that produced them.
-
-### iOS
-
-Needs Xcode and one simulator runtime; nothing else has to be installed by hand.
-
-**The order matters and is not optional.** The Xcode project and the xcframework are both
-generated and neither is checked in, so a fresh clone has neither:
-
-```sh
-just ios-project                      # generate the project from ios/project.yml — first, on a fresh clone
-just ios-core                         # the routing core as an xcframework
-just ios-test                         # the suite, on a simulator it creates if absent
-```
-
-`just ios-test` without `just ios-core` fails on a missing framework rather than on anything
-about the change being tested. Re-run `ios-project` after editing `project.yml`; it also writes
-the `Info.plist` files and the entitlements, which is why those are gitignored too.
 
 ### Android
 
@@ -358,8 +212,8 @@ service, from Settings. On a sideloaded build that switch is greyed out until re
 settings are allowed — the app's own checklist screen walks through it, because nothing else
 on the phone explains why the switch does not work.
 
-`ios/AGENTS.md` says what a pull request may claim to have verified on a machine without
-Xcode, which is less than it looks.
+`android/AGENTS.md` says which of the two test recipes may claim what, and the difference
+matters: only the emulator suite can load the native library at all.
 
 ## Security
 
