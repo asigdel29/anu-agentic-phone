@@ -43,6 +43,29 @@ android {
         // arm64-v8a only, matching the core. A second ABI without a second .so
         // is an APK that installs and cannot load.
         ndk { abiFilters += "arm64-v8a" }
+
+        // Where the app asks a model to answer. Build-time rather than a
+        // setting, and #513 says why: a field that repoints the endpoint is a
+        // field the agent can repoint, because the agent can drive the screen.
+        // The environment is read once, here, and a build that says nothing
+        // gets the provider.
+        //
+        // The mirror of WATTROUTER_UPSTREAM in router/src/config.rs, spelled
+        // the same on purpose — one idea, two places it can be set.
+        //
+        // providers.environmentVariable rather than System.getenv, and the
+        // difference is not style. A build script runs inside a long-lived
+        // daemon and System.getenv reads *that process's* environment, which
+        // was fixed when the daemon started — so exporting a variable and
+        // rebuilding gets the previous value, silently, for as long as the
+        // daemon survives. This form is an input Gradle tracks, so changing it
+        // invalidates the task instead of being ignored by it.
+        buildConfigField(
+            "String",
+            "UPSTREAM_BASE_URL",
+            "\"${providers.environmentVariable("WATTROUTER_UPSTREAM")
+                .getOrElse("https://api.neuralwatt.com/v1")}\"",
+        )
     }
 
     // From the environment, and the keystore is never tracked. A repository
@@ -78,6 +101,12 @@ android {
 
     buildFeatures {
         compose = true
+
+        // Off by default in AGP 8 and later, and buildConfigField above is
+        // silently dropped without it — the generated class simply has no such
+        // member and the reference fails to compile, naming the field rather
+        // than the flag.
+        buildConfig = true
     }
 
     compileOptions {
