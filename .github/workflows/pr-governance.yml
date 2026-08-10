@@ -33,7 +33,7 @@ jobs:
     steps:
       # Full history: the size guard diffs against the merge base, and a shallow
       # clone has no merge base to find.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
