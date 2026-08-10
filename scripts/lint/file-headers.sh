@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# file-headers.sh — every source file opens by saying what it is and when it changed.
+# file-headers.sh: every source file opens by saying what it is and when it changed.
 #
 # History
 #   2026-08-07  A. Sigdel  Created, from a row of the standard's enforcement table
@@ -27,7 +27,7 @@ set -euo pipefail
 # Read the opening comment block, whatever a comment looks like here.
 #
 # # Arguments
-# * `path` — WHERE the file exists and is readable.
+# * `path`: WHERE the file exists and is readable.
 #
 # # Returns
 # The header text, or empty when the file opens with something else.
@@ -107,7 +107,7 @@ for path in "${files[@]}"; do
     missing=""
 
     # Python names its module through the import path, so the docstring does not
-    # repeat the filename. Every other language here writes `name.ext — purpose`.
+    # repeat the filename. Every other language here writes `name.ext: purpose`.
     case "$path" in
         *.py) ;;
         *)

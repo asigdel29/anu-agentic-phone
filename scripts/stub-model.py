@@ -225,7 +225,7 @@ def main() -> int:
         # harness rather than kill the process holding the port.
         sys.stderr.write(
             f"stub-model: cannot listen on 127.0.0.1:{args.port}: {why}\n"
-            f"stub-model: something else may already be serving it — "
+            f"stub-model: something else may already be serving it; "
             f"try `pkill -f stub-model.py`, or pass --port\n",
         )
         return 2

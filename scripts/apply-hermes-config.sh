@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# apply-hermes-config.sh — point Hermes at the router, reversibly.
+# apply-hermes-config.sh: point Hermes at the router, reversibly.
 #
 # History
 #   2026-08-07  A. Sigdel  Created.
@@ -11,7 +11,7 @@
 #   scripts/apply-hermes-config.sh --force    proceed with the gateway running
 #
 # Hermes talks to whatever model.provider names, and on this machine that has
-# never been the router — so tiering, stickiness, metrics and the fallback chain
+# never been the router, so tiering, stickiness, metrics and the fallback chain
 # have all been running for nobody. This connects it.
 #
 # It does not write config.yaml. That file is thousands of bytes of hand-tuned
@@ -78,7 +78,7 @@ fi
 # An interpreter that can read YAML, for the raw-file reads below.
 #
 # Not derived from HERMES_HOME. That names where Hermes keeps its state, which
-# is not where Hermes is installed — the systemd unit points it at
+# is not where Hermes is installed: the systemd unit points it at
 # /var/lib/hermes while the checkout lives in a user's home. Candidates are
 # tried in order and the first that can import yaml wins, so this works against
 # a state directory that has no interpreter beside it.
@@ -217,8 +217,8 @@ for leaf in "${LEAVES[@]}"; do
     fi
 done
 
-# Enabling is separate from setting, and it fails if the plugin is not on disk
-# — `hermes plugins enable` reports "not installed or bundled" rather than
+# Enabling is separate from setting, and it fails if the plugin is not on disk:
+# `hermes plugins enable` reports "not installed or bundled" rather than
 # writing a name nothing will resolve.
 plugin_installed=0
 if [ -e "$HERMES_HOME/plugins/session_routing" ]; then

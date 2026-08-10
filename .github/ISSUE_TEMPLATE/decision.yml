@@ -1,5 +1,5 @@
 ---
-# decision.yml — a question about how something should work.
+# decision.yml: a question about how something should work.
 #
 # History
 #   2026-08-09  A. Sigdel  Created.
@@ -36,5 +36,5 @@ body:
     attributes:
       label: What constrains it
       description: >-
-        Existing decisions this has to live with, and where they are argued —
+        Existing decisions this has to live with, and where they are argued;
         docs/decisions/INDEX.md routes most of them.

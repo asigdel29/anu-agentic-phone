@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run-router.sh — start the router on the machine you are sitting at.
+# run-router.sh: start the router on the machine you are sitting at.
 #
 # History
 #   2026-08-07  A. Sigdel  Created.
@@ -22,7 +22,7 @@
 #
 # Builds without default features. The server constructs HashEmbedder in both
 # places it needs one, so the onnx feature builds an embedder it has no way to
-# call — 15m13s of build against 1m25s, for code the binary cannot reach. See
+# call, at 15m13s of build against 1m25s, for code the binary cannot reach. See
 # issue #87; until that is settled, this changes nothing the router does.
 
 set -uo pipefail
@@ -74,7 +74,7 @@ serving() {
 # The credential, from the environment or from .env, never from a tracked file.
 #
 # .env is sourced only when the variable is unset, so an explicit value on the
-# command line wins — which is what someone testing a second key expects. The
+# command line wins, which is what someone testing a second key expects. The
 # script never writes .env; .env.example documents the names and carries no
 # values.
 load_credential() {
@@ -102,7 +102,7 @@ load_credential() {
 # Created here because nothing else creates it and everything assumes it: the
 # README's train-head command redirects into it, and Config::head_path reads
 # from it. Note it is ~/.hermes/memory, one letter from the ~/.hermes/memories
-# that Hermes itself uses for MEMORY.md — different directories, and the
+# that Hermes itself uses for MEMORY.md. They are different directories, and the
 # confusion is worth knowing about rather than tidying away.
 ensure_model_cache() {
     local dir="${WATTROUTER_MODEL_CACHE:-$HOME/.hermes/memory/zeromem-models}"
@@ -140,7 +140,7 @@ start_detached() {
 
     mkdir -p "$STATE"
     # nohup and a detached stdout, or the router dies with the shell that
-    # started it — which is exactly what a `just` recipe is.
+    # started it, which is exactly what a `just` recipe is.
     nohup "$BIN" >>"$LOGFILE" 2>&1 &
     local pid=$!
     printf '%s' "$pid" >"$PIDFILE"
@@ -213,7 +213,7 @@ case "${1:-foreground}" in
         load_credential || exit 1
         ensure_model_cache
         build_if_stale || exit 1
-        step "serving on $(addr) — Ctrl-C to stop"
+        step "serving on $(addr), Ctrl-C to stop"
         exec "$BIN"
         ;;
     start)
