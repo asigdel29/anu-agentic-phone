@@ -1,4 +1,4 @@
-// ToolBoxTest.kt — dispatch, and what a failure looks like to the model.
+// ToolBoxTest.kt: dispatch, and what a failure looks like to the model.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.

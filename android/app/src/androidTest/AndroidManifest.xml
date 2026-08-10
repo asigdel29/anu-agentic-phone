@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  AndroidManifest.xml — components that exist only for the suite.
+  AndroidManifest.xml: components that exist only for the suite.
 
   History
     2026-08-09  A. Sigdel  Created to hold a FLAG_SECURE activity.

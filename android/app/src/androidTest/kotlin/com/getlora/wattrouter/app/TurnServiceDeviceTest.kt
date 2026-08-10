@@ -1,4 +1,4 @@
-// TurnServiceDeviceTest.kt — the Stop button reaches the turn.
+// TurnServiceDeviceTest.kt: the Stop button reaches the turn.
 //
 // History
 //   2026-08-09  A. Sigdel  Created with the fix for #470.

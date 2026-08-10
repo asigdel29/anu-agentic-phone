@@ -1,4 +1,4 @@
-// RepositoryTest.kt — the paths as the core will read them.
+// RepositoryTest.kt: the paths as the core will read them.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -41,7 +41,7 @@ class RepositoryTest {
     @Test
     fun aControlCharacterIsLegalOnDiskAndNotInJson() {
         // Left raw this produces an envelope the core cannot parse, and so
-        // cannot explain — the model is told the JSON was wrong rather than
+        // cannot explain: the model is told the JSON was wrong rather than
         // that the file it named is unusual.
         assertEquals("""["a\nb"]""", encodePaths(listOf("a\nb")))
         assertEquals("""["a\tb"]""", encodePaths(listOf("a\tb")))

@@ -1,4 +1,4 @@
-// HandedTest.kt — what is worth taking from a share, and what is not.
+// HandedTest.kt: what is worth taking from a share, and what is not.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.

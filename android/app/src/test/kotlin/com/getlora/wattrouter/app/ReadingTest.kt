@@ -1,4 +1,4 @@
-// ReadingTest.kt — the two rows that are not a permission check.
+// ReadingTest.kt: the two rows that are not a permission check.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.

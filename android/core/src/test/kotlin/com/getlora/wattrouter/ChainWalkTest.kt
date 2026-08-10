@@ -1,4 +1,4 @@
-// ChainWalkTest.kt — which failures are worth the next model, and when.
+// ChainWalkTest.kt: which failures are worth the next model, and when.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.

@@ -1,4 +1,4 @@
-// StartupTest.kt — the three states a cold launch can be in.
+// StartupTest.kt: the three states a cold launch can be in.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
@@ -6,7 +6,7 @@
 // On a device: every case reaches Core.open, which needs the library.
 //
 // No case here signs in against the provider. The core does not call out at
-// open, so a well-formed key proves only that a non-empty string crossed — and
+// open, so a well-formed key proves only that a non-empty string crossed, and
 // a key the provider would accept is not something a test can hold.
 
 package com.getlora.wattrouter

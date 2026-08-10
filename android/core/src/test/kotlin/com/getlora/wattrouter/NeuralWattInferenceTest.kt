@@ -1,4 +1,4 @@
-// NeuralWattInferenceTest.kt — the client, against a socket that answers.
+// NeuralWattInferenceTest.kt: the client, against a socket that answers.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.

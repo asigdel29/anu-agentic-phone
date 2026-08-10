@@ -1,4 +1,4 @@
-// DecisionFromCoreTest.kt — the decoder, against what the core actually says.
+// DecisionFromCoreTest.kt: the decoder, against what the core actually says.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.

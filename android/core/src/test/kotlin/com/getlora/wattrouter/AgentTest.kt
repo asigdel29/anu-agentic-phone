@@ -1,4 +1,4 @@
-// AgentTest.kt — the loop, and the four ways it goes wrong quietly.
+// AgentTest.kt: the loop, and the four ways it goes wrong quietly.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.

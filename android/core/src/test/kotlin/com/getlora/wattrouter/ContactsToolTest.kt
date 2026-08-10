@@ -1,4 +1,4 @@
-// ContactsToolTest.kt — what a lookup hands over, and what it will not.
+// ContactsToolTest.kt: what a lookup hands over, and what it will not.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.

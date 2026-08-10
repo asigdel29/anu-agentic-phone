@@ -1,4 +1,4 @@
-// AndroidWhereaboutsTest.kt — no accuracy is not perfect accuracy.
+// AndroidWhereaboutsTest.kt: no accuracy is not perfect accuracy.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -32,7 +32,7 @@ class AndroidWhereaboutsTest {
     @Test
     fun aFixWithNoRadiusIsNotRenderedAsADoorstep() {
         // The end the choice of number is for. Left at 0 this reads
-        // "53.4808, -2.2426 (within 0 m)" — a doorstep asserted from nothing.
+        // "53.4808, -2.2426 (within 0 m)", a doorstep asserted from nothing.
         val said = LocationTool.describe(
             Place(53.480_759, -2.242_631, radiusOf(has = false, reported = 0f), at = 0),
             now = 0,

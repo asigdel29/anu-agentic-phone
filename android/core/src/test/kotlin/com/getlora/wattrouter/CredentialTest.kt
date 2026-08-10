@@ -1,4 +1,4 @@
-// CredentialTest.kt — what is worth storing from what somebody typed.
+// CredentialTest.kt: what is worth storing from what somebody typed.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.

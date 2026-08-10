@@ -1,4 +1,4 @@
-// BudgetTest.kt — what a turn may actually do, and what it may do freely.
+// BudgetTest.kt: what a turn may actually do, and what it may do freely.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -114,7 +114,7 @@ class BudgetTest {
     @Test
     fun aResumedTurnIsATurn() = runTest {
         // What an interrupt produces, and the moment somebody has just said
-        // carry on — inheriting a spent allowance would refuse them.
+        // carry on, where inheriting a spent allowance would refuse them.
         val budget = Budget(most = 1)
         Budgeted(Counting(), budget).tap(handle, generation)
         assertEquals(0, budget.left)
