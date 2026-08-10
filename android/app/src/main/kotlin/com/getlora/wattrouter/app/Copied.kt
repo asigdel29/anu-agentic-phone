@@ -1,4 +1,4 @@
-// Copied.kt — the framework's tree, as the rules read it.
+// Copied.kt: the framework's tree, as the rules read it.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -31,7 +31,7 @@ import com.getlora.wattrouter.Node
  * widgets, so `android.widget.Button` and `androidx.appcompat.widget.AppCompatButton`
  * are both buttons and neither is worth showing a model verbatim.
  *
- * @return one of a small closed set, or `view` for anything unrecognised —
+ * @return one of a small closed set, or `view` for anything unrecognised,
  *   which is honest rather than a guess, and still lets a node be named.
  */
 internal fun roleOf(className: CharSequence?): String {
@@ -82,7 +82,7 @@ internal data class Copied(
 /**
  * One screen, copied out of the framework.
  *
- * @param info the root. It stays the caller's — what this releases is only what
+ * @param info the root. It stays the caller's, and what this releases is only what
  *   it obtained itself.
  * @param retain whether to keep each framework node beside its copy. Off for
  *   every read; on only to act, which is one call long. The caller then owes

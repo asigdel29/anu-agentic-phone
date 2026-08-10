@@ -1,4 +1,4 @@
-// ChainWalk.kt — trying each model in a tier until one answers.
+// ChainWalk.kt: trying each model in a tier until one answers.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
@@ -9,7 +9,7 @@
 //
 // A tier names several models in preference order, which is the only reason
 // wattrouter_chain_length exists. Without this, a single Unavailable ends the
-// turn — and the chain is precisely the thing that says it should not.
+// turn, and the chain is precisely the thing that says it should not.
 //
 // The rule is one line and the whole correctness of the file:
 //
@@ -47,7 +47,7 @@ sealed interface TurnEvent {
     data class Result(val result: ToolResult) : TurnEvent
 
     /**
-     * The tier, and the chain behind it. Never from a walk — the Agent yields
+     * The tier, and the chain behind it. Never from a walk: the Agent yields
      * it before asking, because the panel should show where a turn is going
      * rather than where it went.
      */
@@ -78,7 +78,7 @@ class ChainWalk(private val asking: Inference) {
 
         for (step in steps) {
             // Counted as an attempt and skipped. Nothing runs a model in this
-            // process yet — #188 is the checklist for when something does — and
+            // process yet (#188 is the checklist for when something does) and
             // counting rather than ignoring keeps the exhausted message honest
             // about how many models were considered.
             if (step.backend != Backend.REMOTE) {

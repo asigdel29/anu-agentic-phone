@@ -1,4 +1,4 @@
-// Autonomy.kt — how much the agent may do without being asked.
+// Autonomy.kt: how much the agent may do without being asked.
 //
 // History
 //   2026-08-10  A. Sigdel  Created with #552.
@@ -21,7 +21,7 @@
 //
 // This sits beside Budgeted, at the Phone seam, for Budget.kt's reason: every
 // acting tool reaches the phone through one object, so a tenth is governed
-// without knowing this exists. Wrapping order is Confirmed(Budgeted(phone)) —
+// without knowing this exists. Wrapping order is Confirmed(Budgeted(phone));
 // see Confirmed for why round that way.
 //
 // Reading is never gated. Asking permission to look is not what anybody means
@@ -55,7 +55,7 @@ enum class Autonomy {
  *
  * @property verb what is about to happen, in the present tense: a prompt reads
  *   "Tap Send?" rather than "Tapped Send?". ScreenTools.say takes the past
- *   participle of the same word, and the two are deliberately not shared — one
+ *   participle of the same word, and the two are deliberately not shared: one
  *   is asked before and one is reported after.
  * @property what it will happen to, already chosen by [asked] rather than by
  *   the caller. Never wording the caller composed: that is the whole of the
@@ -87,7 +87,7 @@ fun interface Consent {
  * What somebody is shown a handle as.
  *
  * The field [resolve] will key on, chosen by the same precedence and in the
- * same order — and this is a defence rather than a convenience.
+ * same order, and this is a defence rather than a convenience.
  *
  * The model writes the handle. `resolve` requires the most durable field it
  * carries and lets the rest only narrow, so a handle carrying `viewId=send` and
@@ -112,7 +112,7 @@ internal fun asked(handle: Handle): String = when {
 /**
  * A [Phone] that asks before it acts.
  *
- * Wrap outside [Budgeted] — `Confirmed(Budgeted(phone), …)`. The other way
+ * Wrap outside [Budgeted]: `Confirmed(Budgeted(phone), …)`. The other way
  * round spends a budgeted action on a prompt somebody then declines, so a turn
  * refused twenty times has nothing left for the action they would have allowed.
  *
@@ -154,7 +154,7 @@ class Confirmed(
 
     // The package name rather than the label. Resolving one to the other means
     // asking the package manager, which can answer with whatever an app calls
-    // itself — and an app calling itself Settings is exactly the case a prompt
+    // itself, and an app calling itself Settings is exactly the case a prompt
     // is supposed to catch.
     override suspend fun open(packageName: String): Done? =
         ifAllowed(Intent("open", packageName)) { phone.open(packageName) }

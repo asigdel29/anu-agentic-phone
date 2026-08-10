@@ -1,4 +1,4 @@
-// ReadinessScreen.kt — the checklist, and what the agent can actually see.
+// ReadinessScreen.kt: the checklist, and what the agent can actually see.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -6,12 +6,12 @@
 // Re-read on resume rather than on first composition. The whole point of a
 // checklist over a wizard is that it is right when you look at it, and the
 // moment somebody looks is the moment they come back from Settings. Built once
-// and never re-read, it would show the state as it was before they went —
+// and never re-read, it would show the state as it was before they went,
 // which is the lie a wizard tells, arrived at by accident.
 //
 // It ends by showing what the model would see. "The switch is on" is a claim
 // and "this is what it can read" is evidence, and it is the moment somebody
-// decides whether they are comfortable with any of it — a decision nobody can
+// decides whether they are comfortable with any of it, a decision nobody can
 // make from a list of green ticks.
 
 package com.getlora.wattrouter.app
@@ -60,7 +60,7 @@ internal fun ReadinessScreen(
 
         // Skippable on purpose. Blocking the conversation would make the app
         // unusable to somebody who wants to talk and never intends to let it
-        // drive anything — the phone tools are one capability among several.
+        // drive anything; the phone tools are one capability among several.
         TextButton(onClick = onCarryOn) {
             Text(if (readiness.canDrive) "Start talking" else "Carry on without it")
         }
@@ -89,7 +89,7 @@ private fun NeededRow(step: Needed, onOpen: (Needed) -> Unit) {
                 // The mark before the words, so a column of them can be read
                 // down without reading any of the sentences.
                 Text(
-                    (if (step.isOn) "on   " else if (step.isRequired) "off  " else "—    ") +
+                    (if (step.isOn) "on   " else if (step.isRequired) "off  " else "-    ") +
                         step.what,
                     style = MaterialTheme.typography.bodyLarge,
                 )

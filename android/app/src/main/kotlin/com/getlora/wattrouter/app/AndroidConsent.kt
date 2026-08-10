@@ -1,4 +1,4 @@
-// AndroidConsent.kt — a question on the display, waited on from a turn.
+// AndroidConsent.kt: a question on the display, waited on from a turn.
 //
 // History
 //   2026-08-10  A. Sigdel  Created with #556.
@@ -11,7 +11,7 @@
 //
 // The one decision that is not AndroidAsking's: no service means no. The
 // overlay lives on the accessibility service, and open_app is the tool that
-// does not need one — it starts an activity from a Context. So a turn in Ask
+// does not need one, since it starts an activity from a Context. So a turn in Ask
 // mode with the service switched off could otherwise launch an app with nobody
 // asked. Refusing is the only safe answer, and Confirmed's wording had to stop
 // saying somebody said no to be true of it.

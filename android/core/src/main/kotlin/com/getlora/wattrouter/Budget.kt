@@ -1,4 +1,4 @@
-// Budget.kt — how much a turn may actually do.
+// Budget.kt: how much a turn may actually do.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -15,7 +15,7 @@
 // departure from how-the-agent-drives.md worth stating. That file says safety is
 // enforced where the action is dispatched, and the reason it gives is that a
 // rule in a tool is one the ninth tool forgets. A budget is per turn, and the
-// service has no notion of one — it is bound by the system and outlives every
+// service has no notion of one: it is bound by the system and outlives every
 // conversation, so putting it there means inventing a turn signal for it to
 // hold. The seam satisfies the reason: every acting tool reaches the phone
 // through one object, and a tenth is counted without knowing this exists.
@@ -28,7 +28,7 @@ package com.getlora.wattrouter
 /**
  * What a turn has left to do.
  *
- * One per conversation, reset by [Agent] at the top of every turn — including a
+ * One per conversation, reset by [Agent] at the top of every turn, including a
  * resumed one, which is what an interrupt produces and which should get a fresh
  * allowance rather than inheriting a spent one.
  */
@@ -59,8 +59,8 @@ class Budget(private val most: Int = DEFAULT) {
         /**
          * Actions in a turn when nobody says otherwise.
          *
-         * Generous enough for a real task — opening an app, finding a row,
-         * filling two fields and confirming is under ten — and low enough that
+         * Generous enough for a real task (opening an app, finding a row,
+         * filling two fields and confirming is under ten) and low enough that
          * a loop is stopped while somebody is still watching it.
          */
         const val DEFAULT = 25

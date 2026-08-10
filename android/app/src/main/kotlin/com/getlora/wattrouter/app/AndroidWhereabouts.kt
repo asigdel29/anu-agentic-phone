@@ -1,4 +1,4 @@
-// AndroidWhereabouts.kt — a fix from the platform, and no Play Services for it.
+// AndroidWhereabouts.kt: a fix from the platform, and no Play Services for it.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -6,7 +6,7 @@
 // The milestone's plan says FusedLocationProviderClient. That class is
 // play-services-location, a Play Services dependency taken for one call
 // returning one coordinate, and this repository has made the same judgement
-// three times and gone the other way each time — hand-written AES-GCM over the
+// three times and gone the other way each time: hand-written AES-GCM over the
 // Keystore rather than Tink, buildJsonObject rather than the serialization
 // plugin, HttpURLConnection rather than OkHttp. LocationManager costs nothing
 // and, since API 31, carries FUSED_PROVIDER: the same fusion that client wraps.
@@ -31,8 +31,8 @@ import kotlinx.coroutines.suspendCancellableCoroutine
  * How wide a circle a fix really is.
  *
  * @param has what `Location.hasAccuracy()` said.
- * @param reported what `Location.accuracy` holds, which is 0 when [has] is false
- *   — and 0 is not perfect knowledge, it is none. Reported wide so the rendering
+ * @param reported what `Location.accuracy` holds, which is 0 when [has] is false,
+ *   and 0 is not perfect knowledge, it is none. Reported wide so the rendering
  *   in LocationTool rounds the coordinates down rather than to a doorstep.
  */
 internal fun radiusOf(has: Boolean, reported: Float): Float =
@@ -77,7 +77,7 @@ class AndroidWhereabouts(private val context: Context) : Whereabouts {
      * A fix asked for now rather than whatever was last cached.
      *
      * Below API 30 there is no such call and the last known one is what there
-     * is — which is why LocationTool renders an age at all.
+     * is, which is why LocationTool renders an age at all.
      */
     private suspend fun fresh(manager: LocationManager, provider: String): Location? =
         suspendCancellableCoroutine { waiting ->

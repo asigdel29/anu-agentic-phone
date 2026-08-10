@@ -1,4 +1,4 @@
-// ChatScreen.kt — the conversation, and the field under it.
+// ChatScreen.kt: the conversation, and the field under it.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -45,7 +45,7 @@ import com.getlora.wattrouter.Row
  * The conversation.
  *
  * @param onSend what the person typed. Blank text is the driver's to refuse,
- *   not this function's — one place deciding what counts as a message.
+ *   not this function's: one place deciding what counts as a message.
  * @param onInterrupt stop the turn in flight.
  * @param mode how involved this person wants to be. Above the field rather
  *   than behind a settings screen: it changes what the next send does, so it
@@ -68,7 +68,7 @@ fun ChatScreen(
     // when they have scrolled up.
     //
     // Not `if (isRunning)`, which is what this was first: the last row of a
-    // turn — the end of an answer, or the reason it failed — is appended as the
+    // turn (the end of an answer, or the reason it failed) is appended as the
     // turn ends, so gating on isRunning leaves exactly the row that matters
     // below the fold. Found by driving it on an emulator and being unable to
     // see a 401 the transcript had recorded correctly.

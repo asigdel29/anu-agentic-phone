@@ -10,8 +10,8 @@ in the build that look like defaults and are not.
 ## Layout
 
 Two modules. `core/` is the library and `app/` is the application. The core stays a library
-because it is what an instrumented test loads, and what a second surface — a share target, a
-tile, a service in its own process — links without also taking on the app's manifest.
+because it is what an instrumented test loads, and what a second surface (a share target, a
+tile, a service in its own process) links without also taking on the app's manifest.
 
 `core/src/main/kotlin/com/getlora/wattrouter/` holds `Core.kt`, the core as Kotlin sees it
 (`open`, `decide`, `close` over four JNI entry points), and `Conversation.kt`, the state a turn
@@ -32,7 +32,7 @@ foreground-service entries belong to `app/`, which is where the launcher and the
 live.
 
 Plugin versions are in `settings.gradle.kts`, not a root build file. Both Android plugins come
-from one artefact, and a version declared in two subprojects puts it on the classpath twice —
+from one artefact, and a version declared in two subprojects puts it on the classpath twice, and
 Gradle then fails with a message naming neither module.
 
 ## Three versions that are decisions
@@ -46,18 +46,18 @@ rather than 35 because Compose 1.12 and later require it.
 
 **`targetSdk = 35`, deliberately**, while the phone-driving layer is built. Targeting 36 opts
 into Android 16's enforced edge-to-edge, which cannot be turned off, and that puts node bounds
-in *driven* apps under the system bars — a tap at an element's centre can land on the
+in *driven* apps under the system bars: a tap at an element's centre can land on the
 navigation bar. Nothing forces the bump: this app is sideloaded and has no store deadline. It
 is a bump to make once the gesture planner is inset-aware.
 
-**The Compose compiler plugin is pinned to the Kotlin AGP bundles** — 2.2.10 for AGP 9.0.0,
+**The Compose compiler plugin is pinned to the Kotlin AGP bundles**, 2.2.10 for AGP 9.0.0,
 which is not the newest published. AGP bundling Kotlin does not bring this plugin with it, and
 `compose = true` without it fails at configuration time saying so.
 
 ## The two test recipes, and what each may claim
 
 `just android-test` runs on the JVM. It covers everything that touches nothing Android, which
-today is `Conversation.kt` — the request a turn becomes. It never loads the library.
+today is `Conversation.kt`, the request a turn becomes. It never loads the library.
 
 `just android-device-test` boots an emulator and is **the only recipe that can say the binding
 works**. The `.so` is built for `aarch64-linux-android` and will not load on the host at all,
@@ -66,8 +66,8 @@ string comparison between two files; the first run on a device found a real seri
 in the core within six tests.
 
 It runs both modules' suites and they make different claims. `core`'s says the library loads
-and the ABI is right. `app`'s says the `.so` survived the trip into the APK — out of
-`core/src/main/jniLibs`, into the AAR, into `lib/arm64-v8a/` — which `core`'s suite cannot see,
+and the ABI is right. `app`'s says the `.so` survived the trip into the APK, out of
+`core/src/main/jniLibs` into the AAR into `lib/arm64-v8a/`, which `core`'s suite cannot see,
 because it packages its own test APK.
 
 So: a pull request touching `Core.kt` or `jni.rs` and claiming only `just android-test` has
@@ -77,7 +77,7 @@ claimed nothing about the change it made.
 
 Gradle reports a cached test task as `UP-TO-DATE` and exits zero having run nothing, which on
 a terminal reads exactly like a pass. `just android-test` passes `--rerun-tasks` for that
-reason and it is not optional — anywhere, CI included. When counting tests, read the result
+reason and it is not optional anywhere, CI included. When counting tests, read the result
 XML under `build/test-results/`, not the console.
 
 ## The symbol contract is checked from Rust
@@ -97,13 +97,13 @@ There is no `gradlew` and no `gradle/wrapper/`: a wrapper is a jar, and this rep
 not track binaries it cannot review. `just android` says how to install Gradle when it is
 absent, the way `scripts/test-android.sh` does for a system image.
 
-Two consequences. Continuous integration installs Gradle and invokes the one on `PATH` — it
+Two consequences. Continuous integration installs Gradle and invokes the one on `PATH`, and it
 names the full release, `9.7.0`, because `9.7` is not a version `setup-gradle` resolves. That
 action's wrapper validation stays on and passes over nothing, which is the right way round: a
 wrapper jar arriving later should be unchecked as well as unwanted.
 
 And the toolchain is pinned by prose rather than by a properties file, so `settings.gradle.kts`
-carries the reason each version is what it is — AGP 9 because Gradle 9.6 removed an internal
+carries the reason each version is what it is: AGP 9 because Gradle 9.6 removed an internal
 AGP 8.13 used, and no `org.jetbrains.kotlin.android` because AGP 9 bundles Kotlin and applying
 it is an error rather than a duplicate.
 
@@ -124,7 +124,7 @@ Three things it learned the hard way, so you do not have to. It waits on
 `getprop sys.boot_completed` rather than on `adb devices`, because a shutting-down emulator is
 still listed and the script would decline to boot one and hand Gradle nothing. It stops an
 emulator only if it started it. And it calls the SDK's own `cmdline-tools/latest/bin/avdmanager`
-by full path, because `avdmanager` infers its SDK root from where it lives — a Homebrew copy
+by full path, because `avdmanager` infers its SDK root from where it lives, and a Homebrew copy
 cannot see system images installed under `~/Library/Android/sdk`.
 
 Name the emulator and the recipe in the pull request. "Seven instrumented tests on
