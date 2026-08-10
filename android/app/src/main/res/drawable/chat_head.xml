@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  chat_head.xml — the shape behind the bubble.
+
+  History
+    2026-08-09  A. Sigdel  Created with #522.
+
+  A shape rather than an image, and that is a repository rule rather than a
+  preference: this project does not track binaries it cannot review, and an icon
+  file is one. A circle and two colours are reviewable in the diff that adds them.
+
+  Opaque, with a stroke. The bubble sits over designs it knows nothing about —
+  a white app, a black one, a photograph — so it brings its own ground and its
+  own edge instead of hoping for contrast. Banner brings its own for the same
+  reason and says so.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="#1A1A1A" />
+    <stroke
+        android:width="2dp"
+        android:color="#F2C100" />
+</shape>

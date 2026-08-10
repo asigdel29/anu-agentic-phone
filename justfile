@@ -56,20 +56,6 @@ down:
 status:
     scripts/run-router.sh status
 
-# Build the routing core as an xcframework Swift can link. Needs Xcode.
-ios-core:
-    scripts/build-ios-core.sh
-
-# Generate ios/WattRouter.xcodeproj from ios/project.yml. Safe to re-run; the
-# project is build output and gitignored, so this is how it comes into being on a
-# fresh clone as well as how it is refreshed after editing the spec.
-ios-project:
-    cd ios && xcodegen generate
-
-# Run the Swift tests on the shared simulator. Needs `just ios-core` first.
-ios-test:
-    scripts/test-ios.sh
-
 # Build the routing core as a library JNI can load. Needs the Android NDK; the
 # script says how to get one if there is none.
 android-core:
@@ -132,6 +118,21 @@ android-test:
 # that can say the binding works.
 android-device-test:
     scripts/test-android.sh
+
+# Answer the app's turns from a script instead of a provider, and record what it
+# asked. This is what makes the tool loop testable at all: every tool runs only
+# because a model decided to call it, so without this the whole point of the
+# application can only be exercised by paying somebody.
+#
+# Build the app to match, or it will keep talking to the provider — the endpoint
+# is fixed when the app is built and cannot be moved at runtime:
+#
+#   WATTROUTER_UPSTREAM=http://10.0.2.2:8099/v1 just android
+#
+# 10.0.2.2 is the emulator's alias for this host. Only a debug build may reach it
+# in the clear; a release build has no cleartext exemption at all.
+stub script="scripts/stub-scripts/open-and-read.json":
+    python3 scripts/stub-model.py {{ script }}
 
 # Check the stack end to end. Needs a router; `just up` first.
 verify:

@@ -24,10 +24,13 @@ share, and the build and deployment scripts.
 
 ### Not in scope
 
-- **The router being reachable from a network.** It has no authentication on any endpoint —
-  `/healthz`, `/v1/models`, `/v1/chat/completions` and `/metrics` are open to anything that can
-  reach the socket. It binds `127.0.0.1` for that reason. Exposing it is out of scope rather
-  than a hardening exercise, and `.env.example` says so beside `WATTROUTER_ADDR`.
+- **What a token does not protect.** Since #533 the router refuses `/v1/models`,
+  `/v1/chat/completions` and `/metrics` without a bearer token it issued; `/healthz` stays
+  open because a platform health check arrives with no credential, and it answers only
+  whether the process is alive. What a token buys is that a stranger cannot spend the
+  provider credit behind it. It is **not** authorisation: every valid token can do
+  everything, there are no quotas, and a leaked token is a leaked account until it is
+  removed from the list. Metering arrives with accounts.
 - **NeuralWatt, Hermes Agent and zeromem.** Report those to the people who wrote them.
 - **The platform's own behaviour.** What an accessibility service is allowed to do is Android's
   decision; the section below records it rather than disputing it.
@@ -55,7 +58,7 @@ This is the largest risk here and it is not fully mitigated. What stands against
 
 What does not stand against it: **there is no confirmation prompt**. Every candidate rule for
 when one should fire is a guess, and the argument is in
-[#452](https://github.com/asigdel29/anu-agentic-stack/issues/452). The decision taken is a
+[#452](https://github.com/asigdel29/anu-agentic-phone/issues/452). The decision taken is a
 per-person setting defaulting to off, which is not built yet.
 
 ### What the agent can read is more than you would expect
@@ -66,7 +69,7 @@ screen reader has to work in a banking application.
 
 Two decision records in this repository used to say the opposite and one called it a feature.
 They were wrong and are corrected —
-[#472](https://github.com/asigdel29/anu-agentic-stack/issues/472) has the measurement, and
+[#472](https://github.com/asigdel29/anu-agentic-phone/issues/472) has the measurement, and
 `SecureScreenDeviceTest` is the test that would notice if a future Android made the old claim
 true.
 
@@ -86,16 +89,13 @@ about what it does at runtime — no node text to the system log at any level, n
 disk including the application's own cache, nothing in a crash breadcrumb. The failure that rule
 exists to prevent is somebody enabling verbose logging two years from now.
 
-`ios/App/PrivacyInfo.xcprivacy` argues the same point at more length for the App Store's
-definition of collection, and its reasoning applies to both phones.
-
 ### Credentials
 
 One: `NEURALWATT_API_KEY`.
 
 - On the board it comes from the environment or a systemd `EnvironmentFile`, never a tracked
   file. `.env` is gitignored; `.env.example` carries names and no values.
-- On iOS it is in the Keychain, on Android the Keystore. Nothing else is stored.
+- On the phone it is in the Android Keystore. Nothing else is stored.
 - `allowBackup="false"` on Android is deliberate: the store this application holds is somebody's
   conversations, and cloud backup would copy it somewhere none of the decisions about it apply.
 
@@ -114,7 +114,12 @@ which is the right way round for something with these capabilities.
 
 ## What has and has not been verified
 
-Nothing in this repository has run on a physical phone. Every claim above is a host suite, an
-emulator or a simulator, and
-[#188](https://github.com/asigdel29/anu-agentic-stack/issues/188) is the checklist for the first
-time a device is attached. Treat the mitigations as implemented and untested in the field.
+Nothing in this repository has run on a physical phone. Every claim above is a host suite or an
+emulator, and
+[#510](https://github.com/asigdel29/anu-agentic-phone/issues/510) is the checklist for the first
+time one is attached. Treat the mitigations as implemented and untested in the field.
+
+What the emulator has settled is narrower than it sounds and worth naming: the release build
+loads its native library under R8, a turn reaches the provider, the tool loop drives another
+application, and the overlay reaches the display. What it cannot settle is a real screen, a
+real calendar, and a person deciding whether they are comfortable.

@@ -8,7 +8,7 @@ again before arguing with a lint.
 `CLAUDE.md` beside this file is a symlink to it. One file, two names, no second copy.
 
 A subtree with an `AGENTS.md` of its own holds what is true only there, and overrides this file
-where they disagree. Four have one: `router/`, `ios/`, `android/`, `hermes/`.
+where they disagree. Three have one: `router/`, `android/`, `hermes/`.
 
 ## What this is
 
@@ -18,7 +18,6 @@ table; this file assumes you have read it.
 | Path | Language | What it is |
 |---|---|---|
 | `router/` | Rust | `wattrouter`: scores a prompt and routes it to the cheapest tier that can answer. Also the C ABI the iOS app links. Has its own `AGENTS.md`. |
-| `ios/` | Swift | The phone app and the routing core wrapped for it. Has its own `AGENTS.md`. |
 | `hermes/` | Python, YAML | Configuration and two plugins for the agent, which is installed separately. Has its own `AGENTS.md`. |
 | `train/` | Python | `fetch_dataset.py`, which builds the training set for the scoring head. |
 | `deploy/` | Shell, systemd | Board bootstrap and the two service units. |
@@ -35,15 +34,14 @@ The recipes that matter: `just router` runs it in the foreground, `just up` and 
 start and stop it detached, `just verify` checks the stack end to end and needs a router
 running first.
 
-`just ios-core` and `just android-core` build the same crate for the two phones, and
-`just android` packages the Android one into a library Gradle can hand to an app. All of it is
-optional toolchain — `just toolchain` reports the NDK, the SDK and Gradle as absent rather than
-failing, because a check that fails over a milestone nobody is working on is a check people
-learn to ignore.
+`just android-core` builds the crate for the phone, and `just android` packages it into a
+library Gradle can hand to the app. Both are optional toolchain — `just toolchain` reports the
+NDK, the SDK and Gradle as absent rather than failing, because a check that fails over a
+milestone nobody is working on is a check people learn to ignore.
 
 There is no Gradle wrapper. A wrapper is a jar, and this repository does not track binaries it
-cannot review; the recipe says how to install Gradle instead, the way `scripts/test-ios.sh` does
-for xcodegen.
+cannot review; the recipe says how to install Gradle instead, the way `scripts/test-android.sh`
+does for a system image.
 
 Android has two test recipes and the difference matters. `just android-test` runs on the JVM and
 covers everything that touches nothing Android. `just android-device-test` boots an emulator,
@@ -61,7 +59,7 @@ per language; every later step carries an `if` on those flags.
 
 `router/Cargo.toml` exists, so the Rust half runs: `cargo fmt --check`, `clippy -D warnings`,
 `cargo test --all-targets`, a cross-build for `aarch64-unknown-linux-gnu`, a build for
-`aarch64-apple-ios`, and performance gates.
+a C syntax check over `router/include/wattrouter.h`, and performance gates.
 
 `android/settings.gradle.kts` exists, so `gradle test` runs — **the JVM suite only**. The
 instrumented one cannot run there: the system image is `arm64-v8a` and the runner is x86_64
@@ -132,6 +130,6 @@ now checks for the trailer.
 ## Before you claim something works
 
 State where it ran. This repository is developed on more than one machine and they do not have
-the same tools: `ios/` needs Xcode, and the machine most of this was written on has only the
-Command Line Tools. A change that compiled in CI and a change that ran on a simulator are
-different claims, and the pull request should say which one it is making.
+the same tools: the instrumented suites need an emulator and an SDK. A change that compiled in
+CI, one that passed the JVM suite, one that ran on an emulator and one that was watched on a
+phone are four different claims, and the pull request should say which it is making.

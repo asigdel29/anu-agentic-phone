@@ -77,6 +77,11 @@ class Budgeted(private val phone: Phone, private val budget: Budget) : Phone {
 
     override suspend fun barredNow(): String? = phone.barredNow()
 
+    // Passed through uncounted, with barredNow and read: asking whether the
+    // service exists is not acting on the phone, and a turn that spent its
+    // budget still has to be able to say why it cannot read.
+    override suspend fun attached(): Boolean = phone.attached()
+
     override suspend fun read(): Reading? = phone.read()
 
     override suspend fun apps(): List<Launchable>? = phone.apps()

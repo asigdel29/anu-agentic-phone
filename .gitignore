@@ -88,3 +88,7 @@ ios/Share/WattRouterShare.entitlements
 # Heap dumps. R8 writes one when it runs out of memory, which is how
 # android/gradle.properties came to exist.
 *.hprof
+
+# Written by scripts/stub-model.py: every request the app made while it was
+# pointed at the stub. A transcript of somebody testing, so not tracked.
+stub-requests.jsonl

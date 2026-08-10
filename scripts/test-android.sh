@@ -4,7 +4,7 @@
 # History
 #   2026-08-08  A. Sigdel  Created.
 #
-# test-ios.sh's shape, for its reasons: a device found by name and created when
+# A device found by name and created when
 # absent, so a machine that has never run this needs no setup beyond the SDK. It
 # boots one headless when nothing is up, because these tests draw nothing.
 #
@@ -81,7 +81,7 @@ fi
 
 # Only an emulator this script started is one it may stop. A device somebody
 # else is using is not this script's to shut down, which is the mistake
-# test-ios.sh made once with a booted simulator.
+# learned once with a booted emulator.
 cleanup() {
     if [ -n "$started" ]; then
         "$ADB" emu kill >/dev/null 2>&1 || true

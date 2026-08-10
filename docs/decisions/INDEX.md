@@ -35,29 +35,29 @@ that somebody chose which questions get asked. `gh pr view <n>` reads one.
 
 | Question | Argued in |
 |---|---|
-| Why is a round committed atomically, and why do tools run in order rather than at once? | [#149](https://github.com/asigdel29/anu-agentic-stack/pull/149) |
-| Why do the tools have a workspace, and where does it come from on a phone? | [#121](https://github.com/asigdel29/anu-agentic-stack/pull/121) |
-| Why does a write go through a temporary and a rename? | [#125](https://github.com/asigdel29/anu-agentic-stack/pull/125) |
-| Why does `patch` refuse an ambiguous match instead of picking one? | [#133](https://github.com/asigdel29/anu-agentic-stack/pull/133) |
-| Why does a tool call carry an id, and a result answer it? | [#147](https://github.com/asigdel29/anu-agentic-stack/pull/147) |
+| Why is a round committed atomically, and why do tools run in order rather than at once? | [#149](https://github.com/asigdel29/anu-agentic-phone/pull/149) |
+| Why do the tools have a workspace, and where does it come from on a phone? | [#121](https://github.com/asigdel29/anu-agentic-phone/pull/121) |
+| Why does a write go through a temporary and a rename? | [#125](https://github.com/asigdel29/anu-agentic-phone/pull/125) |
+| Why does `patch` refuse an ambiguous match instead of picking one? | [#133](https://github.com/asigdel29/anu-agentic-phone/pull/133) |
+| Why does a tool call carry an id, and a result answer it? | [#147](https://github.com/asigdel29/anu-agentic-phone/pull/147) |
 
 ### The router
 
 | Question | Argued in |
 |---|---|
-| Why is the embedding backend chosen at startup rather than compiled in? | [#96](https://github.com/asigdel29/anu-agentic-stack/pull/96) |
-| Why is there no lock acquisition order? | [#163](https://github.com/asigdel29/anu-agentic-stack/pull/163) |
-| Why does a chain walk try each model rather than one? | [#107](https://github.com/asigdel29/anu-agentic-stack/pull/107) |
-| Why does the credential start the core in one particular order? | [#111](https://github.com/asigdel29/anu-agentic-stack/pull/111) |
+| Why is the embedding backend chosen at startup rather than compiled in? | [#96](https://github.com/asigdel29/anu-agentic-phone/pull/96) |
+| Why is there no lock acquisition order? | [#163](https://github.com/asigdel29/anu-agentic-phone/pull/163) |
+| Why does a chain walk try each model rather than one? | [#107](https://github.com/asigdel29/anu-agentic-phone/pull/107) |
+| Why does the credential start the core in one particular order? | [#111](https://github.com/asigdel29/anu-agentic-phone/pull/111) |
 
 ### The gates
 
 | Question | Argued in |
 |---|---|
-| Why is `slopgate` advisory rather than hard? | [#152](https://github.com/asigdel29/anu-agentic-stack/pull/152) |
-| Why do the guards share a library, and why are pathspecs anchored? | [#156](https://github.com/asigdel29/anu-agentic-stack/pull/156) |
-| Why is `CLAUDE.md` a symlink to `AGENTS.md`? | [#159](https://github.com/asigdel29/anu-agentic-stack/pull/159) |
-| Why does `doc-tags` check two tags and not the four the standard lists? | [#161](https://github.com/asigdel29/anu-agentic-stack/pull/161) |
+| Why is `slopgate` advisory rather than hard? | [#152](https://github.com/asigdel29/anu-agentic-phone/pull/152) |
+| Why do the guards share a library, and why are pathspecs anchored? | [#156](https://github.com/asigdel29/anu-agentic-phone/pull/156) |
+| Why is `CLAUDE.md` a symlink to `AGENTS.md`? | [#159](https://github.com/asigdel29/anu-agentic-phone/pull/159) |
+| Why does `doc-tags` check two tags and not the four the standard lists? | [#161](https://github.com/asigdel29/anu-agentic-phone/pull/161) |
 
 ## When a question is not here
 

@@ -10,13 +10,13 @@
 blank_issues_enabled: false
 contact_links:
   - name: A vulnerability
-    url: https://github.com/asigdel29/anu-agentic-stack/security/advisories/new
+    url: https://github.com/asigdel29/anu-agentic-phone/security/advisories/new
     about: >-
       Report privately. This application reads other applications' screens, so a
       public issue for a finding is a disclosure. SECURITY.md has the scope.
 
   - name: Why is it like this
-    url: https://github.com/asigdel29/anu-agentic-stack/blob/main/docs/decisions/INDEX.md
+    url: https://github.com/asigdel29/anu-agentic-phone/blob/main/docs/decisions/INDEX.md
     about: >-
       The decision index routes most questions of this shape to the change that
       argued it, which is usually faster than asking.

@@ -75,14 +75,30 @@ interface Phone {
     suspend fun barredNow(): String?
 
     /**
+     * Whether the service that reads screens is attached at all.
+     *
+     * Separate from [read] for the reason [barredNow] is: null has more than
+     * one cause and the answer needs different words for each. #517 is what
+     * happens without it — a window that had not arrived yet was reported as a
+     * permission that was never granted, and the model was told to go and turn
+     * on a switch that was already on.
+     *
+     * # Rely
+     * As [read], and cheaper: it asks whether a service is bound and reads
+     * nothing.
+     */
+    suspend fun attached(): Boolean
+
+    /**
      * What is on screen now.
      *
      * # Rely
      * Called from the turn loop. Fetches a tree rather than answering from one
      * held, so it costs a round trip into the framework each time.
      *
-     * @return null when the screen cannot be read at all — the service off, or
-     *   no window focused.
+     * @return null when the screen cannot be read — the service off, or no
+     *   window focused. [attached] tells the two apart, and a caller answering
+     *   null without asking it will blame the wrong one.
      */
     suspend fun read(): Reading?
 
@@ -281,7 +297,8 @@ class ReadScreenTool(private val phone: Phone) : Tool {
         // the model exactly which button says Allow, and the refusal it would
         // then get from tap is a refusal it can plan around.
         phone.barredNow()?.let { return it }
-        return describe(phone.read())
+        val reading = phone.read() ?: return unreadable(phone.attached())
+        return describe(reading)
     }
 
     companion object {
@@ -291,19 +308,38 @@ class ReadScreenTool(private val phone: Phone) : Tool {
         /** Deepest indent. Beyond it the nesting says nothing a reader uses. */
         private const val DEEPEST = 6
 
-        /** What a reading looks like, or what its absence does. */
-        fun describe(reading: Reading?): String {
-            // Both reasons, in the order somebody would try them. The second is
-            // the one how-the-agent-drives.md calls the failure with no error
-            // attached: on a sideloaded build the toggle is greyed until
-            // restricted settings are cleared, and nothing says so.
-            if (reading == null) {
-                return "the screen could not be read. Turn the assistant on in " +
+        /**
+         * Why the screen could not be read, in the caller's terms.
+         *
+         * The argument is the whole point of the function. A screen reads as
+         * unreadable both when nothing may read it and when there is nothing
+         * to read *yet*, and those want opposite advice: one is a switch to
+         * turn on, the other is to try again in a moment. #517 is the second
+         * being answered with the first, on the one sequence this application
+         * exists for — open an app, then read it.
+         *
+         * @param attached whether the service is bound, from [Phone.attached].
+         */
+        fun unreadable(attached: Boolean): String =
+            if (attached) {
+                // No mention of Settings. A model told about a permission it
+                // cannot grant itself stops and reports one, and stopping is
+                // exactly wrong here: the next call would have worked.
+                "the screen could not be read just now — most often a window " +
+                    "that has not finished arriving. Read it again."
+            } else {
+                // The failure how-the-agent-drives.md calls the one with no
+                // error attached: on a sideloaded build the toggle is greyed
+                // until restricted settings are cleared, and nothing says so.
+                "the screen could not be read. Turn the assistant on in " +
                     "Settings > Accessibility > WattRouter. If the switch there is " +
                     "greyed out, open Settings > Apps > WattRouter, then the menu in " +
                     "the corner, and allow restricted settings first."
             }
-            // Distinguishable from the above, for the reason every tool here
+
+        /** What a reading looks like. */
+        fun describe(reading: Reading): String {
+            // Distinguishable from an unreadable screen, for the reason every tool here
             // has one: a model told "nothing" cannot tell an empty page from a
             // locked door.
             if (reading.seen.isEmpty()) return "the screen is readable and has nothing on it"
@@ -365,35 +401,64 @@ class TapTool(private val phone: Phone) : Tool {
         val seen = decodeSeen(Tools.field(arguments, "screen"))
             ?: return "that is not a screen id. Use the one at the top of a read_screen answer."
 
-        return say(phone.tap(handle, seen))
+        return say(phone, "tapped", phone.tap(handle, seen))
     }
 
     companion object {
-        /** What happened, for the model to read. */
-        fun say(done: Done?): String = when (done) {
-            null -> ReadScreenTool.describe(null)
+        /**
+         * What happened, for the model to read.
+         *
+         * Takes the phone rather than a reading because an unreadable screen
+         * has two causes needing opposite advice, and only the phone knows
+         * which — see [ReadScreenTool.unreadable]. Asked for lazily: the common
+         * path never reaches it.
+         *
+         * # Rely
+         * Called from the turn loop, straight after the action it describes.
+         * Suspends only on the paths with no reading to show, where it asks
+         * [Phone.attached] — which reads nothing and touches no tree.
+         *
+         * @param did what the tool actually did, as a past participle — the
+         *   same word reads in all three sentences below. Not defaulted: five
+         *   tools share this function and a default is how four of them came to
+         *   report that they had tapped something (#518). A caller that has to
+         *   supply the word cannot forget to.
+         */
+        suspend fun say(phone: Phone, did: String, done: Done?): String = when (done) {
+            null -> ReadScreenTool.unreadable(phone.attached())
 
             is Done.Did ->
-                "tapped. The screen may still be settling; this is it now.\n\n" +
-                    ReadScreenTool.describe(done.now)
+                "$did. The screen may still be settling; this is it now.\n\n" +
+                    after(phone, done.now)
 
-            // Not a failure of the tap, and worth wording as an instruction
+            // Not a failure of the action, and worth wording as an instruction
             // rather than an error: the answer already contains what to do.
             is Done.Moved ->
                 "the screen changed before that could happen, so nothing was " +
-                    "tapped. This is what is there now.\n\n" +
-                    ReadScreenTool.describe(done.now)
+                    "$did. This is what is there now.\n\n" +
+                    after(phone, done.now)
 
-            is Done.Lost -> lost(done.resolution)
+            is Done.Lost -> lost(did, done.resolution)
 
             is Done.Refused ->
-                "that is on the screen and could not be tapped: ${done.why}"
+                "that is on the screen and could not be $did: ${done.why}"
         }
 
-        private fun lost(resolution: Resolution): String = when (resolution) {
+        /**
+         * The screen an action left behind, or why it could not be seen.
+         *
+         * The action itself succeeded in both cases, which is why this is not
+         * an error: what failed is the look afterwards, and a model that is
+         * told to read again will get one.
+         */
+        private suspend fun after(phone: Phone, now: Reading?): String =
+            now?.let { ReadScreenTool.describe(it) }
+                ?: ReadScreenTool.unreadable(phone.attached())
+
+        private fun lost(did: String, resolution: Resolution): String = when (resolution) {
             is Resolution.Ambiguous ->
                 "that handle matches ${resolution.count} things on the screen, so " +
-                    "nothing was tapped. Read the screen again and use a handle " +
+                    "nothing was $did. Read the screen again and use a handle " +
                     "that names one of them."
 
             Resolution.Unusable ->
@@ -443,7 +508,7 @@ class TypeTextTool(private val phone: Phone) : Tool {
             return "no text was given. To empty the field, pass an empty string."
         }
 
-        return TapTool.say(phone.type(handle, seen, text))
+        return TapTool.say(phone, "typed", phone.type(handle, seen, text))
     }
 }
 
@@ -469,7 +534,7 @@ class NavigateTool(private val phone: Phone) : Tool {
         val way = Way.of(Tools.field(arguments, "where"))
             ?: return "there is no button called that. Try one of: ${Way.words}."
 
-        return TapTool.say(phone.navigate(way))
+        return TapTool.say(phone, "pressed", phone.navigate(way))
     }
 }
 
@@ -502,7 +567,7 @@ class ScrollTool(private val phone: Phone) : Tool {
         val onward = Onward.of(Tools.field(arguments, "direction"))
             ?: return "there is no direction called that. Try one of: ${Onward.words}."
 
-        return TapTool.say(phone.scroll(handle, seen, onward))
+        return TapTool.say(phone, "scrolled", phone.scroll(handle, seen, onward))
     }
 }
 
@@ -542,7 +607,7 @@ class OpenAppTool(private val phone: Phone) : Tool {
                     found.joinToString(", ") { it.label } +
                     ". Name one of those exactly."
             } else {
-                TapTool.say(phone.open(found.single().packageName))
+                TapTool.say(phone, "opened", phone.open(found.single().packageName))
             }
         }
     }
@@ -589,7 +654,7 @@ class WaitForChangeTool(
 
         var last: Reading? = null
         repeat(asked * 1000 / INTERVAL) {
-            val now = phone.read() ?: return ReadScreenTool.describe(null)
+            val now = phone.read() ?: return ReadScreenTool.unreadable(phone.attached())
             if (now.generation != from) {
                 return "the screen changed.\n\n" + ReadScreenTool.describe(now)
             }
@@ -600,8 +665,13 @@ class WaitForChangeTool(
         // Not a failure. "Still the same screen" is what somebody asks when
         // they want to know whether a tap did anything, and reported as an
         // error a model retries the tap instead of looking for another reason.
+        // Non-null by construction: the loop above runs at least four times and
+        // returns early on the first unreadable look, so reaching here means one
+        // succeeded. Written as a fallback rather than an assertion because the
+        // fallback costs a line and a wrong assertion costs a turn.
+        val seen = last ?: return ReadScreenTool.unreadable(phone.attached())
         return "the screen has not changed in $asked seconds; it is still this " +
-            "one.\n\n" + ReadScreenTool.describe(last)
+            "one.\n\n" + ReadScreenTool.describe(seen)
     }
 
     companion object {
@@ -639,7 +709,7 @@ class FindOnScreenTool(private val phone: Phone) : Tool {
         if (wanted.isEmpty()) return "no words were given, so nothing was looked for"
 
         phone.barredNow()?.let { return it }
-        val reading = phone.read() ?: return ReadScreenTool.describe(null)
+        val reading = phone.read() ?: return ReadScreenTool.unreadable(phone.attached())
 
         // The whole reading, not the printed part. The handles past
         // read_screen's limit exist; they are only not on the page.

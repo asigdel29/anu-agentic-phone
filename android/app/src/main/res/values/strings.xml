@@ -25,4 +25,18 @@
     <!-- On the overlay, over whatever is being driven. One word, because it
          sits beside a sentence and the sentence is the part to read. -->
     <string name="banner_stop">Stop</string>
+
+    <!--
+      On the bubble. One character, because the bubble is a thumb wide and sits
+      over somebody else's design; a word would either not fit or would have to
+      shrink until it could not be read.
+    -->
+    <string name="chat_head_label">W</string>
+
+    <!--
+      What a screen reader says instead. The bubble decides a tap from a drag
+      itself and so has no click listener to describe, which is exactly when a
+      content description stops being a courtesy.
+    -->
+    <string name="chat_head_description">Open WattRouter</string>
 </resources>

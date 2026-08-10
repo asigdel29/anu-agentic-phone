@@ -220,50 +220,26 @@ jobs:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
         run: cargo build --manifest-path router/Cargo.toml --target aarch64-unknown-linux-gnu --release
 
-  # The iOS app links the router as a static library, and no other job compiles
-  # for that target. A break specific to it — a dependency reaching for a Unix
-  # the phone does not provide — would otherwise surface in Xcode, off CI and
-  # days later. The Apple SDK means a macOS runner, which is the scarcest thing
-  # this workflow asks for — fewer of them run at once than Linux ones, and they
-  # take longer to come up — so this job builds and checks the header and does
-  # nothing else: the tests are target-independent and already run on Linux.
+  # A test in ffi.rs proves the header names what the library exports. It cannot
+  # prove the header is valid C, because nothing in a Rust build ever compiles
+  # it. This does.
   #
-  # --lib --no-default-features is the build an app takes. It calls the decision
-  # core, never the server, and the default features drag ONNX Runtime in behind
-  # them for an embedder the app does not use — 156 MB of archive against 42.
-  #
-  # --features git matches scripts/build-ios-core.sh, and the point is that it
-  # matches: a phone has no shell, so the app is the one build that turns git on.
-  # Without it here this job compiles a library the app does not ship, and a
-  # break in the git half reaches a developer running `just ios-core` rather than
-  # the push that caused it.
-  ios-build:
-    name: Build (aarch64-apple-ios)
+  # On Linux, and that is the change #544 made: this used to ride along with the
+  # iOS build on a macOS runner, targeting arm64-apple-ios. The app is gone and
+  # the ABI is not -- ffi.rs, ffi_git.rs and ffi_memory.rs are a stable C
+  # interface with tests -- so the check moves to the cheapest runner that can
+  # make it. Valid C is valid C; the target was never what this was asking about.
+  header:
+    name: Header
     needs: detect
     if: ${{ needs.detect.outputs.rust == 'true' }}
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/rust-setup
-        with:
-          target: aarch64-apple-ios
-          cache-key: ios
-      - name: Build
-        run: |
-          set -euo pipefail
-          cargo build --manifest-path router/Cargo.toml \
-            --target aarch64-apple-ios --release --lib \
-            --no-default-features --features git
-
-      # A test in ffi.rs proves the header names what the library exports. It
-      # cannot prove the header is valid C, because nothing in a Rust build ever
-      # compiles it. This does, with the compiler and SDK the app will use.
       - name: Check the header compiles as C
         run: |
           set -euo pipefail
-          clang -fsyntax-only -Wall -Wextra -pedantic -std=c11 \
-            -target arm64-apple-ios17 \
-            -isysroot "$(xcrun --sdk iphoneos --show-sdk-path)" \
+          gcc -fsyntax-only -Wall -Wextra -pedantic -std=c11 \
             router/include/wattrouter.h
 
   # The benches carry gates, and a gate nothing runs is a comment. These are
@@ -350,9 +326,54 @@ jobs:
   # for and its result ignored, which is worse than not gating it at all: the
   # aggregator reports green over a red job. Adding one without proving it can
   # turn this check red is trusting the YAML.
+  # The Dockerfile is how the router reaches a platform, and nothing else in this
+  # workflow compiles it. A break specific to the image -- a missing system
+  # library, a stale base tag, a layer order that stops caching -- would
+  # otherwise surface during a deployment, which is the worst place to find it.
+  #
+  # It also makes a claim nobody could make locally: #537 was written on a
+  # machine whose Docker had a corrupt content store and 3.5GB of disk, so the
+  # image had never been built anywhere when the Dockerfile was merged. This job
+  # is what changed that.
+  #
+  # Built and not pushed. A registry is a credential and a decision about where
+  # images live, and neither belongs in a check that only has to answer whether
+  # the thing compiles.
+  image:
+    name: Image
+    needs: detect
+    if: ${{ needs.detect.outputs.rust == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build --tag wattrouter:ci .
+      - name: It starts and answers liveness
+        run: |
+          set -euo pipefail
+          # A build that produces an image which cannot start is a build that
+          # passed for no reason. PORT rather than an address, because that is
+          # what a platform sets and the path #537 added.
+          docker run --rm --detach --name probe \
+            --env PORT=8080 \
+            --env NEURALWATT_API_KEY=not-a-real-key \
+            --publish 8080:8080 wattrouter:ci
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/healthz >/dev/null 2>&1; then
+              printf 'the image starts and answers /healthz\n'
+              docker rm --force probe >/dev/null
+              exit 0
+            fi
+            sleep 1
+          done
+          printf 'the image never answered /healthz\n' >&2
+          docker logs probe >&2 || true
+          docker rm --force probe >/dev/null 2>&1 || true
+          exit 1
+
   required:
     name: Required
-    needs: [detect, format, lint, test, cross-build, ios-build, perf, android]
+    needs: [detect, format, lint, test, cross-build, header, perf, android, image]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -364,9 +385,10 @@ jobs:
             lint:${{ needs.lint.result }}
             test:${{ needs.test.result }}
             cross-build:${{ needs.cross-build.result }}
-            ios-build:${{ needs.ios-build.result }}
+            header:${{ needs.header.result }}
             perf:${{ needs.perf.result }}
             android:${{ needs.android.result }}
+            image:${{ needs.image.result }}
         run: |
           set -euo pipefail
           fail=0

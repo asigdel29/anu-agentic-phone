@@ -15,8 +15,14 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-private class Static(private val reading: Reading?, private val why: String? = null) : Phone {
+private class Static(
+    private val reading: Reading?,
+    private val why: String? = null,
+    private val attached: Boolean = true,
+) : Phone {
     override suspend fun barredNow() = why
+
+    override suspend fun attached() = attached
 
     override suspend fun read() = reading
 
@@ -109,14 +115,37 @@ class ScreenToolsTest {
     }
 
     @Test
-    fun aScreenThatCannotBeReadSaysBothWaysToFixIt() {
+    fun aScreenNothingMayReadSaysBothWaysToFixIt() = runTest {
         // The second is the failure how-the-agent-drives.md calls the one with
         // no error attached: on a sideloaded build the toggle is greyed until
         // restricted settings are cleared, and nothing says so.
-        val said = ReadScreenTool.describe(null)
+        val said = ReadScreenTool(Static(null, attached = false)).run("{}")
 
         assertTrue(said, said.contains("Settings > Accessibility > WattRouter"))
         assertTrue(said, said.contains("restricted settings"))
+    }
+
+    @Test
+    fun aScreenThatIsMerelyStillArrivingSaysNothingAboutSettings() = runTest {
+        // #517. The service is on and the window has not landed, which is the
+        // ordinary state of a phone for a moment after open_app — so this is
+        // the answer the one sequence this application exists for produces.
+        //
+        // Against the code before the fix this said "Turn the assistant on",
+        // sending somebody to a switch that was already on and telling a model
+        // it lacked a capability it cannot grant itself.
+        val said = ReadScreenTool(Static(null, attached = true)).run("{}")
+
+        assertTrue(said, !said.contains("Settings"))
+        assertTrue(said, !said.contains("restricted settings"))
+        assertTrue(said, said.contains("Read it again"))
+    }
+
+    @Test
+    fun theTwoUnreadableAnswersAreNotTheSameWords() {
+        // Guards the distinction rather than either message: a later edit that
+        // makes them agree again puts #517 back with both tests above green.
+        assertTrue(ReadScreenTool.unreadable(attached = true) != ReadScreenTool.unreadable(attached = false))
     }
 
     @Test
@@ -150,6 +179,7 @@ class ScreenToolsTest {
 }
 
 private class Tapping(private val done: Done?, private val reading: Reading? = null) : Phone {
+    override suspend fun attached() = true
     var asked: Pair<Handle, Generation>? = null
     var typed: String? = null
     var pressed: Way? = null
@@ -217,10 +247,10 @@ class TapToolTest {
     }
 
     @Test
-    fun aTapAnswersWithTheScreenAndSaysItMaySettle() {
+    fun aTapAnswersWithTheScreenAndSaysItMaySettle() = runTest {
         val after = Reading(Generation("k3f9", 5), listOf(Sighting(send, "button", "Send", isClickable = true)))
 
-        val said = TapTool.say(Done.Did(after))
+        val said = TapTool.say(Static(after), "tapped", Done.Did(after))
 
         assertTrue(said, said.startsWith("tapped."))
         assertTrue(said, said.contains("still be settling"))
@@ -228,27 +258,28 @@ class TapToolTest {
     }
 
     @Test
-    fun aScreenThatMovedIsAnInstructionRatherThanAnError() {
+    fun aScreenThatMovedIsAnInstructionRatherThanAnError() = runTest {
         // Not a failure of the tap. Told "failed", a model retries — which is
         // right for one of the four outcomes and wrong for this one.
         val now = Reading(Generation("k3f9", 5), listOf(Sighting(send, "button", "Send", isClickable = true)))
 
-        val said = TapTool.say(Done.Moved(now))
+        val said = TapTool.say(Static(now), "tapped", Done.Moved(now))
 
         assertTrue(said, said.contains("nothing was tapped"))
         assertTrue(said, said.contains("screen k3f9.5"))
     }
 
     @Test
-    fun eachWayOfMissingGetsItsOwnInstruction() {
-        assertTrue(TapTool.say(Done.Lost(Resolution.Ambiguous(3))).contains("matches 3 things"))
-        assertTrue(TapTool.say(Done.Lost(Resolution.Unusable)).contains("does not describe anything"))
-        assertTrue(TapTool.say(Done.Lost(Resolution.Missing)).contains("not on it any more"))
+    fun eachWayOfMissingGetsItsOwnInstruction() = runTest {
+        val phone = Static(null)
+        assertTrue(TapTool.say(phone, "tapped", Done.Lost(Resolution.Ambiguous(3))).contains("matches 3 things"))
+        assertTrue(TapTool.say(phone, "tapped", Done.Lost(Resolution.Unusable)).contains("does not describe anything"))
+        assertTrue(TapTool.say(phone, "tapped", Done.Lost(Resolution.Missing)).contains("not on it any more"))
     }
 
     @Test
-    fun theOneThatIsAboutTheTapSaysSo() {
-        val said = TapTool.say(Done.Refused("it is disabled"))
+    fun theOneThatIsAboutTheTapSaysSo() = runTest {
+        val said = TapTool.say(Static(null), "tapped", Done.Refused("it is disabled"))
 
         assertTrue(said, said.contains("could not be tapped: it is disabled"))
     }
@@ -259,7 +290,7 @@ class TapToolTest {
         // about how to describe the service being off.
         val said = TapTool(Tapping(null)).run(call())
 
-        assertEquals(ReadScreenTool.describe(null), said)
+        assertEquals(ReadScreenTool.unreadable(attached = true), said)
     }
 }
 
@@ -278,6 +309,17 @@ class TypeTextToolTest {
 
         assertEquals(field to generation, phone.asked)
         assertEquals("meet at six", phone.typed)
+    }
+
+    @Test
+    fun typingSaysItTypedRatherThanTapped() = runTest {
+        // #518. Every acting tool shares TapTool.say, and before the verb was a
+        // parameter all five of them reported that they had tapped something.
+        // The transcript is the model's account of what it did.
+        val said = TypeTextTool(Tapping(Done.Did(null))).run(call())
+
+        assertTrue(said, said.startsWith("typed."))
+        assertTrue(said, !said.contains("tapped"))
     }
 
     @Test
@@ -313,11 +355,15 @@ class TypeTextToolTest {
     }
 
     @Test
-    fun everyOutcomeIsWordedTheWayATapIs() {
+    fun everyOutcomeIsWordedTheWayATapIs() = runTest {
         // One vocabulary for both. Two tools describing a moved screen
         // differently is two things for a model to learn about one event.
-        assertEquals(TapTool.say(Done.Lost(Resolution.Missing)), TapTool.say(Done.Lost(Resolution.Missing)))
-        assertTrue(TapTool.say(Done.Refused("that is a password field")).contains("password field"))
+        val phone = Static(null)
+        assertEquals(
+            TapTool.say(phone, "tapped", Done.Lost(Resolution.Missing)),
+            TapTool.say(phone, "tapped", Done.Lost(Resolution.Missing)),
+        )
+        assertTrue(TapTool.say(phone, "tapped", Done.Refused("that is a password field")).contains("password field"))
     }
 }
 
@@ -331,6 +377,15 @@ class NavigateToolTest {
 
             assertEquals(way, phone.pressed)
         }
+    }
+
+    @Test
+    fun pressingSaysItPressedRatherThanTapped() = runTest {
+        // #518. A system button is not a node and was never tapped.
+        val said = NavigateTool(Tapping(Done.Did(null))).run("""{"where":"back"}""")
+
+        assertTrue(said, said.startsWith("pressed."))
+        assertTrue(said, !said.contains("tapped"))
     }
 
     @Test
@@ -419,6 +474,15 @@ class ScrollToolTest {
         """{"handle":"$handle","screen":"$screen","direction":"$direction"}"""
 
     @Test
+    fun scrollingSaysItScrolledRatherThanTapped() = runTest {
+        // #518. Completes the set: five acting tools, five verbs, one helper.
+        val said = ScrollTool(Tapping(Done.Did(null))).run(call())
+
+        assertTrue(said, said.startsWith("scrolled."))
+        assertTrue(said, !said.contains("tapped"))
+    }
+
+    @Test
     fun bothDirectionsReachThePhone() = runTest {
         Onward.entries.forEach { onward ->
             val phone = Tapping(Done.Did(null))
@@ -460,10 +524,10 @@ class ScrollToolTest {
     }
 
     @Test
-    fun beingAtTheEndIsAnAnswerRatherThanAFailure() {
+    fun beingAtTheEndIsAnAnswerRatherThanAFailure() = runTest {
         // Told it failed, a model retries. Told the list is at its end, it
         // stops — which is the answer to "is there any more".
-        val said = TapTool.say(Done.Refused("it is already at the end, so nothing moved"))
+        val said = TapTool.say(Static(null), "tapped", Done.Refused("it is already at the end, so nothing moved"))
 
         assertTrue(said, said.contains("already at the end"))
     }
@@ -478,6 +542,16 @@ class OpenAppToolTest {
 
     private fun phone(vararg apps: Launchable) =
         Tapping(Done.Did(null)).also { it.installed = apps.toList() }
+
+    @Test
+    fun openingSaysItOpenedRatherThanTapped() = runTest {
+        // #518, and the run that found it: open_app answered "tapped." while
+        // Clock genuinely came to the front.
+        val said = OpenAppTool(phone(gmail)).run("""{"name":"Gmail"}""")
+
+        assertTrue(said, said.startsWith("opened."))
+        assertTrue(said, !said.contains("tapped"))
+    }
 
     @Test
     fun anExactNameWinsOutright() {
@@ -556,6 +630,7 @@ class OpenAppToolTest {
 }
 
 private class Changing(private val readings: List<Reading?>, private val why: String? = null) : Phone {
+    override suspend fun attached() = true
     var looks = 0
 
     override suspend fun barredNow() = why
@@ -652,7 +727,7 @@ class WaitForChangeToolTest {
 
         val said = tool(phone).run("""{"screen":"k3f9.4"}""")
 
-        assertEquals(ReadScreenTool.describe(null), said)
+        assertEquals(ReadScreenTool.unreadable(attached = true), said)
         assertEquals(2, phone.looks)
     }
 }
@@ -728,7 +803,7 @@ class FindOnScreenToolTest {
     fun anUnreadableScreenBorrowsTheSameSentence() = runTest {
         val said = FindOnScreenTool(Changing(listOf(null))).run("""{"text":"Bluetooth"}""")
 
-        assertEquals(ReadScreenTool.describe(null), said)
+        assertEquals(ReadScreenTool.unreadable(attached = true), said)
     }
 }
 
