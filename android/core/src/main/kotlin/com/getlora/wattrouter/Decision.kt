@@ -1,4 +1,4 @@
-// Decision.kt — what the core answered, as values rather than a string.
+// Decision.kt: what the core answered, as values rather than a string.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
@@ -14,7 +14,7 @@
 // a routing panel wants the tier and the reason, the turn loop re-decides each
 // round and shows what changed.
 //
-// Decoded by hand for the reason Conversation.kt encodes by hand — there is no
+// Decoded by hand for the reason Conversation.kt encodes by hand: there is no
 // serialization compiler plugin here, and the two decisions below are ones a
 // generated decoder would get wrong quietly.
 
@@ -74,7 +74,7 @@ data class Decision(
          *
          * @return the decision, or null for `{"error": …}`, for a null answer,
          *   or for anything that does not parse. A caller cannot act on the
-         *   difference — there is no decision either way — and the core already
+         *   difference, since there is no decision either way, and the core already
          *   distinguishes them for anybody debugging it.
          */
         fun from(envelope: String?): Decision? {

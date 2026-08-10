@@ -1,10 +1,10 @@
-// NeuralWattInference.kt — the provider, over the wire.
+// NeuralWattInference.kt: the provider, over the wire.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
 //
 // HttpURLConnection rather than OkHttp: on Android the former is the latter
-// underneath, so this is the platform client and adds nothing — the same call
+// underneath, so this is the platform client and adds nothing: the same call
 // URLSession is on iOS.
 //
 // The contract that costs most to get wrong: nothing is emitted before the

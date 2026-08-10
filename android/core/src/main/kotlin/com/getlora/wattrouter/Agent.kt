@@ -1,4 +1,4 @@
-// Agent.kt — the turn loop: decide, ask, run tools, ask again.
+// Agent.kt: the turn loop: decide, ask, run tools, ask again.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
@@ -8,7 +8,7 @@
 //
 // A round is committed atomically: the assistant message and every tool result
 // are appended together, so a round failing partway leaves the conversation as
-// it was. Otherwise a call carries no answering tool message — a body the
+// it was. Otherwise a call carries no answering tool message, a body the
 // provider refuses on the *next* request, one turn after the cause.
 //
 // Tools run in order: a write then a read of one path is a sequence, or a race.
@@ -52,7 +52,7 @@ fun interface Routing {
      * # Rely
      * Suspending, and that is the point rather than a formality. The real
      * implementation is a blocking native call, the loop below runs in its
-     * collector's context, and MainActivity collects on the main thread — so a
+     * collector's context, and MainActivity collects on the main thread, so a
      * plain function here would embed a prompt on the UI thread once per round.
      * #474 has the measurement. A fake in a test does not have to suspend and
      * is not asked to.
@@ -116,7 +116,7 @@ class Agent(
 
     private suspend fun kotlinx.coroutines.flow.FlowCollector<TurnEvent>.loop() {
         // Here rather than in send(), so a resumed turn gets a fresh allowance
-        // rather than inheriting a spent one — which is the case an interrupt
+        // rather than inheriting a spent one, which is the case an interrupt
         // produces, and the one where somebody has just said carry on.
         budget?.beginTurn()
 

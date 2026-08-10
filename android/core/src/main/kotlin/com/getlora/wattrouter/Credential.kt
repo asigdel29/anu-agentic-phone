@@ -1,4 +1,4 @@
-// Credential.kt — the one secret the stack needs, kept between launches.
+// Credential.kt: the one secret the stack needs, kept between launches.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
@@ -10,7 +10,7 @@
 //
 // `clean` is separate, and public to this module, so that decision is reachable
 // from a JVM test. Everything else here needs AndroidKeyStore and so needs a
-// device — and the part with a bug in it should not be the part that only runs
+// device, and the part with a bug in it should not be the part that only runs
 // on an emulator.
 
 package com.getlora.wattrouter
@@ -46,7 +46,7 @@ class Credential(private val store: SharedPreferences) {
      *
      * The second case is real: the keystore drops its entries when the screen
      * lock is removed on some devices, and the honest answer then is the same
-     * as never having had one — sign in again.
+     * as never having had one: sign in again.
      */
     fun read(): String? = store.getString(KEY, null)?.let { Keystore.open(ALIAS, it) }
 

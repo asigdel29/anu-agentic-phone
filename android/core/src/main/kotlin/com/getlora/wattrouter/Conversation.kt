@@ -1,4 +1,4 @@
-// Conversation.kt — the state a turn accumulates, and the request it becomes.
+// Conversation.kt: the state a turn accumulates, and the request it becomes.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
@@ -9,7 +9,7 @@
 //
 // The core takes an OpenAI-shaped body as a string. Written by hand at each call
 // site that is a second copy of a format, free to drift, with escaping at every
-// site — and a message containing a quote stops being text and becomes a
+// site, and a message containing a quote stops being text and becomes a
 // malformed request. Built here, once, from state already kept.
 //
 // Hand-written encoding rather than @Serializable, and not only to avoid a
@@ -77,7 +77,7 @@ data class Message(
          * A turn that asked for tools must be appended before any result is, and
          * with its calls intact: a tool message names a call id, and a provider
          * that was never sent the message announcing that id rejects the whole
-         * request — naming, in the way of these things, nothing in particular.
+         * request, naming, in the way of these things, nothing in particular.
          */
         fun assistant(content: String, toolCalls: List<ToolCall> = emptyList()) =
             Message(Role.ASSISTANT, content, toolCalls)
@@ -141,7 +141,7 @@ class Conversation(system: String? = null) {
      * The body the core classifies, and the provider answers.
      *
      * @param model which model to ask, or null when the caller is only asking the
-     *   core to route — the core reads the messages and ignores the rest, and
+     *   core to route: the core reads the messages and ignores the rest, and
      *   sending a model name it will not use invites somebody to trust it.
      */
     fun body(model: String? = null): String = buildJsonObject {
