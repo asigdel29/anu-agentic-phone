@@ -17,10 +17,9 @@ table; this file assumes you have read it.
 
 | Path | Language | What it is |
 |---|---|---|
-| `router/` | Rust | `wattrouter`: scores a prompt and routes it to the cheapest tier that can answer. Also the C ABI the iOS app links. Has its own `AGENTS.md`. |
+| `router/` | Rust | `wattrouter`: scores a prompt and routes it to the cheapest tier that can answer. Also the server, and what the phone reaches over JNI. Has its own `AGENTS.md`. |
 | `hermes/` | Python, YAML | Configuration and two plugins for the agent, which is installed separately. Has its own `AGENTS.md`. |
 | `train/` | Python | `fetch_dataset.py`, which builds the training set for the scoring head. |
-| `deploy/` | Shell, systemd | Board bootstrap and the two service units. |
 | `android/` | Kotlin, Gradle | Two modules: `core/`, the routing core as a library, and `app/`, a Compose chat over it that reads and drives other apps. `just android` builds the debug app, core first. No wrapper. Has its own `AGENTS.md`. |
 | `scripts/` | Shell | Everything `just` calls, plus `scripts/guards/`, which CI calls. |
 | `docs/` | Prose | The standard, and the decision records. |
@@ -58,8 +57,7 @@ property of this pipeline, and the first thing to know about it. A `detect` job 
 per language; every later step carries an `if` on those flags.
 
 `router/Cargo.toml` exists, so the Rust half runs: `cargo fmt --check`, `clippy -D warnings`,
-`cargo test --all-targets`, a cross-build for `aarch64-unknown-linux-gnu`, a build for
-a C syntax check over `router/include/wattrouter.h`, and performance gates.
+`cargo test --all-targets`, and performance gates.
 
 `android/settings.gradle.kts` exists, so `gradle test` runs — **the JVM suite only**. The
 instrumented one cannot run there: the system image is `arm64-v8a` and the runner is x86_64

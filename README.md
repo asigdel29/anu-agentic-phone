@@ -210,7 +210,7 @@ container turns ONNX off, because the phone routes and the server does not score
 | Path | What |
 |---|---|
 | `android/` | Two modules: `core/`, the routing core as a library, and `app/`, the assistant over it. |
-| `router/` | The Rust core: scoring, routing, the C ABI and the JNI layer, and the server. |
+| `router/` | The Rust core: scoring, routing, the JNI layer, and the server. |
 | `hermes/` | Configuration for the same router from a terminal — the reference for what the phone has to match. |
 | `scripts/` | Everything `just` calls, plus `scripts/guards/` for pull requests. |
 | `docs/` | The coding standard, and the decision records. |

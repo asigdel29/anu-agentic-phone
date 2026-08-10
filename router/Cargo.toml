@@ -9,9 +9,6 @@ license = "MIT"
 [lib]
 name = "wattrouter"
 path = "src/lib.rs"
-# staticlib alongside lib: the same source serves the server binary and the iOS
-# app, so the routing rules cannot diverge between them.
-crate-type = ["lib", "staticlib"]
 
 [[bin]]
 name = "wattrouter"
@@ -68,8 +65,8 @@ git2 = { version = "0.20.4", optional = true, default-features = false }
 # Pinned to the version zeromem uses. Two versions means two libsqlite3-sys,
 # which is two copies of SQLite in one binary: it sometimes links, and when it
 # does the two hold separate page caches over one file. `bundled` for the same
-# reason the cross-build needs it — the system SQLite is not there to link
-# against on an iOS slice.
+# reason the Android build needs it — the system SQLite is not there to link
+# against on an `aarch64-linux-android` slice.
 rusqlite = { version = "0.32", optional = true, features = ["bundled"] }
 # The JVM's side of the boundary. Header-only in effect: it binds against
 # whatever JNI the runtime provides, so nothing here needs a JDK to build.
