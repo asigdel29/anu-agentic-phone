@@ -73,7 +73,7 @@ dependencies {
     // is a decision rather than a default, so `buildJsonObject` is the honest
     // shape and the plugin would be a version to keep in step with AGP for
     // nothing.
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 
     // A cold Flow is the seam a model's answer arrives through: nothing is
     // requested until something collects, cancelling the collector cancels the
@@ -90,8 +90,8 @@ dependencies {
     // resolves to nothing and every @Test is an unresolved reference.
     testImplementation("junit:junit:4.13.2")
 
-    androidTestImplementation("androidx.test.ext:junit:1.2.1")
-    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test:runner:1.7.0")
 }
 
 
