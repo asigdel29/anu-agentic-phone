@@ -1,0 +1,7 @@
+{
+  "turns": [
+    {"call": {"name": "open_app", "arguments": {"name": "Clock"}}},
+    {"call": {"name": "read_screen", "arguments": {}}},
+    {"say": "Clock is open and I can read it."}
+  ]
+}
