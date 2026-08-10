@@ -99,6 +99,33 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/*" />
             </intent-filter>
+
+            <!--
+              The assist gesture: long-press home, or whatever the device maps
+              it to. #527 overturns the design review's refusal of this, and the
+              argument is worth having here because the refusal was right at the
+              time — the role was wanted then as a way to read the screen, and
+              AssistStructure is a read-only snapshot where the accessibility
+              service has the live tree. As an invocation that objection does
+              not apply.
+
+              What is still true is that Android has one assistant slot, so
+              being chosen for it means the gesture stops reaching whatever held
+              it. That is a real loss, and it is why this only puts the app in
+              the picker: nothing is taken, somebody chooses it in Settings >
+              Default apps > Digital assistant app. An app that never appears
+              there has made that choice on their behalf.
+
+              No wake word follows from this, and nothing should claim one.
+              AlwaysOnHotwordDetector needs a VoiceInteractionService that
+              currently holds the role, DSP support, and a vendor enrollment
+              application to have enrolled the phrase, and an app cannot supply
+              the last of those.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
 
         <!--
