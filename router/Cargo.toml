@@ -61,7 +61,7 @@ axum = "0.8"
 # Not 0.21, which is published. The bump above is the smallest one that clears
 # the advisory, and a version chosen for a reason is worth more than the newest
 # when what it vendors is a C library on three targets.
-git2 = { version = "0.20.4", optional = true, default-features = false }
+git2 = { version = "0.21.0", optional = true, default-features = false }
 # Pinned to the version zeromem uses. Two versions means two libsqlite3-sys,
 # which is two copies of SQLite in one binary: it sometimes links, and when it
 # does the two hold separate page caches over one file. `bundled` for the same
@@ -70,7 +70,7 @@ git2 = { version = "0.20.4", optional = true, default-features = false }
 rusqlite = { version = "0.32", optional = true, features = ["bundled"] }
 # The JVM's side of the boundary. Header-only in effect: it binds against
 # whatever JNI the runtime provides, so nothing here needs a JDK to build.
-jni = { version = "0.21", optional = true }
+jni = { version = "0.22", optional = true }
 # Pinned by revision rather than by tag: the crate is new and single-author, and
 # an unpinned dependency means the memory layer can change under a rebuild with
 # no signal. The same revision deploy/install-zeromem.sh puts on the board.
@@ -99,7 +99,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # random bytes this server issued, so there is no dictionary to run against it
 # and nothing a work factor would buy -- it would cost every request the time it
 # is meant to cost an attacker.
-sha2 = "0.10"
+sha2 = "0.11"
 
 [[bench]]
 name = "decide"
