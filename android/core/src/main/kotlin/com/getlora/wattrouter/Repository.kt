@@ -1,4 +1,4 @@
-// Repository.kt — a git repository, as Kotlin sees it.
+// Repository.kt: a git repository, as Kotlin sees it.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -9,7 +9,7 @@
 // a lifetime which does not exist.
 //
 // The symbol names are the contract and nothing checks them at build time, so
-// the parity test in router/src/jni.rs reads this file too — which makes its
+// the parity test in router/src/jni.rs reads this file too, which makes its
 // path part of the contract, the way Core.kt's is.
 //
 // Every call answers the envelope the C ABI already defines. Decoding it is the
@@ -24,7 +24,7 @@ package com.getlora.wattrouter
  * Outside the class on purpose: touching [Repository]'s companion runs
  * `System.loadLibrary`, so a JVM test of this would fail on the host for a
  * reason that has nothing to do with encoding. Hand-written for
- * Conversation.kt's reason — the plugin would be a version to keep in step
+ * Conversation.kt's reason: the plugin would be a version to keep in step
  * with AGP for four lines.
  */
 internal fun encodePaths(paths: List<String>): String = paths.joinToString(
@@ -49,7 +49,7 @@ internal fun encodePaths(paths: List<String>): String = paths.joinToString(
  * A repository, as a seam.
  *
  * [Repository] loads the shared library when its class initialises, so a tool
- * holding one cannot be built on the host at all — and the tools' own decisions,
+ * holding one cannot be built on the host at all, and the tools' own decisions,
  * which are what to refuse and what to say, need no repository to exercise. The
  * same split `Calendars`, `Directory` and `Whereabouts` are on.
  *
@@ -82,7 +82,7 @@ interface Worktree {
  * second instance over the same directory is not a second anything.
  *
  * @property path the working tree's root, absolute. A relative one resolves
- *   against the process's working directory, which on Android is `/` — so the
+ *   against the process's working directory, which on Android is `/`, so the
  *   mistake it looks like is not the one it is.
  */
 class Repository(val path: String) : Worktree {
@@ -108,7 +108,7 @@ class Repository(val path: String) : Worktree {
      *
      * @param paths relative to the repository root, WHERE a directory stages
      *   what is under it. Encoded as JSON here because that is the shape the C
-     *   ABI takes and the shape the model wrote — turning it into an array on
+     *   ABI takes and the shape the model wrote. Turning it into an array on
      *   the way through would be a third shape for one value.
      */
     override fun add(paths: List<String>): String? = nativeAdd(path, encodePaths(paths))

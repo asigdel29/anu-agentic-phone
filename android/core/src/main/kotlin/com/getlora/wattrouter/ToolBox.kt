@@ -1,4 +1,4 @@
-// ToolBox.kt — the tools a turn has, and dispatching to one.
+// ToolBox.kt: the tools a turn has, and dispatching to one.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.

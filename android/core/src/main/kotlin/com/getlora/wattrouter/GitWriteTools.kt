@@ -1,4 +1,4 @@
-// GitWriteTools.kt — staging something, and committing it.
+// GitWriteTools.kt: staging something, and committing it.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -13,7 +13,7 @@
 //
 // Neither obtains a capability, and that is worth saying because every tool
 // written since the calendar has opened by obtaining one. A repository is the
-// app's own directory — there is no dialog to spend and no ordering to keep.
+// app's own directory, so there is no dialog to spend and no ordering to keep.
 //
 // Both answer with the status afterwards rather than with "done". A model that
 // cannot see what landed does it again, which is the same reasoning
@@ -49,7 +49,7 @@ internal fun committed(envelope: String?): String {
 /**
  * The paths the model named.
  *
- * @return the list, or null if `paths` was absent or not an array of strings —
+ * @return the list, or null if `paths` was absent or not an array of strings,
  *   which is a different answer from an empty one, and gets different words.
  */
 internal fun stagedPaths(arguments: String): List<String>? = runCatching {

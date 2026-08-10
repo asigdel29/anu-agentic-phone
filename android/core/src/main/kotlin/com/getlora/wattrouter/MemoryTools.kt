@@ -1,4 +1,4 @@
-// MemoryTools.kt — remembering something, and asking what was remembered.
+// MemoryTools.kt: remembering something, and asking what was remembered.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -10,7 +10,7 @@
 //
 // One file because the pair is the decision: the model decides what is worth
 // remembering, rather than the loop ingesting everything. Automatic ingest is
-// worse for a reason that is not about cost — a transcript is mostly the shape
+// worse for a reason that is not about cost: a transcript is mostly the shape
 // of a conversation, "yes", "do that", "thanks", and a store full of that
 // recalls the shape rather than the facts.
 //
@@ -43,7 +43,7 @@ class RememberTool(
     override val purpose =
         "Remember something for later turns and later conversations. Use it for " +
             "facts about the person and their world that would be tedious to be told " +
-            "again — where things are, who people are, how they like things done. Not " +
+            "again: where things are, who people are, how they like things done. Not " +
             "for the conversation itself, which is already in front of you."
 
     override val schema = """
@@ -59,7 +59,7 @@ class RememberTool(
         if (text.isEmpty()) return "there was nothing to remember, so nothing was stored"
 
         // Dispatchers.IO, for the reason #474 records: SQLite across JNI, and
-        // the loop above runs wherever its collector does — which on a phone
+        // the loop above runs wherever its collector does, which on a phone
         // is the main thread.
         withContext(Dispatchers.IO) {
             memory.remember(text, speaker = "assistant", session = session, at = now())
@@ -76,7 +76,7 @@ class RecallTool(private val memory: Memory) : Tool {
 
     override val purpose =
         "Search everything remembered from earlier conversations. Ask it whenever " +
-            "something depends on what the person told you before — it is the only " +
+            "something depends on what the person told you before. It is the only " +
             "way to reach anything outside this conversation. Some results are marked " +
             "context: those are turns that sit near a match rather than answering it, " +
             "so do not state them as fact."
@@ -109,8 +109,8 @@ class RecallTool(private val memory: Memory) : Tool {
             DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneOffset.UTC)
 
         /**
-         * One recollection, as lines. Separate from [run] so the rendering —
-         * which is all of the decisions — is exercised without a store.
+         * One recollection, as lines. Separate from [run] so the rendering,
+         * which is all of the decisions, is exercised without a store.
          */
         fun describe(found: Recollection): String {
             // Distinguishable from a failure, and from a store never written

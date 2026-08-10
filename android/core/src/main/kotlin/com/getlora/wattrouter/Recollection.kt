@@ -1,4 +1,4 @@
-// Recollection.kt — what the store answered, as values.
+// Recollection.kt: what the store answered, as values.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.

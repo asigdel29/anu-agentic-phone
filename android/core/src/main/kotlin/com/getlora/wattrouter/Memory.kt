@@ -1,4 +1,4 @@
-// Memory.kt — the store, as Kotlin sees it.
+// Memory.kt: the store, as Kotlin sees it.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.

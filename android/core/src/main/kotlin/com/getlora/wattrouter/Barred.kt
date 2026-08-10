@@ -1,4 +1,4 @@
-// Barred.kt — where the agent may not act, whatever it was asked to do.
+// Barred.kt: where the agent may not act, whatever it was asked to do.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -13,8 +13,8 @@
 // a rule that is one refactor from being wrong.
 //
 // The rule is on the activity rather than the package for the settings cases,
-// and that is deliberate. Settings is otherwise a legitimate place to act —
-// somebody asking to turn on dark mode means Settings — so barring the package
+// and that is deliberate. Settings is otherwise a legitimate place to act,
+// since somebody asking to turn on dark mode means Settings, so barring it
 // would trade a real capability for a rule that could be narrower.
 
 package com.getlora.wattrouter
@@ -39,7 +39,7 @@ enum class Barred(val why: String) {
     /**
      * The runtime-permission UI, as a whole package. An agent that can tap
      * Allow can grant itself the calendar, contacts and location it was
-     * refused — and Permission's own refusal puts the words for it into the
+     * refused, and Permission's own refusal puts the words for it into the
      * transcript, so the chain is not hypothetical.
      */
     PERMISSIONS(
@@ -63,7 +63,7 @@ enum class Barred(val why: String) {
  * Whether the agent may act on what is showing.
  *
  * @param packageName the foreground app, as `rootInActiveWindow` reports it.
- * @param activity the foreground activity's class. Null when it is not known —
+ * @param activity the foreground activity's class. Null when it is not known,
  *   which is the state after a restart until the first window change, and is
  *   treated as unknown rather than as safe.
  * @param own this app's own package.
@@ -76,7 +76,7 @@ fun barred(packageName: String?, activity: String?, own: String, locked: Boolean
     packageName != null && packageName.endsWith(PERMISSION_UI) -> Barred.PERMISSIONS
     // Substring rather than an exact class list. The settings app renames and
     // rearranges these between releases, and a list of exact names is a list
-    // that silently stops matching — which here means silently stops refusing.
+    // that silently stops matching, which here means silently stops refusing.
     activity != null && CONTROLLING.any { activity.contains(it, ignoreCase = true) } ->
         Barred.CONTROLS
     else -> null

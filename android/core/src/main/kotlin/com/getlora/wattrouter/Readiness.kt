@@ -1,4 +1,4 @@
-// Readiness.kt — what is switched on, and where to switch on the rest.
+// Readiness.kt: what is switched on, and where to switch on the rest.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -8,8 +8,8 @@
 //   Readiness  All of them, as they stand now.
 //
 // A checklist rather than a wizard, and that is the decision. Every one of
-// these can be revoked from Settings while the app is not looking — the
-// accessibility service, notifications, the calendar, contacts, location — so a
+// these can be revoked from Settings while the app is not looking (the
+// accessibility service, notifications, the calendar, contacts, location) so a
 // one-way flow that congratulates somebody once and never looks again is a flow
 // that lies the first time anything is switched off. Permission.kt refuses to
 // cache its own state for exactly this reason (#229); this is the same rule at
@@ -25,7 +25,7 @@ package com.getlora.wattrouter
 data class Needed(
     /** What it is, in the person's terms rather than the platform's. */
     val what: String,
-    /** Where they turn it on, named exactly — "Settings" alone is not advice. */
+    /** Where they turn it on, named exactly. "Settings" alone is not advice. */
     val where: String,
     val isOn: Boolean,
     /**
