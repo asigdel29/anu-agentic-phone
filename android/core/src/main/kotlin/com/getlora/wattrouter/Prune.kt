@@ -1,4 +1,4 @@
-// Prune.kt — the nodes worth telling a model about.
+// Prune.kt: the nodes worth telling a model about.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -10,7 +10,7 @@
 //   prune     Which nodes those are.
 //
 // A real tree is layout: nested frames, scroll containers, wrappers around
-// wrappers. Whole, it is mostly noise, and the noise costs more than tokens —
+// wrappers. Whole, it is mostly noise, and the noise costs more than tokens:
 // the node that matters is harder to find in three hundred lines than in twelve.
 //
 // Sighting carries what may be shown rather than the node it came from, and
@@ -29,7 +29,7 @@ package com.getlora.wattrouter
  *   Null for a password field, and for a control that is only an icon with
  *   neither.
  * @property depth how far down it sat, for a rendering that wants to indent.
- *   Depth in the *pruned* tree rather than the real one — a node six containers
+ *   Depth in the *pruned* tree rather than the real one: a node six containers
  *   deep and one meaningful parent deep is one level in, and indenting it six
  *   would describe the layout rather than the page.
  */
@@ -88,7 +88,7 @@ fun prune(root: Node): List<Sighting> {
                 role = node.role,
                 // The value never leaves. A model that cannot see there is a
                 // password field cannot ask the person to fill it in, so the
-                // field is reported — what it holds is not.
+                // field is reported; what it holds is not.
                 label = if (node.isPassword) {
                     null
                 } else {
@@ -124,7 +124,7 @@ fun prune(root: Node): List<Sighting> {
  *
  * The outer one wins when it is the one that can be acted on. Where the inner
  * is clickable and the outer is not, the inner is the control and the outer was
- * the wrapper — so the test is on the action rather than on the position.
+ * the wrapper, so the test is on the action rather than on the position.
  */
 private fun wrappedBy(keptParent: Node?, node: Node): Boolean {
     val parent = keptParent ?: return false

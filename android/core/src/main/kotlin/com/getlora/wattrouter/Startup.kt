@@ -1,4 +1,4 @@
-// Startup.kt — getting from a cold launch to a core, or to a reason there is none.
+// Startup.kt: getting from a cold launch to a core, or to a reason there is none.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.

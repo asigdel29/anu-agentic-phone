@@ -1,4 +1,4 @@
-// Inference.kt — asking a model, and reading its answer as it is produced.
+// Inference.kt: asking a model, and reading its answer as it is produced.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
@@ -17,7 +17,7 @@
 //
 // The other half is the error type. A chain exists so a failed attempt can be
 // retried against the next model, and the walk doing that sits above this seam
-// rather than inside it — so the distinction upstream.rs makes in a match arm
+// rather than inside it, so the distinction upstream.rs makes in a match arm
 // has to be a value here. A server error is worth another model; a client error
 // is not, because the next model would reject the same body identically.
 //
@@ -48,7 +48,7 @@ sealed class InferenceError(message: String) : Exception(message) {
         InferenceError("$model is unavailable: $detail")
 
     /**
-     * The request was rejected on its merits — a 4xx. Every model behind the
+     * The request was rejected on its merits, a 4xx. Every model behind the
      * same API would reject it identically, so a chain stops here rather than
      * spending its remaining attempts proving that.
      */
@@ -82,7 +82,7 @@ sealed class InferenceError(message: String) : Exception(message) {
  * either has the pieces already or is about to be told by the stream closing.
  */
 sealed interface StreamEvent {
-    /** A fragment of the answer. Not a token, not a line — whatever arrived. */
+    /** A fragment of the answer. Not a token, not a line: whatever arrived. */
     data class Text(val text: String) : StreamEvent
 
     /** A tool the model wants run, assembled from however many fragments. */
@@ -106,7 +106,7 @@ interface Inference {
      *
      * # Rely
      * The caller decides retries. This asks one model once, and must not throw
-     * [InferenceError.Exhausted] — that belongs to whatever walks a chain.
+     * [InferenceError.Exhausted]; that belongs to whatever walks a chain.
      *
      * Nothing may be emitted before the response status is known. A caller that
      * has seen one event treats the attempt as delivered and will not retry it

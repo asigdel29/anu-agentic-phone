@@ -1,4 +1,4 @@
-// TurnDriver.kt — starting a turn, watching it, and stopping it.
+// TurnDriver.kt: starting a turn, watching it, and stopping it.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
@@ -7,7 +7,7 @@
 // the last decision for a routing panel.
 //
 // Interrupting is cancelling the coroutine and nothing else. Every layer below
-// was built for it — the flow is cold and cancels with its collector, the
+// was built for it: the flow is cold and cancels with its collector, the
 // client checks per line because tool-call fragments emit nothing for a long
 // stretch, and ToolBox rethrows CancellationException alone. A flag here would
 // be a second answer to "is this turn over".
@@ -15,7 +15,7 @@
 // The generation counter is the part that is not bookkeeping. Interrupt, then
 // send again: the first turn unwinds *after* the second has started, and
 // clearing isRunning on the way out would leave the second invisible while it
-// ran. Job identity does not work — the job that finishes is not the one the
+// ran. Job identity does not work: the job that finishes is not the one the
 // caller last kept.
 
 package com.getlora.wattrouter

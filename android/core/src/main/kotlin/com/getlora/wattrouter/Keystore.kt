@@ -1,12 +1,12 @@
-// Keystore.kt — a secret at rest, under a key the app never sees.
+// Keystore.kt: a secret at rest, under a key the app never sees.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
 //
 // Hand-rolled rather than androidx.security:security-crypto. That library's
-// EncryptedSharedPreferences was deprecated at 1.1.0-alpha07 — strict-mode
-// violations on the main thread, and keyset corruption on some manufacturers'
-// devices — and the replacement it points at is DataStore plus Tink. Tink is a
+// EncryptedSharedPreferences was deprecated at 1.1.0-alpha07, for strict-mode
+// violations on the main thread and keyset corruption on some manufacturers'
+// devices, and the replacement it points at is DataStore plus Tink. Tink is a
 // dependency for what is below: one key, one transformation, two methods.
 //
 // What the Android Keystore actually buys is that the key material never enters
@@ -41,7 +41,7 @@ internal object Keystore {
      * Encrypt [plain] under [alias], creating the key if there is none.
      *
      * @return the nonce and ciphertext together, Base64, or null if the keystore
-     *   refused — which happens on a device with no secure hardware configured,
+     *   refused, which happens on a device with no secure hardware configured,
      *   and is a state to report rather than to work around.
      */
     fun seal(alias: String, plain: String): String? = runCatching {
@@ -59,8 +59,8 @@ internal object Keystore {
      * Decrypt what [seal] produced.
      *
      * @return the original string, or null if the key is gone or the bytes do
-     *   not authenticate. Both mean the same thing to a caller — there is no
-     *   credential here — and neither is worth distinguishing to one.
+     *   not authenticate. Both mean the same thing to a caller, that there is no
+     *   credential here, and neither is worth distinguishing to one.
      */
     fun open(alias: String, sealed: String): String? = runCatching {
         val bytes = Base64.decode(sealed, Base64.NO_WRAP)
