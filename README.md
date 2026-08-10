@@ -213,7 +213,7 @@ container turns ONNX off, because the phone routes and the server does not score
 | `router/` | The Rust core: scoring, routing, the JNI layer, and the server. |
 | `hermes/` | Configuration for the same router from a terminal: the reference for what the phone has to match. |
 | `scripts/` | Everything `just` calls, plus `scripts/guards/` for pull requests. |
-| `docs/` | The coding standard, and the decision records. |
+| `docs/` | The coding standard, the decision records, and [the roadmap](docs/roadmap.md). |
 | `train/` | Builds the training set for the scoring head. |
 
 Each subtree with its own `AGENTS.md` holds what is true only there.
