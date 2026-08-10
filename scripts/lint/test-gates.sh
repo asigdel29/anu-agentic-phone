@@ -157,19 +157,22 @@ plant() {
     git -C "$where" commit -qm change
 }
 
-sized() {
-    local where="$1"
-    env BASE_SHA="$(git -C "$where" rev-parse HEAD~1)" \
-        HEAD_SHA="$(git -C "$where" rev-parse HEAD)" \
-        GIT_DIR="$where/.git" GIT_WORK_TREE="$where" \
-        bash "$root/scripts/guards/pr-size.sh"
-}
-
+# Inlined rather than wrapped in a helper, which is also what every case above
+# does: `check` takes a command, and a function passed as one reads to shellcheck
+# as unreachable code.
 plant "$scratch/gone" plain >/dev/null 2>&1
-check "a subtree leaving does not count" 0 sized "$scratch/gone"
+check "a subtree leaving does not count" 0 \
+    env BASE_SHA="$(git -C "$scratch/gone" rev-parse HEAD~1)" \
+    HEAD_SHA="$(git -C "$scratch/gone" rev-parse HEAD)" \
+    GIT_DIR="$scratch/gone/.git" GIT_WORK_TREE="$scratch/gone" \
+    bash "$root/scripts/guards/pr-size.sh"
 
 plant "$scratch/hidden" edit >/dev/null 2>&1
-check "an edit beside a removal still counts" 1 sized "$scratch/hidden"
+check "an edit beside a removal still counts" 1 \
+    env BASE_SHA="$(git -C "$scratch/hidden" rev-parse HEAD~1)" \
+    HEAD_SHA="$(git -C "$scratch/hidden" rev-parse HEAD)" \
+    GIT_DIR="$scratch/hidden/.git" GIT_WORK_TREE="$scratch/hidden" \
+    bash "$root/scripts/guards/pr-size.sh"
 
 printf '\n'
 if [ "$failures" -eq 0 ]; then
