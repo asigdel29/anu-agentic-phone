@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# prune-branches.sh — remote branches whose pull request is over.
+# prune-branches.sh: remote branches whose pull request is over.
 #
 # History
 #   2026-08-10  A. Sigdel  Created with #562.

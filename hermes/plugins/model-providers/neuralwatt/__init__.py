@@ -18,7 +18,7 @@ modified.
 
 Every field below is one ``ProviderProfile`` actually has. It carried a
 ``supports_prompt_cache_key=False`` that it does not, so loading it raised
-``unexpected keyword argument`` and the profile was silently unavailable — which
+``unexpected keyword argument`` and the profile was silently unavailable, which
 nobody saw, because nothing had ever installed it. The concern behind that field
 was real but misplaced: ``prompt_cache_key`` is only ever sent on the
 Codex/Responses path, and this profile is ``chat_completions``.
@@ -46,7 +46,7 @@ NEURALWATT = ProviderProfile(
     base_url="http://127.0.0.1:8080/v1",
     env_vars=("WATTROUTER_ADDR",),
     fallback_models=_MODELS,
-    # Hermes's own housekeeping — titles, summaries, compaction — is the
+    # Hermes's own housekeeping (titles, summaries, compaction) is the
     # highest-volume traffic in a session. Pinning it to the auxiliary tier means
     # the router does not have to infer that from `max_tokens` for every one.
     default_aux_model="aux",

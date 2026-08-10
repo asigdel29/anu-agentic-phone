@@ -14,7 +14,7 @@ re-scored. `plugins/model-providers/neuralwatt/` is the provider.
 
 `just install-hermes` puts the plugins where the agent finds them and **enables nothing**.
 `just hermes-config` reports what pointing the agent at the router would change and **changes
-nothing** — read it before applying. `just hermes-config-apply` applies it, and
+nothing**; read it before applying. `just hermes-config-apply` applies it, and
 `just hermes-unconfig` puts the previous configuration back leaf by leaf, from the state kept
 under `deploy/.state/`.
 
@@ -23,7 +23,7 @@ and does the applying too.
 
 ## Editing a plugin
 
-`plugin.yaml` carries `name`, and the two plugins here treat it differently — check which kind
+`plugin.yaml` carries `name`, and the two plugins here treat it differently, so check which kind
 you are editing before assuming a rule.
 
 `session_routing` is matched by `plugins.enabled` in `config.yaml`, and its `name` is the
@@ -31,7 +31,7 @@ directory name, underscored because a plugin directory is imported as a Python m
 it means changing the directory, the `name`, and the `config.yaml` entry together.
 
 `neuralwatt` is a model provider and is not listed in `plugins.enabled` at all. Its `name` is
-`neuralwatt-profile` — hyphenated, and deliberately not the directory name. Do not "fix" it to
+`neuralwatt-profile`, hyphenated and deliberately not the directory name. Do not "fix" it to
 match.
 
 State `kind` rather than omitting it. Leaving it out puts the loader through a heuristic that
@@ -41,7 +41,7 @@ guesses whether a plugin is a memory provider, and a guess is not a default.
 
 There is no test suite here, and what CI does check is narrower than it looks. `yamllint` runs
 unconditionally over the whole repository, so `config.yaml` and both `plugin.yaml` files are
-held to `.yamllint.yml` — 140 columns, no trailing space. Nothing else covers this directory:
+held to `.yamllint.yml`: 140 columns, no trailing space. Nothing else covers this directory:
 `ruff` and `mypy --strict` are configured for `train/` and skipped entirely today, so no Python
 here is linted or type-checked by anything.
 

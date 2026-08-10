@@ -1,4 +1,4 @@
-# slopgate.patterns — the words slopgate.sh rejects, kept where they can be read.
+# slopgate.patterns: the words slopgate.sh rejects, kept where they can be read.
 #
 # History
 #   2026-08-07  A. Sigdel  Created, from the constants at the top of slopgate.sh.
@@ -9,13 +9,13 @@
 #
 # Splitting the list out of the script is what keeps that exclusion honest. It
 # used to cover all of slopgate.sh, which is two hundred lines of prose about the
-# register — the file most likely to drift into it, and the one file the guard
+# register: the file most likely to drift into it, and the one file the guard
 # could never catch drifting. Only these four lines have to be exempt; the rest of
 # that script is now read like anything else.
 #
 # On adding a word: it is eligible only while this repository's own prose does not
 # already use it. That rule is the whole defence of the list, and applying it cost
-# five candidates — `additionally`, `significant`, `notably`, `unlock` and
+# five candidates. `additionally`, `significant`, `notably`, `unlock` and
 # `landscape` are all in files written here, so none of them can be banned. Check
 # before adding.
 

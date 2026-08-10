@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# verify-stack.sh — answer "is this stack working?" without reading a log.
+# verify-stack.sh: answer "is this stack working?" without reading a log.
 #
 # History
 #   2026-08-05  A. Sigdel  Created.
@@ -16,8 +16,8 @@
 # money silently and nothing else in the stack would report it.
 #
 # Those two sections run against a throwaway router pointed at a dead upstream,
-# so every request fails in microseconds and still reports the decision it made
-# — the tier header is on the failure path too. What they assert is the policy,
+# so every request fails in microseconds and still reports the decision it made:
+# the tier header is on the failure path too. What they assert is the policy,
 # which is compiled in rather than deployed, so a local probe answers for any
 # deployment of the same binary. Without the probe they would forward real
 # traffic to assert something the provider is not involved in.
@@ -30,7 +30,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly ROOT
 readonly BIN="$ROOT/router/target/release/wattrouter"
 # Where the decision checks send their requests. The probe when one could be
-# started, the real router otherwise — in which case they cost what they always
+# started, the real router otherwise, in which case they cost what they always
 # did, and say so.
 DECIDE="$ROUTER"
 probe_pid=""
@@ -60,7 +60,7 @@ route() {
 
 # Start a router whose upstream refuses connections, and point the decision
 # checks at it. Leaves DECIDE alone if the binary is missing, so a checkout that
-# has not been built still verifies — more slowly, and against the real
+# has not been built still verifies, more slowly, and against the real
 # provider.
 start_probe() {
     [ -x "$BIN" ] || return 1

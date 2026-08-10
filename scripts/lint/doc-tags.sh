@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# doc-tags.sh — a public async function says what it assumes about its caller.
+# doc-tags.sh: a public async function says what it assumes about its caller.
 #
 # History
 #   2026-08-07  A. Sigdel  Created, from a row of the standard's enforcement table
@@ -20,13 +20,13 @@
 # The third code is the point of #478. Both loops below used to read a process
 # substitution, whose failure `set -euo pipefail` cannot see: awk dying wrote to
 # stderr, the loop read nothing, and the script reported every file clean and
-# exited 0. That happened — a singly escaped pattern through `-v` — and it was
+# exited 0. That happened, through a singly escaped pattern given to `-v`, and it was
 # noticed by luck. "Nothing was found" and "nothing was looked at" are different
 # answers and this now says which.
 #
 # `# Rely` is Lea's RELY: the execution context a caller must supply. The standard
 # requires it on every `pub async fn` because the router holds shared mutable
-# state — the embedder, the decision cache, the connection pool — and a caller
+# state (the embedder, the decision cache, the connection pool) and a caller
 # cannot reason about a request path without knowing which operations are safe to
 # interleave. That is exactly the thing a signature does not say.
 #
@@ -37,7 +37,7 @@
 #
 # It also checks `# Errors` on every public function returning a `Result`, for the
 # same reason: the type says a call can fail and only the prose says when. That
-# rule is Rust's alone — Kotlin has no checked exceptions and this codebase does
+# rule is Rust's alone: Kotlin has no checked exceptions and this codebase does
 # not use `Result` as a return type, so there is no signature to read a failure
 # off. Naming the condition is still required; it is review that keeps it, and
 # saying so is better than a gate that fires on nothing.
@@ -91,7 +91,7 @@ for path in "${files[@]}"; do
     #
     # Doubled backslashes because awk reads a `-v` value as a string before it is
     # used as a regex, so one level is consumed on the way in. Singly escaped,
-    # `\*` arrives as a bare `*` and awk rejects the pattern — on stderr, while
+    # `\*` arrives as a bare `*` and awk rejects the pattern, on stderr, while
     # still exiting zero, which is a lint that passes because it broke.
     case "$path" in
         *.kt)
@@ -108,12 +108,12 @@ for path in "${files[@]}"; do
     # above it. A blank line or any other code ends the block, which is what
     # separates one item's documentation from the item before it.
     #
-    # A finding arrives as two lines — where it is, then what it wants — so only
+    # A finding arrives as two lines (where it is, then what it wants) so only
     # the first is counted. Counting both reported twice as many items as there
     # were, which is a gate arguing with its own output.
     # Into a file, then checked. A pipe with `pipefail` would also carry the
     # status and would put the loop in a subshell, which loses `findings` on
-    # every iteration — so the temporary is the option that keeps the count.
+    # every iteration, so the temporary is the option that keeps the count.
     if ! awk -v file="$path" -v lang="$lang" -v doc="$doc" '
         function documents(tag,   j, line) {
             for (j = NR - 1; j >= 1; j--) {
@@ -172,7 +172,7 @@ $findings public item(s) missing a tag the standard requires.
 Say what a signature cannot. \`# Rely\` is the context the caller must supply:
 whether it may be called from the request path, whether it blocks, what it may be
 interleaved with. \`# Errors\` is the condition that triggers a failure, not the
-type it returns — the type is already in the signature.
+type it returns; the type is already in the signature.
 
   /// # Rely
   /// Called from the request path. Must not block the executor; the ONNX call is

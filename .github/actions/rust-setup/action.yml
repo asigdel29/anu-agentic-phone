@@ -1,4 +1,4 @@
-# rust-setup — install the Rust toolchain and restore the build cache.
+# rust-setup: install the Rust toolchain and restore the build cache.
 #
 # History
 #   2026-08-05  A. Sigdel  Created.
