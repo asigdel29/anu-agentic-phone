@@ -19,7 +19,7 @@
 //! rebuilding it per question is the cost this milestone exists to avoid. Behind
 //! a mutex, because `ingest_turn` takes `&mut self`.
 
-use crate::ffi_answer::{borrowed, guarded, refused, rendered};
+use crate::ffi_answer::{borrowed, guarded, refused, rendered, unusable};
 use crate::memory;
 use std::ffi::c_char;
 use std::path::Path;
@@ -131,7 +131,7 @@ pub unsafe extern "C" fn wattrouter_memory_remember(
             unsafe { borrowed(speaker) },
             unsafe { borrowed(text) },
         ) else {
-            return std::ptr::null_mut();
+            return unusable();
         };
 
         // Refused rather than stored: zeromem indexes nothing, so it becomes a
@@ -174,7 +174,7 @@ pub unsafe extern "C" fn wattrouter_memory_recall(
     guarded(|| {
         let (Some(memory), Some(query)) = (unsafe { memory.as_ref() }, unsafe { borrowed(query) })
         else {
-            return std::ptr::null_mut();
+            return unusable();
         };
 
         rendered(memory.with(|store| {

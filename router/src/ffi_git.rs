@@ -28,7 +28,7 @@
 //! No panic may cross this boundary — that is undefined behaviour, so every entry
 //! point catches and reports failure as a value, as `ffi.rs` does.
 
-use crate::ffi_answer::{borrowed, guarded, refused, rendered};
+use crate::ffi_answer::{borrowed, guarded, refused, rendered, unusable};
 use crate::git;
 use std::ffi::c_char;
 use std::path::Path;
@@ -52,7 +52,7 @@ use std::path::Path;
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wattrouter_git_init(path: *const c_char) -> *mut c_char {
     guarded(|| match unsafe { borrowed(path) } {
-        None => std::ptr::null_mut(),
+        None => unusable(),
         Some(path) => rendered(git::init(Path::new(path))),
     })
 }
@@ -71,7 +71,7 @@ pub unsafe extern "C" fn wattrouter_git_init(path: *const c_char) -> *mut c_char
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wattrouter_git_head(path: *const c_char) -> *mut c_char {
     guarded(|| match unsafe { borrowed(path) } {
-        None => std::ptr::null_mut(),
+        None => unusable(),
         Some(path) => rendered(git::open(Path::new(path)).and_then(|repo| git::head(&repo))),
     })
 }
@@ -89,7 +89,7 @@ pub unsafe extern "C" fn wattrouter_git_head(path: *const c_char) -> *mut c_char
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wattrouter_git_status(path: *const c_char) -> *mut c_char {
     guarded(|| match unsafe { borrowed(path) } {
-        None => std::ptr::null_mut(),
+        None => unusable(),
         Some(path) => rendered(git::status(Path::new(path))),
     })
 }
@@ -120,7 +120,7 @@ pub unsafe extern "C" fn wattrouter_git_add(
         let (Some(path), Some(paths_json)) =
             (unsafe { borrowed(path) }, unsafe { borrowed(paths_json) })
         else {
-            return std::ptr::null_mut();
+            return unusable();
         };
         match serde_json::from_str::<Vec<String>>(paths_json) {
             Ok(paths) => rendered(git::add(Path::new(path), &paths)),
@@ -151,7 +151,7 @@ pub unsafe extern "C" fn wattrouter_git_commit(
     guarded(|| {
         let (Some(path), Some(message)) = (unsafe { borrowed(path) }, unsafe { borrowed(message) })
         else {
-            return std::ptr::null_mut();
+            return unusable();
         };
         rendered(git::commit(Path::new(path), message))
     })
