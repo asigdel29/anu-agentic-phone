@@ -30,18 +30,27 @@ RUN apt-get update \
 WORKDIR /build
 
 # The manifest first, so a change to source does not re-download the index. The
-# dummy main is what makes that layer cacheable: cargo needs something to build.
+# stubs are what make that layer cacheable: cargo needs something to build.
 COPY router/Cargo.toml router/Cargo.lock ./
-RUN mkdir -p src && echo 'fn main() {}' > src/main.rs \
-    && cargo build --release --no-default-features \
-    && rm -rf src
+
+# Every declared target, not just the binary. Cargo validates the whole manifest
+# before it builds anything, so a [[bench]] with no file is a hard error -- which
+# is how this first failed in CI, with `can't find \`decide\` bench`. lib.rs
+# matters too: [lib] is declared, and the binary depends on it.
+RUN mkdir -p src benches \
+    && echo 'fn main() {}' > src/main.rs \
+    && touch src/lib.rs \
+    && for bench in decide serve load; do echo 'fn main() {}' > "benches/$bench.rs"; done \
+    && cargo build --release --no-default-features --bin wattrouter \
+    && rm -rf src benches
 
 COPY router/src ./src
+COPY router/benches ./benches
 COPY router/include ./include
 
-# Touched so cargo rebuilds it: the dummy above left a fresher artefact than the
-# source that replaced it, and cargo compares timestamps.
-RUN touch src/main.rs \
+# Touched so cargo rebuilds them: the stubs above left artefacts newer than the
+# source that replaced them, and cargo compares timestamps.
+RUN touch src/main.rs src/lib.rs \
     && cargo build --release --no-default-features --bin wattrouter
 
 FROM debian:bookworm-slim
