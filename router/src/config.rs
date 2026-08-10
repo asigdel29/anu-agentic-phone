@@ -73,18 +73,40 @@ pub struct Config {
 }
 
 impl Config {
+    /// Where to bind, in the order a deployment expects to be asked.
+    ///
+    /// `WATTROUTER_ADDR` wins, because somebody who set it meant it. Failing
+    /// that, `PORT` — which every container platform assigns and none of them
+    /// lets you rename — becomes `0.0.0.0:PORT`, because loopback inside a
+    /// container is the container: a health check from outside times out and the
+    /// deployment is marked failed with a process running perfectly.
+    ///
+    /// Loopback stays the default when neither is set. A router that binds every
+    /// interface unasked is the mistake #533 was about, and a container is the
+    /// one place that is not a mistake — so the container says so, by setting
+    /// one of these two.
+    fn addr_from_env() -> String {
+        if let Some(addr) = optional("WATTROUTER_ADDR") {
+            return addr;
+        }
+        optional("PORT").map_or_else(
+            || "127.0.0.1:8080".to_owned(),
+            |port| format!("0.0.0.0:{port}"),
+        )
+    }
+
     /// Read and validate configuration from the environment.
     ///
     /// # Errors
     /// [`ConfigError::Missing`] IF `NEURALWATT_API_KEY` is absent or empty;
-    /// [`ConfigError::Invalid`] IF `WATTROUTER_ADDR` does not parse as a socket
-    /// address.
+    /// [`ConfigError::Invalid`] IF the address does not parse as a socket
+    /// address. See [`Self::addr_from_env`] for where it comes from.
     ///
     /// # Rely
     /// Called once, before the server binds. Reads the process environment, so it
     /// must not run concurrently with anything mutating it.
     pub fn from_env() -> Result<Self, ConfigError> {
-        let addr_raw = optional("WATTROUTER_ADDR").unwrap_or_else(|| "127.0.0.1:8080".to_owned());
+        let addr_raw = Self::addr_from_env();
         let addr = addr_raw.parse().map_err(|_| ConfigError::Invalid {
             name: "WATTROUTER_ADDR",
             expected: "socket address such as 127.0.0.1:8080",
@@ -456,5 +478,38 @@ mod tests {
             !format!("{config:?}").contains("super-secret-value"),
             "the credential leaked into Debug output"
         );
+    }
+
+    #[test]
+    fn a_platform_port_binds_every_interface() {
+        // Loopback inside a container is the container: the health check comes
+        // from outside and times out against a process running perfectly.
+        crate::testenv::with_env(&[("WATTROUTER_ADDR", None), ("PORT", Some("3000"))], || {
+            assert_eq!(Config::addr_from_env(), "0.0.0.0:3000");
+        });
+    }
+
+    #[test]
+    fn an_explicit_address_beats_a_platform_port() {
+        // Somebody who set it meant it, including somebody who set loopback on
+        // purpose in front of a proxy.
+        crate::testenv::with_env(
+            &[
+                ("WATTROUTER_ADDR", Some("127.0.0.1:9999")),
+                ("PORT", Some("3000")),
+            ],
+            || {
+                assert_eq!(Config::addr_from_env(), "127.0.0.1:9999");
+            },
+        );
+    }
+
+    #[test]
+    fn neither_leaves_it_on_loopback() {
+        // The default stays closed. A router that binds every interface unasked
+        // is the mistake #533 was about.
+        crate::testenv::with_env(&[("WATTROUTER_ADDR", None), ("PORT", None)], || {
+            assert_eq!(Config::addr_from_env(), "127.0.0.1:8080");
+        });
     }
 }

@@ -1,0 +1,36 @@
+# railway.toml — how the router is built and watched on Railway.
+#
+# History
+#   2026-08-09  A. Sigdel  Created with #537.
+#
+# Dockerfile rather than the platform's own builder. A Rust crate with a C
+# dependency and a feature set that matters is exactly the case an inferring
+# builder gets wrong quietly -- and the feature set here is a decision, not a
+# default: --no-default-features drops the ONNX embedder this deployment cannot
+# use, because the phone routes and sends the tier it chose.
+#
+# The health check is /healthz, which #536 deliberately left open when it closed
+# everything else. A platform probe arrives with no credential; a health endpoint
+# that requires one is a service that never comes up.
+#
+# What is NOT here, on purpose: NEURALWATT_API_KEY and WATTROUTER_TOKENS. Both
+# are secrets, both are set in the Railway dashboard, and neither belongs in a
+# tracked file -- the same rule .env.example states and the signing keystore
+# follows.
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/healthz"
+
+# Generous, because a cold start pays for a TLS handshake to the provider:
+# upstream.prewarm() runs after binding so the first real request does not.
+healthcheckTimeout = 30
+
+# A crash is worth retrying and a bad configuration is not, but the platform
+# cannot tell them apart. Bounded so a router that cannot read its own
+# environment stops rather than restarting forever with the same variables.
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
