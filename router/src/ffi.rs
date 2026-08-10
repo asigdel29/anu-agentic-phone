@@ -34,7 +34,7 @@ use crate::embed::{Embedder, HashEmbedder};
 use crate::head::Head;
 use crate::policy::{Reason, Thresholds, decide};
 use crate::tier::Tier;
-use std::ffi::{CStr, CString, c_char};
+use std::ffi::{CStr, c_char};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 /// Everything a decision needs; opaque to C.
@@ -42,10 +42,11 @@ pub struct Router {
     /// Every tier's chain, resolved once at construction.
     ///
     /// A decision names a tier, which is a role; what answers is the chain
-    /// behind it. Resolved here rather than per call for two reasons: a caller
-    /// can borrow a name that outlives the call without owning or freeing it,
-    /// and the request path allocates nothing. Six tiers of at most three
-    /// entries, built once.
+    /// behind it. Resolved here rather than per call because a chain outlives
+    /// the configuration it was read from, and because rebuilding one per
+    /// decision would read the environment from whichever thread asked, which
+    /// `config.rs` forbids and #476 removed. Six tiers of at most three entries,
+    /// built once.
     chains: [Vec<ChainEntry>; Tier::ALL.len()],
     thresholds: Thresholds,
     embedder: HashEmbedder,
@@ -53,14 +54,15 @@ pub struct Router {
     head: Option<Head>,
 }
 
-/// One attempt: a model name C can hold, and where to run it.
+/// One attempt: a model to ask, and where to run it.
 ///
-/// [`crate::chain::Step`] borrows its name from configuration and carries a
-/// Rust enum; this owns a NUL-terminated copy and the wire code, which are what
-/// crosses.
-struct ChainEntry {
-    backend: u8,
-    model: CString,
+/// [`crate::chain::Step`] borrows its name from the configuration it was read
+/// from; this owns a copy, because the chains outlive that configuration.
+pub(crate) struct ChainEntry {
+    /// Where this one runs: in this process, or over the network.
+    pub(crate) backend: Backend,
+    /// The model to ask, as configuration spells it.
+    pub(crate) model: String,
 }
 
 /// A decision, by value so the caller frees nothing.
@@ -143,17 +145,12 @@ pub unsafe extern "C" fn wattrouter_new(head_path: *const c_char) -> *mut Router
             .and_then(|(cheap, mid)| Thresholds::new(cheap, mid))
             .unwrap_or_default();
 
-        // A model name containing a NUL cannot cross as a C string; it would
-        // also be a name no provider has, so the chain simply omits it rather
-        // than refusing to build a router over a value nothing will ask for.
         let chains = Tier::ALL.map(|tier| {
             chain_for(&config, tier)
                 .into_iter()
-                .filter_map(|step| {
-                    Some(ChainEntry {
-                        backend: backend_code(step.backend()),
-                        model: CString::new(step.model()).ok()?,
-                    })
+                .map(|step| ChainEntry {
+                    backend: step.backend(),
+                    model: step.model().to_owned(),
                 })
                 .collect()
         });
@@ -246,87 +243,18 @@ pub unsafe extern "C" fn wattrouter_decide(
     .unwrap_or(Decision::FAILED)
 }
 
-/// A stable wire code for a backend, written out for the reason [`reason_code`]
-/// is: the caller compiles against these numbers.
-const fn backend_code(backend: Backend) -> u8 {
-    match backend {
-        Backend::Local => 0,
-        Backend::Remote => 1,
+impl Router {
+    /// `tier`'s chain, in the order it will be tried, or an empty slice IF
+    /// `tier` names none.
+    ///
+    /// One slice rather than a length and two indexed lookups. Those existed so
+    /// a C caller could walk a chain without owning anything; the only caller
+    /// left is in this process and holds a borrow of the router already, so the
+    /// indirection bought nothing and cost three entry points and a walk that
+    /// could disagree with itself between calls.
+    pub(crate) fn chain(&self, tier: u8) -> &[ChainEntry] {
+        self.chains.get(tier as usize).map_or(&[], Vec::as_slice)
     }
-}
-
-/// `tier`'s chain, or an empty slice IF the inputs name none.
-///
-/// # Safety
-/// `router` must be null or valid; each entry point states that at its boundary.
-unsafe fn chain_of<'a>(router: *const Router, tier: u8) -> &'a [ChainEntry] {
-    const NONE: &[ChainEntry] = &[];
-    catch_unwind(AssertUnwindSafe(|| {
-        let router = unsafe { router.as_ref() };
-        router
-            .and_then(|router| router.chains.get(tier as usize))
-            .map_or(NONE, Vec::as_slice)
-    }))
-    .unwrap_or(NONE)
-}
-
-/// How many models back `tier`.
-///
-/// # Returns
-/// At most [`crate::chain::MAX_CHAIN`], or `0` IF `router` was null or `tier`
-/// names no tier — so a caller may walk every index below it without checking
-/// each one for absence.
-///
-/// # Safety
-/// `router` must be null or come from [`wattrouter_new`] and not yet freed.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn wattrouter_chain_length(router: *const Router, tier: u8) -> usize {
-    unsafe { chain_of(router, tier) }.len()
-}
-
-/// The `index`th model backing `tier`, in the order it will be tried.
-///
-/// Reached by index rather than returned as an array: a chain is at most three
-/// long and the router already owns the names, so nothing is allocated to cross
-/// and the caller frees nothing — the property [`Decision`] has.
-///
-/// # Returns
-/// A NUL-terminated name borrowed from `router` and valid until it is freed, or
-/// null IF `index` is past the end of the chain.
-///
-/// # Safety
-/// `router` must be null or come from [`wattrouter_new`] and not yet freed. The
-/// returned pointer must not outlive it.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn wattrouter_chain_model(
-    router: *const Router,
-    tier: u8,
-    index: usize,
-) -> *const c_char {
-    unsafe { chain_of(router, tier) }
-        .get(index)
-        .map_or(std::ptr::null(), |entry| entry.model.as_ptr())
-}
-
-/// Where the `index`th model of `tier`'s chain runs: `0` local, `1` remote.
-///
-/// This is what separates a file to load into this process from an HTTP request,
-/// which a model name alone does not say.
-///
-/// # Returns
-/// A backend code, or `255` IF `index` is past the end of the chain.
-///
-/// # Safety
-/// `router` must be null or come from [`wattrouter_new`] and not yet freed.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn wattrouter_chain_backend(
-    router: *const Router,
-    tier: u8,
-    index: usize,
-) -> u8 {
-    unsafe { chain_of(router, tier) }
-        .get(index)
-        .map_or(u8::MAX, |entry| entry.backend)
 }
 
 /// The `index`th name, or null IF there is none.
@@ -387,7 +315,6 @@ pub extern "C" fn wattrouter_reason_name(reason: u8) -> *const c_char {
 #[cfg(test)]
 mod tests {
     use super::{Decision, Router, reason_code};
-    use crate::backend::Backend;
     use crate::policy::Reason;
     use crate::testenv::with_env;
     use crate::tier::Tier;
@@ -522,35 +449,34 @@ mod tests {
     }
 
     #[test]
-    fn a_chain_crosses_the_boundary_in_order() {
+    fn a_chain_is_the_one_the_server_derived() {
         with_router(|router| {
-            // The chain the server derives, read through C one index at a time.
             // `with_router` has already set the credential the config needs.
             let config = crate::config::Config::from_env().expect("valid");
+            let router = unsafe { &*router };
 
-            // Every tier, not one: a caller reaches these by tier code, and a
-            // crossing that mishandled a particular code would be invisible in a
-            // check of a single tier. Compared against `chain_for` rather than
-            // against written-out names, so a change to the catalogue moves this
-            // with it instead of breaking it.
+            // Every tier, not one: a chain is reached by tier code, and a code
+            // mishandled in particular would be invisible in a check of a single
+            // tier. Compared against `chain_for` rather than against written-out
+            // names, so a change to the catalogue moves this with it instead of
+            // breaking it.
             for tier in Tier::ALL {
                 let expected = crate::chain::chain_for(&config, tier);
                 assert!(expected.len() > 1, "{} has no fallback", tier.name());
 
-                let length = unsafe { super::wattrouter_chain_length(router, tier as u8) };
-                assert_eq!(length, expected.len(), "for {}", tier.name());
+                let got = router.chain(tier as u8);
+                assert_eq!(got.len(), expected.len(), "for {}", tier.name());
 
                 for (index, step) in expected.iter().enumerate() {
-                    let name = unsafe { super::wattrouter_chain_model(router, tier as u8, index) };
-                    assert!(!name.is_null(), "{} index {index} is inside", tier.name());
-                    let name = unsafe { CStr::from_ptr(name) }.to_str().unwrap();
-                    assert_eq!(name, step.model(), "{} at index {index}", tier.name());
-
-                    let backend =
-                        unsafe { super::wattrouter_chain_backend(router, tier as u8, index) };
                     assert_eq!(
-                        backend,
-                        super::backend_code(step.backend()),
+                        got[index].model,
+                        step.model(),
+                        "{} at index {index}",
+                        tier.name()
+                    );
+                    assert_eq!(
+                        got[index].backend,
+                        step.backend(),
                         "{} at index {index}",
                         tier.name()
                     );
@@ -560,36 +486,17 @@ mod tests {
     }
 
     #[test]
-    fn walking_past_a_chain_is_absence_rather_than_a_fault() {
+    fn a_tier_code_naming_no_tier_has_an_empty_chain() {
+        // Walking past the end used to need proving, because three entry points
+        // each had to answer absence in their own way and could disagree. A
+        // slice answers it once. What is still this function's own is what it
+        // does with a code no tier has: an empty chain rather than a panic, so a
+        // caller reading a decision it did not produce gets nothing rather than
+        // an unwind across a boundary.
         with_router(|router| {
-            let length = unsafe { super::wattrouter_chain_length(router, Tier::Mid as u8) };
-            for past in [length, length + 1, usize::MAX] {
-                let name = unsafe { super::wattrouter_chain_model(router, Tier::Mid as u8, past) };
-                assert!(name.is_null(), "at {past}");
-                let backend =
-                    unsafe { super::wattrouter_chain_backend(router, Tier::Mid as u8, past) };
-                assert_eq!(backend, u8::MAX, "at {past}");
-            }
-            // A tier code that names no tier, and a null router, likewise.
-            assert_eq!(
-                unsafe { super::wattrouter_chain_length(router, u8::MAX) },
-                0
-            );
-            assert_eq!(
-                unsafe { super::wattrouter_chain_length(std::ptr::null(), Tier::Mid as u8) },
-                0
-            );
+            let router = unsafe { &*router };
+            assert!(router.chain(u8::MAX).is_empty());
+            assert!(!router.chain(Tier::Mid as u8).is_empty());
         });
-    }
-
-    #[test]
-    fn backend_codes_are_distinct() {
-        let mut seen = std::collections::HashSet::new();
-        for backend in Backend::ALL {
-            assert!(
-                seen.insert(super::backend_code(backend)),
-                "duplicate for {backend:?}"
-            );
-        }
     }
 }
