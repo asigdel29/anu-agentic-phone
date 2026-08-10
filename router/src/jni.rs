@@ -216,7 +216,7 @@ enum Answer<T: Serialize> {
 /// `None` for null and for anything the JVM will not give back as UTF-8. Clears
 /// the pending exception either way: leaving one set means the next JNI call
 /// from Kotlin fails for a reason that has nothing to do with it.
-fn read(env: &mut JNIEnv<'_>, text: &JString<'_>) -> Option<String> {
+pub(crate) fn read(env: &mut JNIEnv<'_>, text: &JString<'_>) -> Option<String> {
     if text.is_null() {
         return None;
     }
