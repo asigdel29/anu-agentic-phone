@@ -1,4 +1,4 @@
-//! head.rs — scoring a prompt's difficulty.
+//! head.rs: scoring a prompt's difficulty.
 //!
 //! History
 //!   2026-08-05  A. Sigdel  Created.
@@ -9,12 +9,12 @@
 //!   `sigmoid`    The crate's link function, shared with the trainer.
 //!
 //! A logistic head over an embedding: one dot product and a sigmoid. That is the
-//! entire model, which is the point — inference costs microseconds on the board
+//! entire model, which is the point: inference costs microseconds on the board
 //! and the weights are a few kilobytes of JSON.
 //!
 //! The method follows RouteLLM (Ong et al., LMSYS): score a prompt by the
 //! probability that a strong model beats a weak one on it, and threshold that
-//! into tiers. The implementation is independent — the embedding is computed
+//! into tiers. The implementation is independent: the embedding is computed
 //! locally rather than fetched from a hosted API, and the score is thresholded
 //! into several tiers rather than two.
 //!
@@ -97,8 +97,8 @@ impl Head {
     /// Load a head and check it matches the embedder in use.
     ///
     /// # Arguments
-    /// * `path` — the weights file.
-    /// * `embedder_id` — [`crate::embed::Embedder::id`] of the router's embedder.
+    /// * `path`: the weights file.
+    /// * `embedder_id`: [`crate::embed::Embedder::id`] of the router's embedder.
     ///
     /// # Errors
     /// [`HeadError::Read`] IF the file is absent or unreadable;
@@ -123,7 +123,7 @@ impl Head {
     /// and reading a file to check them would only test the standard library.
     ///
     /// # Arguments
-    /// * `origin` — where the text came from, for error messages only.
+    /// * `origin`: where the text came from, for error messages only.
     ///
     /// # Errors
     /// [`HeadError::Malformed`] IF it does not parse or carries no weights;
@@ -158,7 +158,7 @@ impl Head {
 
     /// The thresholds calibrated against this head's own score distribution.
     ///
-    /// A fitted head's scores occupy a narrow band — around 0.50 for these — so
+    /// A fitted head's scores occupy a narrow band (around 0.50 for these), so
     /// absolute thresholds chosen in advance would strand whole tiers. Carrying
     /// them with the weights is what keeps the two from drifting apart: a head
     /// and the bands that read it are one artefact, not two.
@@ -180,11 +180,11 @@ impl Head {
     /// Score `embedding`: the probability that a strong model is needed.
     ///
     /// # Arguments
-    /// * `embedding` — WHERE its length equals the head's weight count.
+    /// * `embedding`: WHERE its length equals the head's weight count.
     ///
     /// # Returns
     /// A value in `[0, 1]`, higher meaning harder. Returns `0.5` IF the length
-    /// disagrees — an exactly ambivalent score, which the policy resolves to the
+    /// disagrees: an exactly ambivalent score, which the policy resolves to the
     /// middle band. Refusing to answer here would fail requests over what is a
     /// configuration mistake, and the mismatch is already reported at load.
     ///
@@ -203,7 +203,7 @@ impl Head {
     }
 }
 
-/// The logistic function — the crate's single link function.
+/// The logistic function, the crate's single link function.
 ///
 /// Public because the trainer fits against it. A second copy there would be free
 /// to drift, and drift does not error: it silently changes what a fitted weight
@@ -291,7 +291,7 @@ mod tests {
     #[test]
     fn the_sigmoid_saturates_instead_of_overflowing() {
         // The naive form returns inf for a logit below about -88, then NaN from
-        // the division — which would reach the policy as a score.
+        // the division, which would reach the policy as a score.
         assert!(sigmoid(-1000.0) >= 0.0 && sigmoid(-1000.0) < 1e-6);
         assert!(sigmoid(1000.0) > 0.999_999);
         assert!(sigmoid(f32::NEG_INFINITY).is_finite());

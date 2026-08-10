@@ -1,4 +1,4 @@
-//! embed.rs — turning a prompt into a vector.
+//! embed.rs: turning a prompt into a vector.
 //!
 //! History
 //!   2026-08-05  A. Sigdel  Created with the trait and the offline backend.
@@ -95,21 +95,21 @@ pub enum EmbedError {
 /// small board, but nothing else changes shape.
 ///
 /// `Debug` is required so that a caller holding one behind a `Box` can still
-/// derive `Debug` for the state it lives in. Both backends already have it —
+/// derive `Debug` for the state it lives in. Both backends already have it:
 /// hashing derives it and ONNX writes it by hand, precisely because its session
 /// is not printable.
 pub trait Embedder: Send + Sync + std::fmt::Debug {
     /// A stable identifier for the backend, reported in metrics and logs.
     ///
     /// Included so that a routing decision can be attributed to the backend that
-    /// produced it — scores from the two are not comparable, and an operator
+    /// produced it: scores from the two are not comparable, and an operator
     /// comparing metrics across boards needs to know which they are reading.
     fn id(&self) -> String;
 
     /// Embed `text`.
     ///
     /// # Arguments
-    /// * `text` — WHERE `text` is non-empty after trimming.
+    /// * `text`: WHERE `text` is non-empty after trimming.
     ///
     /// # Returns
     /// A vector of exactly [`DIM`] elements, L2-normalised, so that a dot product
@@ -132,7 +132,7 @@ pub trait Embedder: Send + Sync + std::fmt::Debug {
 /// FNV-1a over `bytes`, salted by `kind`.
 ///
 /// The single hash in the crate. The salt separates feature spaces that would
-/// otherwise collide — a token and a trigram spelled alike, or a prompt key and
+/// otherwise collide: a token and a trigram spelled alike, or a prompt key and
 /// an embedding feature.
 #[must_use]
 pub fn fnv1a(kind: u8, bytes: &[u8]) -> u64 {
@@ -150,7 +150,7 @@ pub fn fnv1a(kind: u8, bytes: &[u8]) -> u64 {
 /// The dot product of two equal-length vectors.
 ///
 /// The single one in the crate: embedder, head and trainer all reduce to this, so
-/// a change here — wider accumulation, SIMD — reaches all three or none.
+/// a change here (wider accumulation, SIMD) reaches all three or none.
 ///
 /// # Returns
 /// The sum of products, or `0.0` IF the lengths differ. A wrong answer beats a
@@ -193,10 +193,10 @@ pub fn dot(a: &[f32], b: &[f32]) -> f32 {
 /// Cosine similarity between two vectors.
 ///
 /// # Arguments
-/// * `a`, `b` — WHERE both have the same length.
+/// * `a`, `b`: WHERE both have the same length.
 ///
 /// # Returns
-/// The dot product, which equals the cosine WHEN both inputs are L2-normalised —
+/// The dot product, which equals the cosine WHEN both inputs are L2-normalised,
 /// as every [`Embedder`] output is. Returns `0.0` IF the lengths differ, which
 /// cannot happen through the trait but is preferable to a panic on the request
 /// path.
@@ -224,7 +224,7 @@ pub fn l2_normalize(v: &mut [f32]) {
 /// Needs no model, no download and no network, which is what makes it the
 /// fallback for a memory-constrained board and the backend for tests.
 ///
-/// It has no notion of meaning — only of overlap. Two prompts sharing vocabulary
+/// It has no notion of meaning, only of overlap. Two prompts sharing vocabulary
 /// score close whether or not they mean the same thing. That is a real quality
 /// loss against ONNX and the reason it is not the default; it is enough to
 /// separate "write a compiler" from "what time is it", which is most of what
@@ -289,8 +289,8 @@ impl Embedder for HashEmbedder {
             // split mid-character into features that mean nothing.
             //
             // A rolling window of three character offsets, hashing the slice
-            // between them. The obvious form — collect the characters, then
-            // collect each window into a `String` — allocates roughly fourteen
+            // between them. The obvious form (collect the characters, then
+            // collect each window into a `String`) allocates roughly fourteen
             // hundred times for a full-length prompt, and that was most of what
             // embedding cost. The bytes hashed are identical either way, so no
             // fitted head is invalidated; `trigrams_match_the_collected_form`
@@ -321,7 +321,7 @@ impl Embedder for HashEmbedder {
 /// bge-small-en-v1.5 through ONNX Runtime.
 ///
 /// The better embedding, and the one the scoring head needs: hash features
-/// encode lexical overlap, and difficulty is not lexical — "prove this is
+/// encode lexical overlap, and difficulty is not lexical: "prove this is
 /// NP-hard" and "spell NP-hard" share nearly all their vocabulary. Fitting a head
 /// on hash vectors separated the training classes by 0.022, which is nothing.
 ///
@@ -378,12 +378,12 @@ impl Embedder for OnnxEmbedder {
 
     /// # Rely
     /// **Blocks.** ONNX inference is CPU-bound and runs for milliseconds, so the
-    /// caller must dispatch this off the async executor — a blocked worker stalls
+    /// caller must dispatch this off the async executor: a blocked worker stalls
     /// every other request sharing it.
     ///
     /// # Atomic
     /// Serialized on a mutex: the session is not safe to use concurrently.
-    /// Callers queue, which is the intended behaviour on a board with few cores —
+    /// Callers queue, which is the intended behaviour on a board with few cores:
     /// parallel inference there would contend for the same cores anyway.
     fn embed(&self, text: &str) -> Result<Vec<f32>, EmbedError> {
         if text.trim().is_empty() {
@@ -480,7 +480,7 @@ mod tests {
     fn trigrams_match_the_collected_form() {
         // The rolling window replaced a form that allocated per trigram. The
         // hashed bytes must be identical or every fitted head silently means
-        // something else, so the two are compared directly — including the
+        // something else, so the two are compared directly, including the
         // boundary lengths and multi-byte text, where a byte-wise window would
         // diverge from a character-wise one.
         for token in [

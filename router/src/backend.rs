@@ -1,4 +1,4 @@
-//! backend.rs — where a tier's model runs.
+//! backend.rs: where a tier's model runs.
 //!
 //! History
 //!   2026-08-06  A. Sigdel  Created.
@@ -17,7 +17,7 @@
 
 /// Where a tier's model runs.
 ///
-/// Ordered so that neither variant is "greater" by accident — unlike
+/// Ordered so that neither variant is "greater" by accident, unlike
 /// [`crate::tier::Tier`], where the ordering is load-bearing, these are two
 /// places rather than two capabilities.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
