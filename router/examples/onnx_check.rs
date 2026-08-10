@@ -1,4 +1,4 @@
-//! onnx_check.rs — proves the ONNX backend loads and embeds meaning.
+//! onnx_check.rs: proves the ONNX backend loads and embeds meaning.
 //!
 //! History
 //!   2026-08-05  A. Sigdel  Created.

@@ -1,4 +1,4 @@
-//! load.rs — what the router does when turns overlap.
+//! load.rs: what the router does when turns overlap.
 //!
 //! History
 //!   2026-08-07  A. Sigdel  Created.
@@ -34,8 +34,8 @@
 //!   pool     `pool_max_idle_per_host` is 8. Past that, upstream calls queue.
 //!   state    `AppState` is shared through an `Arc` with no lock, by design.
 //!
-//! This drives the real binary rather than a copy of its handler — spawned with
-//! the upstream pointed at a mock — so axum's dispatch, the extractor, the
+//! This drives the real binary rather than a copy of its handler, spawned with
+//! the upstream pointed at a mock, so axum's dispatch, the extractor, the
 //! decision, the cache and the pool are all the ones that ship. `serve` explains
 //! why reproducing the handler in a bench is the thing to avoid.
 
@@ -61,7 +61,7 @@ const CONCURRENCY: [usize; 5] = [1, 8, 32, 128, 256];
 ///
 /// Held constant rather than per-client, because the binding constraint is
 /// loopback ephemeral ports, not time. The range here is 16 384 wide with a
-/// 15-second MSL, and the router keeps only 8 idle upstream connections — so
+/// 15-second MSL, and the router keeps only 8 idle upstream connections, so
 /// every request past the eighth in flight closes its connection and parks a
 /// port in TIME_WAIT for two MSL. A per-client count of 200 at 256 clients is
 /// 51 200 connections against 16 384 ports, which exhausts the range and reports
@@ -87,10 +87,10 @@ fn quick() -> bool {
 /// Not reduced in quick mode, and the first draft of that was a mistake worth
 /// recording: cutting the budget to a quarter left twenty requests per client at
 /// the top of the sweep, where establishing 256 connections costs more than
-/// sending them. Throughput then read as a collapse — 9 203/s against a peak of
-/// 23 597/s — and the gate below fired on warmup rather than on anything the
+/// sending them. Throughput then read as a collapse (9 203/s against a peak of
+/// 23 597/s) and the gate below fired on warmup rather than on anything the
 /// router did. What actually costs time in a sweep is [`DRAIN`], not the
-/// requests, so quick mode trims levels and waiting instead — see [`drain`].
+/// requests, so quick mode trims levels and waiting instead; see [`drain`].
 fn per_client(clients: usize) -> usize {
     (PER_LEVEL / clients).max(20)
 }
@@ -99,7 +99,7 @@ fn per_client(clients: usize) -> usize {
 ///
 /// Quick mode drops 8 and 256: the first says little that 1 and 32 do not, and
 /// the second is where loopback port exhaustion starts showing up in the failure
-/// column — which is a property of the runner's port range, not of the router,
+/// column, which is a property of the runner's port range, not of the router,
 /// and not something to have CI adjudicate.
 fn levels() -> &'static [usize] {
     if quick() { &[1, 32, 128] } else { &CONCURRENCY }
@@ -122,7 +122,7 @@ fn check(name: &str, held: bool, detail: &str) -> bool {
 ///
 /// Well under two MSL: the point is to take the edge off the accumulation across
 /// a sweep, not to wait it out, which would triple the runtime. This is what a
-/// sweep actually spends its time on — the requests themselves are seconds — so
+/// sweep actually spends its time on, since the requests themselves are seconds, so
 /// it is the first thing quick mode cuts.
 fn drain() -> Duration {
     if quick() {
@@ -172,7 +172,7 @@ async fn mock() -> String {
 /// A port nothing is listening on.
 ///
 /// Bound and released rather than guessed. There is a window between releasing
-/// it and the router binding it, which nothing here can close — the router takes
+/// it and the router binding it, which nothing here can close: the router takes
 /// an address, not a listener. In practice the window is microseconds on
 /// loopback; if a run ever fails to bind, that is why, and re-running is the fix.
 async fn free_port() -> u16 {
@@ -194,7 +194,7 @@ fn percentile(samples: &[u128], q: f64) -> f64 {
 /// Hold `clients` requests in flight, and report the spread.
 ///
 /// # Arguments
-/// * `session` — `Some(id)` puts every request on one session, which is the
+/// * `session`: `Some(id)` puts every request on one session, which is the
 ///   worst case for the cache mutex; `None` gives each client its own.
 ///
 /// # Returns
@@ -325,8 +325,8 @@ async fn main() {
     let mut measured: Vec<Vec<(f64, f64)>> = Vec::with_capacity(2);
 
     for (label, session) in [
-        ("a session each — the cache's best case", None),
-        ("one shared session — its worst", Some("load-shared")),
+        ("a session each, the cache's best case", None),
+        ("one shared session, its worst", Some("load-shared")),
     ] {
         println!("{label}");
         println!(
@@ -370,7 +370,7 @@ async fn main() {
 
     // Throughput flattens once the router saturates and must stay flat. A
     // collapse at the top of the sweep is the shape of a queue that has stopped
-    // draining, which is the failure worth catching — the absolute figure it
+    // draining, which is the failure worth catching; the absolute figure it
     // flattens at is the runner's business, so only the ratio is gated.
     for rows in [separate, shared] {
         let peak = rows.iter().map(|r| r.1).fold(0.0_f64, f64::max);

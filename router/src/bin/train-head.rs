@@ -1,4 +1,4 @@
-//! train-head.rs — fit the routing head.
+//! train-head.rs: fit the routing head.
 //!
 //! History
 //!   2026-08-05  A. Sigdel  Created.
@@ -9,7 +9,7 @@
 //! In Rust rather than beside the fetch script in Python for one reason: it
 //! embeds with the router's own [`HashEmbedder`]. A head is only meaningful
 //! paired with the embedder that produced its vectors, and a second
-//! implementation would be free to drift silently — showing up as bad routing,
+//! implementation would be free to drift silently, showing up as bad routing,
 //! never as an error.
 //!
 //! Usage
@@ -29,14 +29,14 @@
 //! nearly everything lands in one band and the heavy tier is unreachable.
 //!
 //! The cause is the embedder, not the fit. Hash embeddings encode lexical
-//! overlap, and difficulty is not a lexical property — "prove this is NP-hard"
+//! overlap, and difficulty is not a lexical property: "prove this is NP-hard"
 //! and "spell NP-hard" share their vocabulary. No linear model over these
 //! features can separate them.
 //!
 //! So the ONNX backend is a prerequisite for scoring, not an optimisation, and
 //! the router ships unscored until it lands. That is a supported state: every
 //! rule that does not depend on difficulty still applies. These weights are
-//! deliberately not committed as a default — a head that separates nothing would
+//! deliberately not committed as a default: a head that separates nothing would
 //! route worse than no head at all, while looking like it worked.
 
 use std::io::BufRead as _;
@@ -168,7 +168,7 @@ fn fit(examples: &[Example]) -> (Vec<f32>, f32) {
 /// Separation of the class means is reported but is not the deciding number.
 /// Only ~9% of prompts need the strong model, so a head can rank usefully while
 /// the two means sit almost on top of each other. What matters for routing is
-/// whether a harder prompt scores above an easier one — AUC — because the policy
+/// whether a harder prompt scores above an easier one (AUC) because the policy
 /// thresholds a distribution rather than testing an absolute value.
 ///
 /// The percentiles are the output to act on. Absolute thresholds are wrong when
@@ -297,8 +297,8 @@ fn main() -> std::io::Result<()> {
     let (weights, bias) = fit(&examples);
     let (cheap_max, mid_max) = report(&examples, &weights, bias);
 
-    // The thresholds travel with the head. They are a property of this fit —
-    // scores from a different embedder or a different run land elsewhere — so
+    // The thresholds travel with the head. They are a property of this fit:
+    // scores from a different embedder or a different run land elsewhere, so
     // shipping them separately would let the two drift apart silently.
     let head = serde_json::json!({
         "embedder": embedder.id(),

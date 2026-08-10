@@ -1,4 +1,4 @@
-//! cache.rs — remembering routing decisions.
+//! cache.rs: remembering routing decisions.
 //!
 //! History
 //!   2026-08-05  A. Sigdel  Created.
@@ -38,7 +38,7 @@ pub const CAPACITY: usize = 512;
 struct Bounded<K, V> {
     entries: HashMap<K, (u64, V)>,
     /// Monotonic counter standing in for a clock. A clock would be the obvious
-    /// choice and the wrong one — it makes tests wait, and ordering is all that
+    /// choice and the wrong one: it makes tests wait, and ordering is all that
     /// eviction needs.
     tick: u64,
 }
@@ -160,7 +160,7 @@ impl DecisionCache {
     ///
     /// # Atomic
     /// Reads and writes under one lock, so two concurrent turns cannot both read
-    /// the old tier and each write their own — the result is the maximum of
+    /// the old tier and each write their own; the result is the maximum of
     /// everything recorded, whatever the interleaving.
     pub fn escalate(&self, session: &str, tier: Tier) -> Tier {
         if session.is_empty() {
@@ -186,8 +186,8 @@ impl DecisionCache {
     /// Take the lock, recovering from a poisoned one.
     ///
     /// A panic while holding this lock would leave the cache poisoned, and every
-    /// later request would fail. The data is a cache — worst case it holds a
-    /// stale tier — so continuing with it beats refusing to serve.
+    /// later request would fail. The data is a cache, and worst case it holds a
+    /// stale tier, so continuing with it beats refusing to serve.
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
         self.inner
             .lock()
