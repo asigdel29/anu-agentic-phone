@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-gates.sh — the gates fail closed.
+# test-gates.sh: the gates fail closed.
 #
 # History
 #   2026-08-09  A. Sigdel  Created with the fix for #478.
@@ -10,8 +10,8 @@
 #
 # Four loops read a process substitution, whose failure `set -euo pipefail`
 # cannot see: the command dies, the loop reads nothing, and the script reports
-# that it found nothing wrong. #324 caught one of them by luck — somebody was
-# watching for a new rule to fire and it did not — and #478 found three more,
+# that it found nothing wrong. #324 caught one of them by luck: somebody was
+# watching for a new rule to fire and it did not. #478 found three more,
 # including the guard runner, where the summary said three guards passed that
 # had not run.
 #
@@ -94,7 +94,7 @@ check "doc-tags on a clean file" 0 \
 
 untagged="$(mktemp -d)/Untagged.kt"
 cat >"$untagged" <<'KT'
-// Untagged.kt — a suspending function with nothing said about its caller.
+// Untagged.kt: a suspending function with nothing said about its caller.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.

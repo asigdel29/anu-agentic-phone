@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# protect-main.sh — what may reach the default branch.
+# protect-main.sh: what may reach the default branch.
 #
 # History
 #   2026-08-09  A. Sigdel  Created.
@@ -75,7 +75,7 @@ case "$enforcement" in
         ;;
 esac
 
-# The two checks are DISPLAY names — the `name:` field of each job, not its id.
+# The two checks are DISPLAY names: the `name:` field of each job, not its id.
 # `required` and `guards` are the ids, and a ruleset naming those waits forever
 # for a check that never reports under that name.
 #

@@ -1,4 +1,4 @@
-# justfile — single entry point for building, training, deploying and verifying
+# justfile: single entry point for building, training, deploying and verifying
 # the stack.
 #
 # History
@@ -70,7 +70,7 @@ android:
 
     if ! command -v gradle >/dev/null 2>&1; then
         cat >&2 <<'EOF'
-    gradle is not installed, and this project has no wrapper — a wrapper is a jar,
+    gradle is not installed, and this project has no wrapper. A wrapper is a jar,
     and this repository does not track binaries it cannot review. Install it with:
 
       brew install gradle
@@ -93,7 +93,7 @@ android:
 #
 # The keystore is the person's own and is never tracked. Without it in the
 # environment this assembles unsigned, which is what CI and a contributor
-# without the key can do — and an unsigned APK cannot be installed, so the
+# without the key can do, and an unsigned APK cannot be installed, so the
 # recipe says which one came out.
 android-release:
     scripts/build-android-core.sh >/dev/null
@@ -124,7 +124,7 @@ android-device-test:
 # because a model decided to call it, so without this the whole point of the
 # application can only be exercised by paying somebody.
 #
-# Build the app to match, or it will keep talking to the provider — the endpoint
+# Build the app to match, or it will keep talking to the provider: the endpoint
 # is fixed when the app is built and cannot be moved at runtime:
 #
 #   WATTROUTER_UPSTREAM=http://10.0.2.2:8099/v1 just android
@@ -232,6 +232,6 @@ toolchain:
     if [ "$missing" -eq 0 ]; then
         echo "toolchain OK"
     else
-        echo "toolchain incomplete — install the entries marked MISSING or TOO OLD" >&2
+        echo "toolchain incomplete: install the entries marked MISSING or TOO OLD" >&2
     fi
     exit "$missing"

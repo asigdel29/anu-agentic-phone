@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install-hermes.sh — put this repository's plugins where Hermes will find them.
+# install-hermes.sh: put this repository's plugins where Hermes will find them.
 #
 # History
 #   2026-08-07  A. Sigdel  Created.
@@ -9,7 +9,7 @@
 #
 # Two plugins live here and neither had any way of reaching Hermes. The provider
 # profile's own docstring says to symlink it into $HERMES_HOME/plugins, and
-# bootstrap-pi.sh closes with a banner listing that as a manual step — which is
+# bootstrap-pi.sh closes with a banner listing that as a manual step, which is
 # to say it did not happen. $HERMES_HOME/plugins did not exist at all, so the
 # profile that points Hermes at the router had never loaded, and `provider:
 # neuralwatt` would have failed to resolve even if somebody had set it.
@@ -19,7 +19,7 @@
 # it, both of which live in the configuration. So after this runs the plugins
 # are present and inert, and running it against a working Hermes changes nothing
 # about how that Hermes behaves. Applying the configuration is a separate script
-# for a separate reason — the live config is hand-tuned and merging into it
+# for a separate reason: the live config is hand-tuned and merging into it
 # safely is its own problem.
 #
 # Idempotent by readlink-compare, as install-zeromem.sh already is for its own

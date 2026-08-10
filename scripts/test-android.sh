@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-android.sh — run the instrumented tests on the shared emulator.
+# test-android.sh: run the instrumented tests on the shared emulator.
 #
 # History
 #   2026-08-08  A. Sigdel  Created.
@@ -9,7 +9,7 @@
 # boots one headless when nothing is up, because these tests draw nothing.
 #
 # The core is built first. Gradle only packages the library, so an APK assembled
-# without it fails with UnsatisfiedLinkError — the failure these tests exist to
+# without it fails with UnsatisfiedLinkError: the failure these tests exist to
 # catch, and indistinguishable from a real one.
 #
 # Usage
@@ -43,8 +43,8 @@ EOF
     exit 1
 fi
 
-# The SDK's own avdmanager, not one on PATH. A cmdline-tools installed elsewhere
-# — Homebrew's, for instance — infers its SDK root from its own location and
+# The SDK's own avdmanager, not one on PATH. A cmdline-tools installed elsewhere,
+# Homebrew's for instance, infers its SDK root from its own location and
 # reports every system image as missing, which reads as a bad package name.
 readonly AVDMANAGER="$SDK/cmdline-tools/latest/bin/avdmanager"
 
@@ -54,7 +54,7 @@ if ! ANDROID_HOME="$SDK" "$AVDMANAGER" list avd 2>/dev/null | grep -q "Name: $AV
 fi
 
 # Booted, not merely listed. `adb devices` shows an emulator that is shutting
-# down and one that is still starting, and both take a test run with them — a
+# down and one that is still starting, and both take a test run with them: a
 # device in the list is not a device that can install an APK.
 ready() {
     [ "$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]
@@ -90,7 +90,7 @@ cleanup() {
 trap cleanup EXIT
 
 # Take the app off first. Gradle cannot replace an APK signed with a different
-# key, and the one that gets installed by hand here is the release build —
+# key, and the one that gets installed by hand here is the release build.
 # `just android-release` produces something signed with the person's own key,
 # and proving it loads the native library means installing it. After that the
 # suite fails with INSTALL_FAILED_UPDATE_INCOMPATIBLE, which names a signature

@@ -1,4 +1,4 @@
-# python-setup — install Python and the training environment.
+# python-setup: install Python and the training environment.
 #
 # History
 #   2026-08-05  A. Sigdel  Created.
@@ -43,5 +43,5 @@ runs:
         if [ -f train/pyproject.toml ]; then
           uv sync --project train --all-extras
         else
-          echo "train/pyproject.toml absent — nothing to sync"
+          echo "train/pyproject.toml absent, nothing to sync"
         fi
