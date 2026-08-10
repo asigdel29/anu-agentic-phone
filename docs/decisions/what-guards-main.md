@@ -54,6 +54,44 @@ for a branch rather than for `main`.
 merge-method list is what the UI offers, and linear history is what the branch will accept
 however somebody gets there.
 
+## The ruleset was half the rule
+
+A ruleset says what may reach `main`. It cannot say what the merge button offers, and it cannot
+say what happens to a branch afterwards. Both of those are repository settings, and for as long
+as only the ruleset was written down the two halves disagreed: the ruleset allowed squash alone
+while the repository went on offering merge commits and rebase merges in the UI.
+
+Nobody used them, which is exactly why it survived. A rule that is only ever obeyed by habit
+looks identical to one that is enforced, right up until somebody new presses the button that
+should not have been there.
+
+So `protect-main.sh` makes a second call, and the three settings it writes are the trunk
+half of the same argument the squash section makes above. The fourth, `allow_update_branch`, is
+the one that does not look like discipline and is: the ruleset sets
+`strict_required_status_checks_policy`, so a branch behind `main` cannot merge, and without the
+button to bring one forward the way people work around that is by keeping branches alive longer.
+
+## Deleting a branch closes the pull requests aimed at it
+
+`delete_branch_on_merge` has a consequence that is invisible until a stack is open, and it is
+not recoverable.
+
+A pull request whose base branch is deleted is closed by GitHub, and it cannot be reopened,
+because reopening needs a base that still exists. Merging a stack of four bottom-up with
+`--delete-branch` closed the second of them here and it had to be opened again as a new pull
+request, losing its review history and its number.
+
+The fix is an order rather than a setting:
+
+1. Retarget every child of the branch about to merge onto `main`.
+2. Rebase each child onto `main`, since a squashed parent leaves the child's copy of that work
+   behind as a duplicate.
+3. Merge, and let the deletion happen.
+
+Turning the setting off would trade a recoverable annoyance for an unrecoverable one, which is
+the wrong way round: a branch left behind can be deleted later, and a pull request closed this
+way cannot be brought back at all.
+
 ## It is applied by a script
 
 `scripts/protect-main.sh`, reviewable in a diff like anything else, and idempotent — running

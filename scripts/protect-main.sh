@@ -15,6 +15,12 @@
 # a file: a rule nobody can read in a diff is a rule nobody reviews, and the one
 # below has a clause whose absence is the whole point.
 #
+# Two calls, not one, and the second is easy to miss from the name. A ruleset
+# says what may reach `main`; it cannot say what the merge button offers or what
+# happens to a branch afterwards. Those are repository settings, so a repository
+# that forbade merge commits on `main` went on offering them in the UI for as
+# long as only the ruleset was written down.
+#
 # Needs admin on the repository. Without it the API answers 403 and this says so
 # rather than reporting success over nothing.
 
@@ -76,6 +82,29 @@ rules() {
 JSON
 }
 
+# Trunk-based development, which is three settings the ruleset cannot express.
+#
+# delete_branch_on_merge because a branch outlives its pull request for no
+# reason and 192 of them had accumulated before this was written. The two
+# allow_* falses because the ruleset already forbids both on `main`, and a rule
+# stated twice in two places is a rule that will disagree with itself.
+#
+# allow_update_branch is the one that is not obviously trunk discipline and is.
+# The ruleset sets strict_required_status_checks_policy, so a branch behind
+# `main` cannot merge; without this there is no button to bring it forward, and
+# the way people work around that is by not keeping branches short.
+settings() {
+    cat <<'JSON'
+{
+  "delete_branch_on_merge": true,
+  "allow_merge_commit": false,
+  "allow_rebase_merge": false,
+  "allow_squash_merge": true,
+  "allow_update_branch": true
+}
+JSON
+}
+
 existing="$(gh api "repos/$REPO/rulesets" --jq \
     ".[] | select(.name == \"$NAME\") | .id" 2>/dev/null || true)"
 
@@ -83,6 +112,8 @@ if [ -n "$dry" ]; then
     printf 'would %s the ruleset on %s/%s:\n\n' \
         "$([ -n "$existing" ] && echo update || echo create)" "$REPO" "$BRANCH"
     rules
+    printf '\nwould set on %s:\n\n' "$REPO"
+    settings
     exit 0
 fi
 
@@ -94,9 +125,23 @@ else
     printf 'created the ruleset\n'
 fi
 
+settings | gh api --method PATCH "repos/$REPO" --input - >/dev/null
+printf 'set the repository settings\n'
+
 printf '\n=== %s now requires ===\n' "$BRANCH"
 gh api "repos/$REPO/rules/branches/$BRANCH" --jq '.[] | .type' | sort -u | sed 's/^/  /'
 printf '\nchecks:\n'
 gh api "repos/$REPO/rules/branches/$BRANCH" \
     --jq '.[] | select(.type == "required_status_checks")
           | .parameters.required_status_checks[].context' | sed 's/^/  /'
+
+# Read back rather than echoed. The PATCH above answers with the repository it
+# believes it wrote, and an option the API silently declined would be reported
+# here as set.
+printf '\nthe repository now allows:\n'
+gh api "repos/$REPO" --jq '
+    "  squash        \(.allow_squash_merge)",
+    "  merge commit  \(.allow_merge_commit)",
+    "  rebase        \(.allow_rebase_merge)",
+    "  update branch \(.allow_update_branch)",
+    "  delete branch on merge  \(.delete_branch_on_merge)"'
