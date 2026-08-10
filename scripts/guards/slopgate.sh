@@ -3,6 +3,7 @@
 #
 # History
 #   2026-08-07  A. Sigdel  Created.
+#   2026-08-10  A. Sigdel  A sixth check: the two dashes #582 removed.
 #
 # Reads BASE_SHA, HEAD_SHA, PR_TITLE and PR_BODY from the environment, as its
 # neighbours do. Exits 0 when it finds nothing, 1 otherwise.
@@ -137,9 +138,9 @@ printf 'slopgate: %s added line(s), %s line(s) of prose\n' \
 # "binary file matches", which `check` would then report as the finding, hiding
 # every real hit in that run behind a line naming nothing.
 #
-# The three word-list checks read the same stream the same way, so they read it
+# The four pattern checks read the same stream the same way, so they read it
 # through one function: the binary-safety idiom above was missing from four of
-# five checks once already, and three copies of it is three chances to miss it
+# five checks once already, and a copy per check is a chance per check to miss it
 # again.
 over_everything() {
     printf '%s\n' "$both" | LC_ALL=C grep -aiE "$1" || true
@@ -153,6 +154,14 @@ check 'Chat-context shorthand: the reader was not in the conversation' \
 
 check 'Attribution trailer: the repository has one authorial voice' \
     "$(over_everything "$ATTRIBUTION")"
+
+# Read everywhere, including program source, which is where the emoji check draws
+# its line. The difference is what the mark is doing there: a non-ASCII literal in
+# a test is usually the thing under test, while a dash in a comment is prose that
+# declined to say which of four jobs it was doing. There is no fixture that needs
+# one.
+check 'Em-dash or en-dash: use the mark that says which job it is doing' \
+    "$(over_everything "$DASHES")"
 
 # A marker naming an issue is a plan; one naming nothing is a note to somebody who
 # has already left.
@@ -188,14 +197,14 @@ cat <<EOF
 
 slopgate found $findings line(s).
 
-This guard is advisory: it reports, and the job still passes. Three of its five
+This guard is advisory: it reports, and the job still passes. Four of its six
 checks are decidable, but the register and shorthand lists are a judgement about
 prose, and a style gate that blocks a correct change on a false positive teaches
 people to route around gates rather than to write more carefully.
 
 So read each line above and decide. If a word is right where it is, keep it and
-say so in review. If a list is wrong, the lists are at the top of this file and a
-word comes out in one line, subject to the rule stated there: a word belongs on
-a list only while this repository's own prose does not use it.
+say so in review. If a list is wrong, the lists are in slopgate.patterns beside
+this script and a word comes out in one line, subject to the rule stated there:
+a word belongs on a list only while this repository's own prose does not use it.
 EOF
 exit 1
