@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AndroidManifest.xml (debug) — points a debug build at the config beside it.
+
+  History
+    2026-08-09  A. Sigdel  Created with #513.
+
+  Two lines, and both are here rather than in src/main so that a release build
+  merges neither. The manifest merger applies this only to the debug variant, so
+  networkSecurityConfig is absent from the shipped application and the platform
+  default stands.
+
+  tools:replace is not needed: src/main declares no networkSecurityConfig, so
+  there is nothing to conflict with. If one is ever added there this file will
+  fail the merge loudly, which is the right way round.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:networkSecurityConfig="@xml/network_security_config" />
+</manifest>

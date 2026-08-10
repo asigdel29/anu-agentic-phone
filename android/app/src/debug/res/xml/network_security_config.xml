@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  network_security_config.xml — the one address a debug build may reach in the clear.
+
+  History
+    2026-08-09  A. Sigdel  Created with #513.
+
+  This file lives in src/debug and has no counterpart in src/main, which is the
+  whole of its design. A release build has no network security config at all, so
+  it inherits the platform default and cannot send cleartext anywhere — including
+  to the address below. Nothing here can ship.
+
+  10.0.2.2 is the emulator's alias for the host loopback. It is the only way a
+  stub model server running on a developer's machine is reachable from the
+  application under test, and #513 argues why that server has to exist: without
+  it the tool loop can only be exercised by paying a third party, so the most
+  interesting part of this application has no test a person can run.
+
+  Scoped to that one address rather than cleartextTrafficPermitted="true" on the
+  base config. The broad form would also permit a plain-HTTP model endpoint on a
+  real network, which is a request carrying a conversation and everything the
+  agent read off the screen.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

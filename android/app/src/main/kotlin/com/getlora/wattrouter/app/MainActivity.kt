@@ -162,7 +162,16 @@ class MainActivity : ComponentActivity() {
             TurnDriver(
                 Agent(
                     router = ready.core.routing(),
-                    walk = ChainWalk(NeuralWattInference(credential.read().orEmpty())),
+                    // BuildConfig rather than the client's default, so where a
+                    // turn goes is decided when the application is built and
+                    // cannot be moved at runtime — by anybody, including the
+                    // agent, which can drive this application's own screen.
+                    walk = ChainWalk(
+                        NeuralWattInference(
+                            credential.read().orEmpty(),
+                            BuildConfig.UPSTREAM_BASE_URL,
+                        ),
+                    ),
                     tools = ToolBox(remembering() + phone() + working() + driving()),
                     budget = budget,
                 ),
