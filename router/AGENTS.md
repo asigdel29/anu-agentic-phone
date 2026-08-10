@@ -19,12 +19,12 @@ true only here.
 | `cache.rs` | Remembering routing decisions. |
 | `upstream.rs` | Forwarding a request to the provider. |
 | `metrics.rs` | Counting what the router did. |
-| `ffi.rs` | The C-shaped core the `jni*` files call through. See below. |
-| `ffi_answer.rs` | The envelope an allocating call answers with, shared by the two below. |
+| `core.rs` | The decision core: build a router, decide with it, read a tier's chain. |
+| `answer.rs` | The envelope the two below answer with. |
 | `git.rs` | git operations without a subprocess, behind the `git` feature. |
-| `ffi_git.rs` | Those operations in the same shape, behind the same feature. |
+| `core_git.rs` | Those operations as an envelope, behind the same feature. |
 | `memory.rs` | Bounding what a store loads at open, behind the `memory` feature. |
-| `ffi_memory.rs` | A memory store in the same shape, behind the same feature. |
+| `core_memory.rs` | A memory store as an envelope, behind the same feature. |
 | `jni.rs` | The same core reached from Kotlin, behind the `android` feature. |
 | `jni_git.rs` | A repository from Kotlin, behind `android` and `git`. |
 | `jni_memory.rs` | The memory store from Kotlin, behind `android` and `memory`. |

@@ -9,7 +9,7 @@
 //!   `answered`  Hand an envelope to Kotlin and free the Rust copy.
 //!   `guarded`   Turn a panic into a refusal rather than undefined behaviour.
 //!
-//! `ffi_answer.rs` beside this is the same module for the C ABI, and it exists
+//! `answer.rs` beside this is the same module for the C ABI, and it exists
 //! for the reason recorded in its header: two envelopes that agree today, and a
 //! caller unwrapping two shapes the day one changes. The JNI half had that
 //! duplication — `owned` and `answered` were byte-identical in two files — and
@@ -20,7 +20,7 @@
 //!
 //! Not a reach into `jni_git` from `jni_memory`, which would make the memory
 //! feature require the git feature. Gated on `android` with either of them, the
-//! way `ffi_answer` is gated on either alone.
+//! way `answer` is gated on either alone.
 //!
 //! `jni.rs` does not use this and that is deliberate. It answers with a
 //! `Decided` it serialises itself rather than with a C string somebody else

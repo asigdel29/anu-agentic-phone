@@ -1,4 +1,4 @@
-//! ffi.rs — the decision core, as anything in this process calls it.
+//! core.rs — the decision core, as anything in this process calls it.
 //!
 //! History
 //!   2026-08-06  A. Sigdel  Created.
@@ -6,13 +6,18 @@
 //!                          module map went with it; the shape here did not,
 //!                          and #565 is where that is argued.
 //!   2026-08-10  A. Sigdel  Nothing here is a C interface any more with #565.
-//!                          The name is the last of it and goes separately, so
-//!                          that a rename is a rename rather than the tail of a
-//!                          rewrite.
+//!   2026-08-10  A. Sigdel  Was `ffi.rs`, which by then named the one thing it
+//!                          no longer was.
 //!
 //! Contents
 //!   `Router`   Build one, decide with it, read a tier's chain off it.
 //!   `Decision` Which tier, why, and how hard the prompt looked.
+//!
+//! **The name shadows the `core` crate inside this one.** Nothing here reaches
+//! for it, so nothing broke; a later `core::mem::swap` would resolve to this
+//! module and fail in a way that names neither. Write `::core` where the crate
+//! is meant. The alternative was a name that describes the layer worse in order
+//! to avoid a collision the compiler reports.
 //!
 //! In a process with the agent there is one address space, so the proxy the
 //! server binary is would be the wrong shape here: no socket, no TLS, no

@@ -11,7 +11,8 @@
 //!   classify  Reading routing signals off a request.
 //!   config  What the router reads from the environment.
 //!   embed   Turning a prompt into a vector.
-//!   ffi     The C ABI an app calls the decision core through.
+//!   core    The decision core: build a router, decide, read a chain.
+//!   answer  The envelope git and memory answer with.
 //!   head    Scoring a prompt's difficulty.
 //!   metrics Counting what the router did.
 //!   policy  Choosing a tier from a score and the request's signals.
@@ -32,25 +33,25 @@
 // `cargo clippy` reports exactly what CI reports.
 #![warn(clippy::pedantic)]
 
+#[cfg(any(feature = "git", feature = "memory"))]
+pub mod answer;
 pub mod backend;
 pub mod cache;
 pub mod chain;
 pub mod classify;
 pub mod config;
-pub mod embed;
-pub mod ffi;
-#[cfg(any(feature = "git", feature = "memory"))]
-pub mod ffi_answer;
+pub mod core;
 #[cfg(feature = "git")]
-pub mod ffi_git;
+pub mod core_git;
 #[cfg(feature = "memory")]
-pub mod ffi_memory;
+pub mod core_memory;
+pub mod embed;
 #[cfg(feature = "git")]
 pub mod git;
 pub mod head;
 #[cfg(feature = "android")]
 pub mod jni;
-// Either of the two below being on, the way `ffi_answer` is gated: it is what
+// Either of the two below being on, the way `answer` is gated: it is what
 // they share, and it is nothing without one of them.
 #[cfg(all(feature = "android", any(feature = "git", feature = "memory")))]
 pub mod jni_answer;

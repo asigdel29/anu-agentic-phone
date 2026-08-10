@@ -1,4 +1,4 @@
-//! `ffi_memory.rs` — the memory store, across the C ABI.
+//! `core_memory.rs` — the memory store, across the C ABI.
 //!
 //! History
 //!   2026-08-08  A. Sigdel  Created.
@@ -19,7 +19,7 @@
 //! rebuilding it per question is the cost this milestone exists to avoid. Behind
 //! a mutex, because `ingest_turn` takes `&mut self`.
 
-use crate::ffi_answer::{refused, rendered};
+use crate::answer::{refused, rendered};
 use crate::memory;
 use std::path::Path;
 use std::sync::Mutex;
@@ -157,7 +157,7 @@ mod tests {
     #[test]
     fn a_store_opens_where_there_was_no_file() {
         // A first run: the horizon does nothing and the store makes the file.
-        with_store("ffi-memory-fresh", 100, |store| {
+        with_store("memory-fresh", 100, |store| {
             let written = remember(store, "the boiler is behind the airing cupboard", 1);
             assert!(written["ok"].is_i64(), "crossed as {written}");
         });
@@ -167,7 +167,7 @@ mod tests {
     fn a_turn_with_no_text_is_refused_rather_than_stored() {
         // zeromem indexes nothing, so it is a turn that can never be recalled
         // and still counts against the horizon.
-        with_store("ffi-memory-empty", 100, |store| {
+        with_store("memory-empty", 100, |store| {
             let refusal = remember(store, "   ", 1);
             assert!(
                 refusal["error"]
@@ -183,7 +183,7 @@ mod tests {
     fn what_went_in_comes_back_out() {
         // The round trip. Recall returns evidence rather than an answer, which is
         // what the tool above it will render.
-        with_store("ffi-memory-roundtrip", 100, |store| {
+        with_store("memory-roundtrip", 100, |store| {
             remember(store, "the spare key is with Dave next door", 1);
 
             let found = answer(&store.recall("where is the spare key", 5));
@@ -204,7 +204,7 @@ mod tests {
     fn a_top_k_of_zero_takes_the_default_rather_than_returning_nothing() {
         // Zero is what a caller sends when it has no opinion, and an unchecked
         // `Some(0)` would answer every question with silence.
-        with_store("ffi-memory-topk", 100, |store| {
+        with_store("memory-topk", 100, |store| {
             remember(store, "the bins go out on Tuesday", 1);
 
             let found = answer(&store.recall("bins", 0));

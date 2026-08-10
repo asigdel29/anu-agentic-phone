@@ -1,7 +1,7 @@
-//! `ffi_answer.rs` — the envelope git and memory answer with.
+//! `answer.rs` — the envelope git and memory answer with.
 //!
 //! History
-//!   2026-08-08  A. Sigdel  Created, from ffi_git.rs, when memory became the
+//!   2026-08-08  A. Sigdel  Created, from core_git.rs, when memory became the
 //!                          second caller.
 //!   2026-08-10  A. Sigdel  Builds JSON rather than C strings with #565, then
 //!                          stopped making them at all. The panic guard, the
@@ -12,15 +12,15 @@
 //!   `Answer`               Ok, or a refusal in words the model reads.
 //!   `rendered`, `refused`  Building one.
 //!
-//! This lived in `ffi_git.rs` because git was the first thing here that had to
+//! This lived in `core_git.rs` because git was the first thing here that had to
 //! allocate and there was nothing to share it with. Memory is the second.
 //!
 //! Duplicating it would be two envelopes that agree today and disagree the day
-//! one changes. Reaching into `ffi_git` from `ffi_memory` would make the memory
+//! one changes. Reaching into `core_git` from `core_memory` would make the memory
 //! feature require the git feature, which is untrue and would put libgit2 into a
 //! build that wanted a database. So it is here, gated on either feature.
 //!
-//! `ffi.rs` answers a `Decision`, which is three fields and needs no envelope.
+//! `core.rs` answers a `Decision`, which is three fields and needs no envelope.
 //! That is the line this module is on the other side of, and it is now the only
 //! difference between them: nothing here allocates on a caller's behalf.
 

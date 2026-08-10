@@ -11,30 +11,30 @@
 //!   `Java_..._nativeFree`    Release one.
 //!   `Java_..._nativeDecide`  The whole decision path, as one envelope.
 //!
-//! One envelope rather than the four accessors `ffi.rs` offers. Reading a tier
+//! One envelope rather than the four accessors `core.rs` offers. Reading a tier
 //! and then walking its chain is four crossings from Kotlin where it is four
 //! function calls from Swift, and a decision arriving in pieces is one a caller
-//! can assemble wrongly. The shape is `ffi_answer.rs`'s, so Android decodes
+//! can assemble wrongly. The shape is `answer.rs`'s, so Android decodes
 //! exactly what Swift decodes.
 //!
 //! A null `jstring` is reachable from Kotlin in a way a null `const char *`
 //! mostly is not, because a nullable Kotlin type compiles to one without
 //! complaint.
 //!
-//! Not the C ABI with different names. `ffi.rs` hands back a struct by value and
+//! Not the C ABI with different names. `core.rs` hands back a struct by value and
 //! borrowed `const char *`; JNI deals in `jstring`, which the JVM owns on both
 //! sides, so this is a translation layer and the translation is where the
 //! mistakes are.
 //!
 //! No panic may cross into the JVM — undefined behaviour, exactly as into C, and
-//! the guard belongs here for the same reason it belongs in `ffi.rs`.
+//! the guard belongs here for the same reason it belongs in `core.rs`.
 //!
 //! The symbol names are the contract with `Core.kt` and nothing checks them at
 //! build time: getting one wrong is an `UnsatisfiedLinkError` the first time
 //! somebody runs the app. `the_symbols_match_the_kotlin` holds the two in step,
 //! the way the header parity test does for C.
 
-use crate::ffi::Router;
+use crate::core::Router;
 use crate::tier::Tier;
 use jni::JNIEnv;
 use jni::objects::{JClass, JString};
@@ -53,7 +53,7 @@ struct Decided {
     ///
     /// Absent rather than null. `null` is a value a caller has to know to skip,
     /// and the rule everywhere else in this boundary — `Message`'s empty
-    /// `tool_calls`, `ffi_answer`'s envelope — is that a key that means nothing
+    /// `tool_calls`, `answer`'s envelope — is that a key that means nothing
     /// is not written. A test on the emulator is what noticed the difference.
     #[serde(skip_serializing_if = "Option::is_none")]
     score: Option<f32>,
@@ -110,7 +110,7 @@ pub extern "system" fn Java_com_getlora_wattrouter_Core_nativeConfigure<'a>(
 /// The `Box` is made here and unmade in [`Java_com_getlora_wattrouter_Core_nativeFree`]
 /// directly below, and the two belong together. A handle is a `jlong` because
 /// that is what a Kotlin field can hold; the boxing exists to give that number
-/// something to mean, and it used to live in `ffi.rs` because a C caller needed
+/// something to mean, and it used to live in `core.rs` because a C caller needed
 /// the same trick. This is the only caller left, so the trick lives with it.
 ///
 /// # Returns
@@ -276,7 +276,7 @@ fn chain(router: &Router, tier: Tier) -> Vec<Attempt> {
 
 #[cfg(test)]
 mod tests {
-    use crate::ffi::Router;
+    use crate::core::Router;
 
     /// One Kotlin class, and the Rust that has to satisfy it.
     ///

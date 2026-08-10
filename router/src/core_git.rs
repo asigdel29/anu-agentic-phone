@@ -1,4 +1,4 @@
-//! `ffi_git.rs` — the git operations, as an envelope a model can read.
+//! `core_git.rs` — the git operations, as an envelope a model can read.
 //!
 //! History
 //!   2026-08-08  A. Sigdel  Created.
@@ -14,7 +14,7 @@
 //!   `add`      Staging paths.
 //!   `commit`   Writing what is staged.
 //!
-//! Separate from `ffi.rs` because what these answer is a different shape, not
+//! Separate from `core.rs` because what these answer is a different shape, not
 //! because that file was full. A decision is three fields; a status is a list of
 //! paths, and lists are what the envelope is for.
 //!
@@ -32,7 +32,7 @@
 //! Nothing here guards a panic. There is no boundary in this file to guard, and
 //! `jni_git` catches its own.
 
-use crate::ffi_answer::{refused, rendered};
+use crate::answer::{refused, rendered};
 use crate::git;
 use std::path::Path;
 
@@ -160,7 +160,7 @@ mod tests {
     #[test]
     fn a_fresh_repository_crosses_as_unborn_rather_than_as_a_failure() {
         // The state an agent most often finds, and the one libgit2 calls an error.
-        let scratch = Scratch::new("ffi-git-unborn");
+        let scratch = Scratch::new("git-unborn");
         git2::Repository::init(scratch.path()).unwrap();
 
         let head = answer(super::head, scratch.path());
@@ -170,7 +170,7 @@ mod tests {
 
     #[test]
     fn a_status_crosses_with_each_of_its_lists_whole() {
-        let scratch = Scratch::new("ffi-git-status");
+        let scratch = Scratch::new("git-status");
         let repo = git2::Repository::init(scratch.path()).unwrap();
         std::fs::write(scratch.path().join("staged.txt"), "one").unwrap();
         std::fs::write(scratch.path().join("loose.txt"), "two").unwrap();
@@ -193,7 +193,7 @@ mod tests {
 
     #[test]
     fn staging_then_committing_crosses_as_a_commit() {
-        let (scratch, _repo) = repository("ffi-git-commit");
+        let (scratch, _repo) = repository("git-commit");
         std::fs::write(scratch.path().join("a.txt"), "one").unwrap();
 
         let staged = answer2(super::add, scratch.path(), r#"["a.txt"]"#);
@@ -216,7 +216,7 @@ mod tests {
     fn staging_something_absent_names_that_path_and_not_the_others() {
         // The library's own message is about an unspecified pathspec, which a model
         // holding three paths cannot act on.
-        let (scratch, _repo) = repository("ffi-git-add-missing");
+        let (scratch, _repo) = repository("git-add-missing");
         std::fs::write(scratch.path().join("here.txt"), "one").unwrap();
 
         let refusal = answer2(super::add, scratch.path(), r#"["here.txt", "gone.txt"]"#);
@@ -229,7 +229,7 @@ mod tests {
     fn committing_nothing_is_refused_rather_than_written() {
         // libgit2 writes a commit whose tree matches its parent without complaint,
         // and a model doing that in a loop believes it is making progress.
-        let (scratch, _repo) = repository("ffi-git-commit-nothing");
+        let (scratch, _repo) = repository("git-commit-nothing");
 
         let refusal = answer2(super::commit, scratch.path(), "nothing");
         let text = refusal["error"].as_str().unwrap_or_default();
@@ -240,7 +240,7 @@ mod tests {
     fn paths_that_are_not_a_json_array_say_what_was_expected() {
         // Not a git failure, so it must not read as one — a model told "git:"
         // goes looking at the repository rather than at what it wrote.
-        let (scratch, _repo) = repository("ffi-git-add-bad-json");
+        let (scratch, _repo) = repository("git-add-bad-json");
 
         let refusal = answer2(super::add, scratch.path(), "a.txt");
         let text = refusal["error"].as_str().unwrap_or_default();
@@ -251,7 +251,7 @@ mod tests {
     fn a_refusal_crosses_as_the_message_rather_than_as_an_absence() {
         // The message is what the model acts on. Null here would leave the caller
         // to invent one, and the invented one would not name the path.
-        let scratch = Scratch::new("ffi-git-not-a-repo");
+        let scratch = Scratch::new("git-not-a-repo");
 
         for entry in [super::head, super::status] {
             let refusal = answer(entry, scratch.path());
