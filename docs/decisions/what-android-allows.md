@@ -6,7 +6,7 @@ difference is large enough that one "mobile" section would be wrong about one of
 every line.
 
 So this is #137 in the other direction. Every capability below carries a constraint that
-decides its design, and three of them decide whether the thing can ship at all — which is
+decides its design, and three of them decide whether the thing can ship at all, which is
 the part worth having written down before anything is built on top of it.
 
 ## The screen, which is the whole difference
@@ -19,8 +19,8 @@ the part worth having written down before anything is built on top of it.
 
 Android has all three, through `AccessibilityService`:
 
-- **Read.** `AccessibilityNodeInfo` gives the live view tree of whatever is on screen — text,
-  bounds, roles, and whether a node is clickable — refreshed by
+- **Read.** `AccessibilityNodeInfo` gives the live view tree of whatever is on screen: text,
+  bounds, roles, and whether a node is clickable, refreshed by
   `TYPE_WINDOW_CONTENT_CHANGED` events.
 - **Act.** `performAction(ACTION_CLICK)` on a node, and `dispatchGesture` for arbitrary taps,
   swipes and drags at raw coordinates.
@@ -34,12 +34,12 @@ wish. Four constraints on it, in the order they will bite:
 **Play policy is the binding one, and it is not technical.** Accessibility APIs may be used
 for accessibility. An agent that drives other apps is not that, and a Play submission
 declaring the permission for this purpose is refused. A personally sideloaded build is
-unaffected, which is what this repository is — but the moment the goal changes to
+unaffected, which is what this repository is, but the moment the goal changes to
 distribution, this feature is the reason it cannot.
 
 **`FLAG_SECURE` windows are not blank, and this used to say they were.** Banking apps, password
-managers and DRM video set it. They do appear as black rectangles in a screenshot — that half
-was right — and the node tree is untouched. `FLAG_SECURE` restricts screen *capture*, and it
+managers and DRM video set it. They do appear as black rectangles in a screenshot, which that half
+got right, and the node tree is untouched. `FLAG_SECURE` restricts screen *capture*, and it
 has to leave accessibility alone: a screen reader is required to work in a banking app.
 
 Measured rather than reasoned about, after this paragraph claimed otherwise for a milestone.
@@ -50,7 +50,7 @@ Android makes the old sentence true.
 So the agent is **not** blind on the apps where a mistake costs most. It sees them as it sees
 anything else, and the only protection the framework offers here is narrow: a node marked
 `isPassword` has its text withheld, which is why `type_text` refuses one (#423). Everything
-else on a banking screen — the balance, the payee list, the last transaction — is readable by
+else on a banking screen (the balance, the payee list, the last transaction) is readable by
 anything the person has switched an accessibility service on for, including this.
 
 That is a fact about the platform rather than a decision this repository made, and it belongs
@@ -73,22 +73,22 @@ conversation shortcut, and the system draws the bubble and its expanded view aro
 your activities. It survives Play review, it behaves like the platform, and the tradeoff is
 that the chrome is the system's rather than yours.
 
-**Overlays** — `SYSTEM_ALERT_WINDOW` with `TYPE_APPLICATION_OVERLAY` — are the classic chat
+**Overlays**, `SYSTEM_ALERT_WINDOW` with `TYPE_APPLICATION_OVERLAY`, are the classic chat
 head and draw what you like where you like. The permission is granted from a Settings screen
 rather than a dialog, so it costs a trip out of the app; it is blocked over Settings itself
 and over `FLAG_SECURE` windows; and it is one of the permissions Play looks at hardest.
 
 Both, defaulting to bubbles, is the shape that follows: the sanctioned one is enough for a
-chat, and the overlay is what an agent driving another app needs in order to say what it is
-doing over the top of it.
+chat, and the overlay is what an agent driving another app needs to say what it is doing over
+the top of it.
 
 ## Long work has somewhere to run
 
-A foreground service with a persistent notification runs for as long as it is useful — with a
+A foreground service with a persistent notification runs for as long as it is useful, with a
 ceiling that depends on which kind it says it is, and the answer has changed since this was
 written.
 
-iOS has nothing equivalent — `beginBackgroundTask` buys seconds, not minutes — which is why
+iOS has nothing equivalent (`beginBackgroundTask` buys seconds, not minutes), which is why
 `TurnDriver.isLong` exists there to warn somebody before they walk away rather than to keep
 working. On Android the same tier can simply finish, and the notification is where the turn
 reports itself.
@@ -129,7 +129,7 @@ fills forms and scrapes, with `WebViewClient` for navigation. Everything an agen
 pages the app itself loads. It is also its own session: not signed in to anything the person
 is signed in to, which is a privacy property worth keeping rather than working around.
 
-**The person's Chrome is not drivable**, except through the accessibility route above — which
+**The person's Chrome is not drivable**, except through the accessibility route above, which
 means driving it as a human does, by reading pixels and dispatching taps, with all four
 constraints from that section.
 
@@ -139,7 +139,7 @@ agent that operates somebody's signed-in browser. They deserve separate names.
 ## What does not change
 
 The routing core. `wattrouter` already cross-builds for `aarch64-apple-ios`, and there is
-nothing Apple-specific in it — the tiers, the policy, the sticky cache and the chain walk are
+nothing Apple-specific in it: the tiers, the policy, the sticky cache and the chain walk are
 plain Rust over a C ABI. `aarch64-linux-android` is another target of the same crate.
 
 So the decision path is shared, not reimplemented. That is worth stating plainly because the
@@ -150,6 +150,6 @@ harness.
 
 The seams above the core are the same shape too. `Inference`, `Tool`, `Permission` and the
 turn loop are ideas rather than Swift, and the Android side should arrive at the same ones
-rather than inventing different ones — with one honest exception: `Permission` assumes a
+rather than inventing different ones, with one honest exception: `Permission` assumes a
 prompt shown once and never again, and Android's Settings-screen permissions do not behave
 that way.

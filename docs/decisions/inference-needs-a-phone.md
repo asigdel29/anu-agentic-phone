@@ -9,8 +9,8 @@ machines this is developed on, and no diff records it. What is still work moved 
 
 ## What was measured
 
-A scratch package — `mlx-swift` 0.31.6, one `MLXArray([1,2,3]) + MLXArray([10,20,30])`, no
-model — builds and links cleanly for `arm64-apple-ios-simulator` against the iPhoneOS 26.5
+A scratch package (`mlx-swift` 0.31.6, one `MLXArray([1,2,3]) + MLXArray([10,20,30])`, no
+model) builds and links cleanly for `arm64-apple-ios-simulator` against the iPhoneOS 26.5
 SDK. It aborts at runtime on the iPhone 17 simulator:
 
 ```
@@ -23,7 +23,7 @@ exception:   EXC_CRASH (SIGABRT), Abort trap: 6
 ```
 
 The frames are the whole argument. It dies constructing the Metal device, before any array
-exists and before any weights are read — below the level at which a model choice can
+exists and before any weights are read, below the level at which a model choice can
 influence anything. A small build fails identically to a large one, because neither reaches
 allocation.
 
@@ -61,6 +61,6 @@ get.
 
 The plan listed simulator incompatibility as a risk to find out about early and rated the
 row "doubtful". It is not doubtful and it never was; it is the first line of the smallest
-possible case. Recorded because the plan's instinct — probe the risky layer on day one —
+possible case. Recorded because the plan's instinct, probing the risky layer on day one,
 was right, and only its confidence was wrong. The probe cost an afternoon and moved two
 phases of work ahead of one that could not start.

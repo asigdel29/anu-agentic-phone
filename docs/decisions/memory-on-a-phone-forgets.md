@@ -13,8 +13,8 @@ before the first query.
 That is O(all history) at launch, which a board tolerates and a phone does not.
 
 Reading the database directly and skipping `build()` is not an escape. The retrieval path takes
-those in-memory slices — `graph_view::retrieve` and `hier_view::retrieve` both borrow `&[Turn]`
-and `&[Vec<f32>]` — so there is no query that does not need them. Avoiding `build()` means
+those in-memory slices (`graph_view::retrieve` and `hier_view::retrieve` both borrow `&[Turn]`
+and `&[Vec<f32>]`), so there is no query that does not need them. Avoiding `build()` means
 reimplementing the pipeline, which is about a thousand lines of somebody else's work.
 
 ## The decision
@@ -30,7 +30,7 @@ At 256 floats a turn, a horizon of two thousand turns is about two megabytes of 
 ### The two options this was chosen over
 
 **Fork and pin the fork.** Fixable in the sense that the fix is obvious, and it creates a fork
-to maintain — for a dependency that is new and single-author, which is exactly the kind that
+to maintain, for a dependency that is new and single-author, which is exactly the kind that
 moves.
 
 **Vendor a pinned copy under `router/vendor/`.** The diff becomes visible in review, which is
@@ -49,8 +49,8 @@ the phone is jetsammed a year from now and the question is why.
 
 #226 could not say whether `zeromem` crosses to iOS at all. It does.
 
-Both slices build from the pinned commit `32ac538` with `--no-default-features` — which drops
-`fastembed` and the ONNX runtime behind it — in under twenty seconds each. `rusqlite`'s bundled
+Both slices build from the pinned commit `32ac538` with `--no-default-features`, which drops
+`fastembed` and the ONNX runtime behind it, in under twenty seconds each. `rusqlite`'s bundled
 SQLite compiles for `aarch64-apple-ios` and `aarch64-apple-ios-sim` without help. The crate is
 the workspace's default member and separable from `zeromem-py`, so the PyO3 half never enters
 an iOS build.
@@ -63,7 +63,7 @@ and hashes instead. Pointing both at one database would empty it on alternate op
 are permanently separate stores. That is a fact to design around rather than one to discover.
 
 **The SQLite `-shm` file must never be opened across an App Group container.** That constrains
-where a memory database may live now that the share extension exists — #280 puts one text file
+where a memory database may live now that the share extension exists; #280 puts one text file
 per item in that container and opens no database in it, deliberately.
 
 File protection needs setting deliberately, as #111 did for the Keychain. A memory store is the

@@ -4,7 +4,7 @@ This repository ran two agents. Hermes held the conversation and delegated codin
 through a bundled skill. That is now one agent: Hermes does the coding too, and OpenCode is
 retired.
 
-This file records why, because the reasoning is worth more than the diff — and because two of
+This file records why, because the reasoning is worth more than the diff, and because two of
 the arguments made along the way were wrong, and a decision record that only keeps the winning
 arguments is a record nobody can audit.
 
@@ -29,7 +29,7 @@ So the split was not a division of labour. It was the same work, twice, in two p
 ## The cost of keeping it
 
 A second process, a second agent loop, and a second context window paying tokens over the same
-repository. Two binaries on the machine at different versions — 1.18.13 and 1.18.4 were both
+repository. Two binaries on the machine at different versions, 1.18.13 and 1.18.4 were both
 installed here, and the skill that drove them carried a section warning about which one `PATH`
 would pick. Iterative work went through a pseudo-terminal, with the documented exit being to
 send `\x03`.
@@ -51,7 +51,7 @@ whose id does not begin with `opencode` takes the `else` branch and already send
 would have supplied session stickiness for free, with no plugin and no configuration.
 
 **"A static session header would ratchet every request to the highest tier."** True of a static
-one, but the premise was wrong — see above. The header is per-request.
+one, but the premise was wrong; see above. The header is per-request.
 
 The case for retirement rests on redundancy alone. It is enough, but it is one argument rather
 than three.
@@ -62,7 +62,7 @@ than three.
 that one does not. This is a real cost and the mitigation is weak: the binary stays installed
 and can still be driven by hand.
 
-**LSP navigation.** Hermes's LSP client handles `publishDiagnostics` and nothing else — it
+**LSP navigation.** Hermes's LSP client handles `publishDiagnostics` and nothing else: it
 advertises `documentSymbol` capability and never issues the request. OpenCode exposed
 definition, references, hover and workspace-symbol. Closing that is tracked separately; the
 groundwork is already there, since `client.py` has a generic request method and `manager.py`
@@ -75,5 +75,5 @@ already spawns a server per file.
 
 The OpenCode configuration in a developer's own `~/.config/opencode/` is untouched. It goes
 directly to the provider and always has, which is why nothing in this repository can be
-bypassed by it — there is no longer any router-facing OpenCode configuration for it to bypass.
+bypassed by it: there is no longer any router-facing OpenCode configuration for it to bypass.
 It remains available as a standalone tool.

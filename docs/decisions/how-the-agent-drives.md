@@ -6,13 +6,13 @@ to. It is written before them rather than after, because each of the six decisio
 cheap to make now and expensive to reverse once eight tools depend on it.
 
 Three of these came out of a design review that changed my mind, and the reasons are the part
-worth keeping — a conclusion without its argument is a thing the next person re-litigates.
+worth keeping: a conclusion without its argument is a thing the next person re-litigates.
 
 ## The model never sees a coordinate
 
 `dispatchGesture` takes pixels, and that is where the temptation is: a `swipe(x1,y1,x2,y2)`
 tool is four lines and works the first time. It is also the failure #233 opens by warning
-about — a coordinate remembered rather than re-read — handed to the model as an API.
+about (a coordinate remembered rather than re-read) handed to the model as an API.
 
 So coordinates stay inside the service and never enter the model's vocabulary. Scrolling is by
 handle. System gestures are by name. What the model holds instead is a **handle**, which is a
@@ -24,7 +24,7 @@ recipe for finding a node again:
 | `role` | The class, coarsely: button, field, list, text. |
 | `text` | What it says, which is what a person would call it. |
 | `desc` | The content description, when there is one. |
-| `siblingIndex` | Where it sits among its siblings — the structural path, last. |
+| `siblingIndex` | Where it sits among its siblings: the structural path, last. |
 
 Ordered by durability, and re-resolved against a **freshly fetched tree before every action**.
 Not against the tree the handle came from: between reading the screen and tapping it, the
@@ -42,7 +42,7 @@ Every handle carries the generation of the tree it was read from, and an action 
 generation is refused rather than attempted.
 
 A single counter is not enough, and this is the one hole in the design that produces a *wrong
-tap* rather than a refusal. The service is killed and restarted by the system routinely — it is
+tap* rather than a refusal. The service is killed and restarted by the system routinely; it is
 bound rather than owned, and `what-android-allows.md` records that in-memory state does not
 survive it. A counter that restarts at zero means a handle read before the kill can match a
 tree read after it, by coincidence, and the coincidence is likeliest in exactly the case that
@@ -53,7 +53,7 @@ reused. A handle from a previous life of the service fails to match, every time,
 construction.
 
 **And the counter increments on a structural change, not on every event.** Content changes
-constantly — a clock, a progress bar, an unread badge — and a generation that moved with them
+constantly (a clock, a progress bar, an unread badge) and a generation that moved with them
 would make every handle stale before the model could use one, which is a system that refuses
 everything and is indistinguishable from a broken one. The counter follows a hash of the tree's
 shape: what nodes exist, where, and what they are. Text moving inside a node it already had is
@@ -66,7 +66,7 @@ from the normal Settings screen. The toggle is visible and greyed out, with no e
 the point of failure. It is ungreyed only by opening **App info → ⋮ → Allow restricted
 settings**, which nobody discovers by looking.
 
-App stores are exempt — including F-Droid — because the exemption rides on the install session
+App stores are exempt, F-Droid included, because the exemption rides on the install session
 rather than on the store's identity. A plain `adb install` does not get it, and neither does
 opening an APK from a file manager.
 
@@ -80,7 +80,7 @@ paragraph exists before the code does.
 
 This section used to say that `FLAG_SECURE` windows expose nothing through accessibility, that
 `what-android-allows.md` called it a feature, and that the read therefore needed a third answer
-saying the application hides its contents — because reporting a secure window as *an empty
+saying the application hides its contents, because reporting a secure window as *an empty
 screen* would tell a model there is nothing there, and a model told there is nothing there
 decides the page has not loaded and acts again.
 
@@ -90,7 +90,7 @@ reading to mistake for a blank page, and `describe` needs no third state. #472 h
 measurement and `what-android-allows.md` now carries the correction.
 
 Kept rather than deleted, because the shape of the argument still applies to the next thing
-that turns out to be unreadable — and because a record that quietly loses a claim it made for a
+that turns out to be unreadable, and because a record that quietly loses a claim it made for a
 milestone teaches nobody what went wrong. What was missing was a test, and there is one now.
 
 ## Nothing is logged

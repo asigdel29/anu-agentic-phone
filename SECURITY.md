@@ -8,7 +8,7 @@ Read the threat model before installing it on a phone you use for real things.
 
 ## Reporting something
 
-Open a **private security advisory** through GitHub — the *Security* tab, then *Report a
+Open a **private security advisory** through GitHub: the *Security* tab, then *Report a
 vulnerability*. That reaches the maintainer without the finding being public first.
 
 Please do not open an ordinary issue for a vulnerability. Everything else belongs in one.
@@ -41,7 +41,7 @@ share, and the build and deployment scripts.
 
 `read_screen` turns whatever is on another application's screen into model input. `tap`,
 `type_text` and `scroll` turn model output into presses and keystrokes. So anything that can put
-text on the screen — a received message, a web page, a notification — is writing into the
+text on the screen (a received message, a web page, a notification) is writing into the
 context of a model that is about to act on the phone.
 
 This is the largest risk here and it is not fully mitigated. What stands against it:
@@ -68,14 +68,14 @@ set that flag; it stops screen *capture* and leaves the accessibility node tree 
 screen reader has to work in a banking application.
 
 Two decision records in this repository used to say the opposite and one called it a feature.
-They were wrong and are corrected —
+They were wrong and are corrected:
 [#472](https://github.com/asigdel29/anu-agentic-phone/issues/472) has the measurement, and
 `SecureScreenDeviceTest` is the test that would notice if a future Android made the old claim
 true.
 
 So: with the accessibility service enabled, this application can read a banking application's
 balance and a password manager's entry list. The only protection the framework offers here is
-narrow — a node marked `isPassword` has its text withheld.
+narrow: a node marked `isPassword` has its text withheld.
 
 ### What leaves the device
 
@@ -85,7 +85,7 @@ application's screen** reach `api.neuralwatt.com` when a turn needs them.
 
 They go there because answering the question requires it, and they go nowhere else. Nothing is
 logged: `how-the-agent-drives.md` makes that a rule about what the code may contain rather than
-about what it does at runtime — no node text to the system log at any level, no screenshot to
+about what it does at runtime: no node text to the system log at any level, no screenshot to
 disk including the application's own cache, nothing in a crash breadcrumb. The failure that rule
 exists to prevent is somebody enabling verbose logging two years from now.
 

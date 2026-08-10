@@ -1,7 +1,7 @@
 # Working in this repository
 
 Read this first. It says where things are, what runs them, and what will reject a change.
-It does not restate the rules — `docs/coding-standard.md` is the standard, and a second copy
+It does not restate the rules: `docs/coding-standard.md` is the standard, and a second copy
 of a rule is free to disagree with the first. Read that file before writing code, and read it
 again before arguing with a lint.
 
@@ -34,7 +34,7 @@ start and stop it detached, `just verify` checks the stack end to end and needs 
 running first.
 
 `just android-core` builds the crate for the phone, and `just android` packages it into a
-library Gradle can hand to the app. Both are optional toolchain — `just toolchain` reports the
+library Gradle can hand to the app. Both are optional toolchain: `just toolchain` reports the
 NDK, the SDK and Gradle as absent rather than failing, because a check that fails over a
 milestone nobody is working on is a check people learn to ignore.
 
@@ -44,14 +44,14 @@ does for a system image.
 
 Android has two test recipes and the difference matters. `just android-test` runs on the JVM and
 covers everything that touches nothing Android. `just android-device-test` boots an emulator,
-and it is the only one that can load the library — the `.so` is built for
+and it is the only one that can load the library; the `.so` is built for
 `aarch64-linux-android` and will not load on the host at all.
 
 ## What will reject a change
 
 Two workflows, and they check different things.
 
-`.github/workflows/ci.yml` checks the code, and **most of it is conditional** — the surprising
+`.github/workflows/ci.yml` checks the code, and **most of it is conditional**: the surprising
 property of this pipeline, and the first thing to know about it. A `detect` job probes for
 `router/Cargo.toml`, `train/pyproject.toml` and `android/settings.gradle.kts` and sets a flag
 per language; every later step carries an `if` on those flags.
@@ -59,14 +59,14 @@ per language; every later step carries an `if` on those flags.
 `router/Cargo.toml` exists, so the Rust half runs: `cargo fmt --check`, `clippy -D warnings`,
 `cargo test --all-targets`, and performance gates.
 
-`android/settings.gradle.kts` exists, so `gradle test` runs — **the JVM suite only**. The
+`android/settings.gradle.kts` exists, so `gradle test` runs **the JVM suite only**. The
 instrumented one cannot run there: the system image is `arm64-v8a` and the runner is x86_64
 with no KVM for it. So the only suite that can load the library is a local gate, which is why
 `android/AGENTS.md` asks a pull request to name which of the two it ran.
 
 **`train/pyproject.toml` does not exist, so the Python half runs over nothing.** `ruff format`,
 `ruff`, `mypy --strict` and `pytest` are all configured and all skipped. `train/` currently
-holds one file, so there is little to check — but a contributor writing Python here and
+holds one file, so there is little to check, but a contributor writing Python here and
 trusting CI to catch a type error will not be caught. Adding `train/pyproject.toml` turns all
 four on at once.
 
@@ -84,7 +84,7 @@ and the pull request text avoid the register of unreviewed prose).
 
 Which of them blocks is **not repeated here**. `registry.json` carries each guard's mode and
 its description, and a second copy in this file would turn a one-line promotion into a two-file
-edit — with the failure mode that this document ends up asserting the opposite of what CI does.
+edit, with the failure mode that this document ends up asserting the opposite of what CI does.
 Read the registry: it is nine lines per guard and it is the truth.
 
 Run them before pushing:
@@ -96,13 +96,13 @@ just guards 153-agents-md      # when the pull request targets something else
 
 A gate you can only exercise by opening a pull request is a gate you debug by opening pull
 requests. Each guard is an ordinary script taking its inputs from the environment, so the recipe
-is a convenience over them rather than a second path — `run-all.sh` is what CI calls too.
+is a convenience over them rather than a second path: `run-all.sh` is what CI calls too.
 
 ## Issues and pull requests
 
 Open the issue first: the issue is where the problem is stated, the pull request only where it
 is solved. Every pull request references one and changes at most 300 lines. Work running over
-splits into a follow-up on the same branch under a new issue linked to the parent — the
+splits into a follow-up on the same branch under a new issue linked to the parent; the
 `pr-size` failure message spells out the steps.
 
 Branch names are `<issue-number>-<short-description>`, which is what `gh issue develop`
@@ -115,8 +115,8 @@ now checks for the trailer.
 
 ## Finding out why something is the way it is
 
-1. **`docs/decisions/INDEX.md`.** Start here. It routes a question — why is a round committed
-   atomically, why does `patch` refuse an ambiguous match — to the pull request that argued it,
+1. **`docs/decisions/INDEX.md`.** Start here. It routes a question (why is a round committed
+   atomically, why does `patch` refuse an ambiguous match) to the pull request that argued it,
    and holds the records for decisions with no diff to live in.
 2. **Merged pull request bodies.** Where the reasoning actually is, which is why the index
    points at them rather than restating them. `gh pr view <n>`, or
