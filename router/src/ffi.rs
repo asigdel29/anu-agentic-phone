@@ -66,33 +66,24 @@ pub(crate) struct ChainEntry {
 /// A decision: which tier will serve a request, why, and how hard the prompt
 /// looked.
 ///
-/// Absence is [`Option`] now rather than a `tier` of `255`. The sentinel existed
-/// because C has no way to answer "no decision" in a struct returned by value;
-/// it also meant one value stood for four different failures, and a caller could
-/// only tell it apart from a real decision by knowing to check.
+/// Absence is [`Option`] rather than a `tier` of `255`, and the fields are the
+/// enums rather than numbers standing for them.
+///
+/// The numbers existed so that a caller compiled against one could not be broken
+/// by an enum being reordered here. No such caller exists. What they cost while
+/// they lasted was a second spelling of every name, in a table beside the one
+/// the enum already carried, kept in step by a test.
 #[derive(Debug, Clone, Copy)]
 pub struct Decision {
-    /// Tier discriminant.
-    pub tier: u8,
-    /// Reason code.
-    pub reason: u8,
-    /// Difficulty score, or `-1.0` IF unscored.
-    pub score: f32,
-}
-
-/// A stable wire code, written out rather than taken from the discriminant (as
-/// `metrics::reason_index` is): reordering the enum must not change what a
-/// number means to a caller compiled against the old order.
-const fn reason_code(reason: Reason) -> u8 {
-    match reason {
-        Reason::Pinned => 0,
-        Reason::Background => 1,
-        Reason::ContextTooLarge => 2,
-        Reason::Scored => 3,
-        Reason::CodeShaped => 4,
-        Reason::Unscored => 5,
-        Reason::Sticky => 6,
-    }
+    /// Which tier serves the request.
+    pub tier: Tier,
+    /// Why that tier.
+    pub reason: Reason,
+    /// Difficulty in `[0, 1]`, or [`None`] where nothing scored it.
+    ///
+    /// [`None`] rather than `-1.0`. A number meaning "no number" is one a caller
+    /// compares against a threshold by accident.
+    pub score: Option<f32>,
 }
 
 /// Borrow a C string as UTF-8; null and invalid encoding both read as absent.
@@ -225,9 +216,9 @@ impl Router {
             }
         }
         Some(Decision {
-            tier: decision.tier as u8,
-            reason: reason_code(decision.reason),
-            score: score.unwrap_or(-1.0),
+            tier: decision.tier,
+            reason: decision.reason,
+            score,
         })
     }
 
@@ -239,73 +230,17 @@ impl Router {
     /// left is in this process and holds a borrow of the router already, so the
     /// indirection bought nothing and cost three entry points and a walk that
     /// could disagree with itself between calls.
-    pub(crate) fn chain(&self, tier: u8) -> &[ChainEntry] {
+    pub(crate) fn chain(&self, tier: Tier) -> &[ChainEntry] {
         self.chains.get(tier as usize).map_or(&[], Vec::as_slice)
     }
 }
 
-/// The `index`th name, or null IF there is none.
-///
-/// Total: no lookup built on it can panic, so no entry point that is only a
-/// lookup needs a `catch_unwind` to make one safe to cross the boundary.
-fn name_at(names: &[&'static CStr], index: u8) -> *const c_char {
-    names
-        .get(index as usize)
-        .map_or(std::ptr::null(), |name| name.as_ptr())
-}
-
-/// The name of a tier code, as configuration and metrics spell it.
-///
-/// A decision crosses as two numbers, which is all the caller needs to act but
-/// nothing it can display or log. These return the words without the caller
-/// keeping a second copy of the vocabulary that can fall behind this one.
-///
-/// # Arguments
-/// * `tier` — a code from [`Decision`]'s `tier`.
-///
-/// # Returns
-/// A static NUL-terminated name, borrowed for the program's lifetime and never
-/// freed by the caller, or null IF `tier` names no tier — which includes the
-/// failure sentinel.
-#[unsafe(no_mangle)]
-pub extern "C" fn wattrouter_tier_name(tier: u8) -> *const c_char {
-    // Written out rather than indexed off `Tier::ALL`, for the reason
-    // `reason_code` is: the caller is compiled against these codes, and
-    // reordering the enum must not change what a number means to it.
-    // `tier_names_match_the_tier` holds the spellings to the tier's own.
-    const NAMES: [&CStr; 6] = [c"aux", c"cheap", c"mid", c"code", c"long", c"heavy"];
-    name_at(&NAMES, tier)
-}
-
-/// The name of a reason code, as metrics spell it.
-///
-/// # Arguments
-/// * `reason` — a code from [`Decision`]'s `reason`.
-///
-/// # Returns
-/// A static NUL-terminated name, borrowed for the program's lifetime and never
-/// freed by the caller, or null IF `reason` names no reason.
-#[unsafe(no_mangle)]
-pub extern "C" fn wattrouter_reason_name(reason: u8) -> *const c_char {
-    const NAMES: [&CStr; 7] = [
-        c"pinned",
-        c"background",
-        c"context-too-large",
-        c"scored",
-        c"code-shaped",
-        c"unscored",
-        c"sticky",
-    ];
-    name_at(&NAMES, reason)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{Decision, Router, reason_code};
+    use super::{Decision, Router};
     use crate::policy::Reason;
     use crate::testenv::with_env;
     use crate::tier::Tier;
-    use std::ffi::CStr;
 
     /// One router may be shared across threads, and nothing but this decides
     /// that claim: the cache is behind a mutex and everything else is read-only
@@ -354,8 +289,7 @@ mod tests {
                 None,
                 "",
             );
-            assert_ne!(d.tier, u8::MAX, "should have decided");
-            assert_eq!(d.tier, Tier::Mid as u8, "unscored lands in the middle");
+            assert_eq!(d.tier, Tier::Mid, "unscored lands in the middle");
         });
     }
 
@@ -370,8 +304,8 @@ mod tests {
                 Some("cheap"),
                 "",
             );
-            assert_eq!(pinned.tier, Tier::Cheap as u8);
-            assert_eq!(pinned.reason, reason_code(Reason::Pinned));
+            assert_eq!(pinned.tier, Tier::Cheap);
+            assert_eq!(pinned.reason, Reason::Pinned);
 
             let background = decide(
                 router,
@@ -379,8 +313,8 @@ mod tests {
                 None,
                 "",
             );
-            assert_eq!(background.tier, Tier::Aux as u8);
-            assert_eq!(background.reason, reason_code(Reason::Background));
+            assert_eq!(background.tier, Tier::Aux);
+            assert_eq!(background.reason, Reason::Background);
         });
     }
 
@@ -404,32 +338,38 @@ mod tests {
     }
 
     #[test]
-    fn reason_codes_are_distinct() {
-        let mut seen = std::collections::HashSet::new();
-        for reason in Reason::ALL {
-            assert!(seen.insert(reason_code(reason)), "duplicate for {reason:?}");
-        }
-    }
-
-    #[test]
-    fn tier_names_match_the_tier() {
-        // The codes are written out in `wattrouter_tier_name` so that they stay
-        // put; this is what keeps writing them out from drifting.
+    fn the_vocabulary_a_decision_crosses_with_is_usable_as_a_key() {
+        // What the three deleted tests defended, replaced rather than dropped.
+        //
+        // They held two hand-written tables of names in step with the enums, and
+        // held the codes indexing them distinct. There are no tables and no
+        // codes, so "reordering the enum must not change what a number means" is
+        // no longer something anything can break.
+        //
+        // What took its place is that the wire carries the names themselves, so
+        // the property that matters moved: a name must exist for every variant,
+        // and no two variants may spell theirs the same way. `Decision.kt`
+        // matches these as strings, and two tiers sharing a name would be a
+        // decision it silently mis-read rather than one it rejected.
+        let mut names = std::collections::HashSet::new();
         for tier in Tier::ALL {
-            let name = unsafe { CStr::from_ptr(super::wattrouter_tier_name(tier as u8)) };
-            assert_eq!(name.to_str().unwrap(), tier.name());
+            assert!(!tier.name().is_empty(), "{tier:?} has no name");
+            assert!(
+                names.insert(tier.name()),
+                "two tiers spell it {}",
+                tier.name()
+            );
         }
-        assert!(super::wattrouter_tier_name(u8::MAX).is_null());
-    }
 
-    #[test]
-    fn reason_names_match_the_reason() {
+        let mut labels = std::collections::HashSet::new();
         for reason in Reason::ALL {
-            let code = reason_code(reason);
-            let name = unsafe { CStr::from_ptr(super::wattrouter_reason_name(code)) };
-            assert_eq!(name.to_str().unwrap(), reason.label());
+            assert!(!reason.label().is_empty(), "{reason:?} has no label");
+            assert!(
+                labels.insert(reason.label()),
+                "two reasons spell it {}",
+                reason.label()
+            );
         }
-        assert!(super::wattrouter_reason_name(u8::MAX).is_null());
     }
 
     #[test]
@@ -448,7 +388,7 @@ mod tests {
                 let expected = crate::chain::chain_for(&config, tier);
                 assert!(expected.len() > 1, "{} has no fallback", tier.name());
 
-                let got = router.chain(tier as u8);
+                let got = router.chain(tier);
                 assert_eq!(got.len(), expected.len(), "for {}", tier.name());
 
                 for (index, step) in expected.iter().enumerate() {
@@ -466,21 +406,6 @@ mod tests {
                     );
                 }
             }
-        });
-    }
-
-    #[test]
-    fn a_tier_code_naming_no_tier_has_an_empty_chain() {
-        // Walking past the end used to need proving, because three entry points
-        // each had to answer absence in their own way and could disagree. A
-        // slice answers it once. What is still this function's own is what it
-        // does with a code no tier has: an empty chain rather than a panic, so a
-        // caller reading a decision it did not produce gets nothing rather than
-        // an unwind across a boundary.
-        with_router(|router| {
-            let router = unsafe { &*router };
-            assert!(router.chain(u8::MAX).is_empty());
-            assert!(!router.chain(Tier::Mid as u8).is_empty());
         });
     }
 }

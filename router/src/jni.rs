@@ -35,6 +35,7 @@
 //! the way the header parity test does for C.
 
 use crate::ffi::Router;
+use crate::tier::Tier;
 use jni::JNIEnv;
 use jni::objects::{JClass, JString};
 use jni::sys::{jboolean, jlong, jstring};
@@ -231,11 +232,9 @@ fn decide(router: &Router, body: &str, session: &str) -> Option<Decided> {
     let answer = router.decide(body, None, session)?;
 
     Some(Decided {
-        tier: name(crate::ffi::wattrouter_tier_name(answer.tier))?,
-        reason: name(crate::ffi::wattrouter_reason_name(answer.reason))?,
-        // Absent rather than -1. A number that means "no number" is a number a
-        // caller compares against a threshold.
-        score: (answer.score >= 0.0).then_some(answer.score),
+        tier: answer.tier.name().to_owned(),
+        reason: answer.reason.label().to_owned(),
+        score: answer.score,
         chain: chain(router, answer.tier),
     })
 }
@@ -257,7 +256,7 @@ fn decide(router: &Router, body: &str, session: &str) -> Option<Decided> {
 /// that already had one home, and a step whose code it did not recognise was
 /// dropped from the chain rather than reported. An exhaustive match cannot
 /// have that arm, so a step can no longer vanish.
-fn chain(router: &Router, tier: u8) -> Vec<Attempt> {
+fn chain(router: &Router, tier: Tier) -> Vec<Attempt> {
     router
         .chain(tier)
         .iter()
@@ -266,19 +265,6 @@ fn chain(router: &Router, tier: u8) -> Vec<Attempt> {
             backend: entry.backend.name().to_owned(),
         })
         .collect()
-}
-
-/// A borrowed static name, as an owned `String`.
-fn name(raw: *const std::ffi::c_char) -> Option<String> {
-    if raw.is_null() {
-        return None;
-    }
-    Some(
-        unsafe { std::ffi::CStr::from_ptr(raw) }
-            .to_str()
-            .ok()?
-            .to_owned(),
-    )
 }
 
 #[cfg(test)]
@@ -476,14 +462,12 @@ mod tests {
         );
         assert!(!router.is_null(), "the router did not build");
 
-        // The tier's own index, which is what `wattrouter_decide` answers with.
-        let mid = u8::try_from(
-            crate::tier::Tier::ALL
-                .iter()
-                .position(|tier| tier.name() == "mid")
-                .expect("no mid tier"),
-        )
-        .expect("six tiers fit in a byte");
+        // Found by name rather than written down, so renaming a tier moves this
+        // with it. A `Tier` now, not the index one used to cross as.
+        let mid = *crate::tier::Tier::ALL
+            .iter()
+            .find(|tier| tier.name() == "mid")
+            .expect("no mid tier");
 
         let read = with_env(
             &[
