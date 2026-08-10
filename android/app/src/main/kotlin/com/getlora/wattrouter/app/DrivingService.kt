@@ -76,6 +76,14 @@ class DrivingService : AccessibilityService() {
 
     /** The banner, while a turn is driving. */
     private var banner: Banner? = null
+
+    /**
+     * The bubble, while a turn is not.
+     *
+     * Never up at the same time as [banner], which is the rule #522 records
+     * from the design review rather than a preference about clutter.
+     */
+    private var head: ChatHead? = null
     private var shown = false
 
     /** What the stop button does. Set by whoever started the turn. */
@@ -86,6 +94,7 @@ class DrivingService : AccessibilityService() {
         viewing = Viewing(Generations.fresh())
         connected = this
         accessibilityButtonController.registerAccessibilityButtonCallback(summon)
+        attachHead()
     }
 
     /**
@@ -131,11 +140,50 @@ class DrivingService : AccessibilityService() {
     fun showing(what: String?) {
         if (what == null) {
             hide()
+            // Back once the task is over, which is the half of "before and
+            // after" that is easy to forget: a bubble that leaves and does not
+            // return is a bubble somebody stops relying on.
+            attachHead()
             return
         }
+        // Away for the duration. The banner already says what is happening and
+        // carries the stop, and two overlays over one moment is two things to
+        // read while watching a third. #522 records the design review finding
+        // this follows.
+        detachHead()
         val showing = banner ?: Banner(this) { onStop?.invoke() }.also { banner = it }
         showing.say(what)
         if (!shown) attach(showing)
+    }
+
+    /**
+     * Put the bubble up, unless it is up.
+     *
+     * Silent on failure, as [attach]: a display that will not take an overlay
+     * is a phone with no bubble on it, not a service that should refuse to
+     * drive anything.
+     */
+    private fun attachHead() {
+        if (head != null) return
+        val bubble = ChatHead(this) {
+            startActivity(
+                Intent(this, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }
+        val windows = getSystemService(WindowManager::class.java)
+        val put = runCatching {
+            windows.addView(bubble.view, bubble.params)
+            bubble.follow(windows)
+        }.isSuccess
+        if (put) head = bubble
+    }
+
+    /** Take it away, and forget where it was. */
+    private fun detachHead() {
+        val bubble = head ?: return
+        runCatching { getSystemService(WindowManager::class.java).removeView(bubble.view) }
+        head = null
     }
 
     /**
@@ -183,6 +231,7 @@ class DrivingService : AccessibilityService() {
 
     override fun onDestroy() {
         hide()
+        detachHead()
         runCatching { accessibilityButtonController.unregisterAccessibilityButtonCallback(summon) }
         connected = null
         viewing = null
