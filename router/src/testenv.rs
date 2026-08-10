@@ -2,7 +2,7 @@
 //!
 //! History
 //!   2026-08-07  A. Sigdel  Created, from the lock that lived in config's tests.
-//!   2026-08-08  A. Sigdel  Took in `Scratch`, which `ffi_git` needs as well as
+//!   2026-08-08  A. Sigdel  Took in `Scratch`, which `core_git` needs as well as
 //!                          `git`, for the reason the lock is here.
 //!
 //! Contents
@@ -13,7 +13,7 @@
 //! so a test that sets one races every test that reads one. `config` knew this
 //! and kept a mutex — but inside its own `mod tests`, where nothing else could
 //! take it, while its comment claimed nothing else read the environment
-//! meanwhile. `ffi` did, both writing the credential and reading it back through
+//! meanwhile. `core` did, both writing the credential and reading it back through
 //! `Config::from_env`, and CI duly failed an unrelated change with
 //! `Missing("NEURALWATT_API_KEY")` when the two overlapped.
 //!

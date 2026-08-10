@@ -7,7 +7,7 @@
 //!   2026-08-10  A. Sigdel  Reads a `String` and answers one with #565. There is
 //!                          no Rust allocation crossing to free.
 //!
-//! These go through `ffi_git` rather than `crate::git` directly, so the envelope
+//! These go through `core_git` rather than `crate::git` directly, so the envelope
 //! a model reads is built in one place. That used to be phrased as both phones
 //! reaching a repository by one path; there is one phone since #545, and the
 //! reason survives it — the envelope is the thing being kept single, not the
@@ -47,7 +47,7 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeInit<'a>(
         let Some(path) = read(&mut env, &path) else {
             return std::ptr::null_mut();
         };
-        handed(&mut env, crate::ffi_git::init(Path::new(&path)))
+        handed(&mut env, crate::core_git::init(Path::new(&path)))
     })
 }
 
@@ -65,7 +65,7 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeHead<'a>(
         let Some(path) = read(&mut env, &path) else {
             return std::ptr::null_mut();
         };
-        handed(&mut env, crate::ffi_git::head(Path::new(&path)))
+        handed(&mut env, crate::core_git::head(Path::new(&path)))
     })
 }
 
@@ -83,7 +83,7 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeStatus<'a>(
         let Some(path) = read(&mut env, &path) else {
             return std::ptr::null_mut();
         };
-        handed(&mut env, crate::ffi_git::status(Path::new(&path)))
+        handed(&mut env, crate::core_git::status(Path::new(&path)))
     })
 }
 
@@ -106,7 +106,10 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeAdd<'a>(
         else {
             return std::ptr::null_mut();
         };
-        handed(&mut env, crate::ffi_git::add(Path::new(&path), &paths_json))
+        handed(
+            &mut env,
+            crate::core_git::add(Path::new(&path), &paths_json),
+        )
     })
 }
 
@@ -125,6 +128,9 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeCommit<'a>(
         let (Some(path), Some(message)) = (read(&mut env, &path), read(&mut env, &message)) else {
             return std::ptr::null_mut();
         };
-        handed(&mut env, crate::ffi_git::commit(Path::new(&path), &message))
+        handed(
+            &mut env,
+            crate::core_git::commit(Path::new(&path), &message),
+        )
     })
 }

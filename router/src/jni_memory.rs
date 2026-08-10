@@ -22,7 +22,7 @@
 //! to be at the bottom of this file was identical to `jni_git.rs`'s and neither
 //! applied the rules `jni.rs` states — see #468 and #482.
 
-use crate::ffi_memory::Memory;
+use crate::core_memory::Memory;
 use crate::jni::read;
 use crate::jni_answer::{guarded, handed};
 use jni::JNIEnv;
@@ -58,7 +58,7 @@ pub extern "system" fn Java_com_getlora_wattrouter_Memory_nativeOpen<'a>(
         // the other has not compiles cleanly and corrupts memory on the first
         // close, and no suite in this repository except the instrumented one can
         // see it happen.
-        crate::ffi_memory::open(Path::new(&path), keep)
+        crate::core_memory::open(Path::new(&path), keep)
             .map_or(0, |store| Box::into_raw(Box::new(store)) as jlong)
     })
 }
@@ -101,7 +101,7 @@ pub extern "system" fn Java_com_getlora_wattrouter_Memory_nativeRemember<'a>(
 ) -> jstring {
     guarded(std::ptr::null_mut(), || {
         // The null-handle check is here now. It was `memory.as_ref()` inside
-        // `ffi_memory`, which is where it had to be while that function took a
+        // `core_memory`, which is where it had to be while that function took a
         // pointer. The pointer stops at this file.
         let (Some(memory), Some(session), Some(speaker), Some(text)) = (
             unsafe { (handle as *const Memory).as_ref() },
