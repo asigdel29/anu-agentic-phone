@@ -4,7 +4,7 @@
 through CI and the guards because somebody chose to put them there, not because anything
 required it.
 
-This says what requires it now, and — more usefully — which two of the obvious settings are
+This says what requires it now, and more usefully which two of the obvious settings are
 absent on purpose, because both are the kind somebody turns on later to tidy up.
 
 ## It came last, and that was the point
@@ -19,7 +19,7 @@ guarantee about.
 
 `Required` and `Guards` are the `name:` fields of two jobs. Their ids are `required` and
 `guards`, and a ruleset naming an id waits forever for a check that never reports under that
-name — a pull request that can never be merged, with nothing anywhere saying why.
+name: a pull request that can never be merged, with nothing anywhere saying why.
 
 `Required` is CI's aggregator. It exists because a job added to `needs` and forgotten in
 `RESULTS` makes the aggregator pass green over that job's failure, so the aggregator is what
@@ -30,13 +30,13 @@ request rather than the code.
 ## There is no merge queue, and that is the important absence
 
 `pr-governance.yml` triggers on `pull_request` alone. Its own header says why: on a
-`merge_group` ref there is no pull request to read — no title, no body, no head branch — so
+`merge_group` ref there is no pull request to read (no title, no body, no head branch) so
 `issue-link`, `pr-size` and `slopgate` have nothing to look at.
 
 A merge queue would therefore wait forever for `Guards` on every queued candidate, and the
 queue would stall with no failing check to point at. The fix, if a queue is ever wanted, is
 to give `pr-governance.yml` a `merge_group` trigger and decide what the three guards mean
-there — not to enable the queue and see.
+there, not to enable the queue and see.
 
 ## There is no required review
 
@@ -94,7 +94,7 @@ way cannot be brought back at all.
 
 ## It is applied by a script
 
-`scripts/protect-main.sh`, reviewable in a diff like anything else, and idempotent — running
+`scripts/protect-main.sh`, reviewable in a diff like anything else, and idempotent: running
 it again is how to see what is set, which is why there is no separate command for that. A
 rule that lives only in a settings page is a rule nobody reviews, and this one has a clause
 whose *absence* is the whole point.

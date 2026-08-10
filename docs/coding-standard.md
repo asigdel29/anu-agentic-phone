@@ -14,11 +14,14 @@ without reading its body. Most of what follows serves that.
 ### File headers
 
 Every source file opens with a comment block giving the file's name and purpose, a history
-table, and — where the file holds more than one significant item — a list of its contents.
+table, and, where the file holds more than one significant item, a list of its contents.
 Checked by `scripts/lint/file-headers.sh`.
 
+The name and the purpose are separated by a colon, not a dash. Prose below says why the mark is
+absent from everything else too; the header is only where it was most visible.
+
 ```rust
-//! embed.rs — prompt embedding for the routing head.
+//! embed.rs: prompt embedding for the routing head.
 //!
 //! History
 //!   2026-08-05  A. Sigdel  Created.
@@ -46,12 +49,12 @@ The standard specifies a formal shape for method documentation. Restated for thi
 | `GENERATE T` | Creates new entities | Stated in `# Returns` |
 | `PREV(obj)` | Pre-call state | Stated inline where needed |
 
-`# Rely` is required on every suspending public function — `pub async fn` in Rust, `suspend
-fun` in Kotlin — and `# Atomic` on every method touching shared state. `# Rely` is checked by
+`# Rely` is required on every suspending public function (`pub async fn` in Rust, `suspend
+fun` in Kotlin) and `# Atomic` on every method touching shared state. `# Rely` is checked by
 `scripts/lint/doc-tags.sh`; `# Atomic` is not, and the Enforcement section below says why.
 
-They matter here because the router holds three pieces of shared mutable state — the ONNX
-session, the decision cache, and the upstream connection pool — and a caller cannot reason
+They matter here because the router holds three pieces of shared mutable state (the ONNX
+session, the decision cache, and the upstream connection pool) and a caller cannot reason
 about a request path without knowing which operations are safe to interleave. The phones hold
 the same count for the same reason: a turn loop, a permission seam, and a store.
 
@@ -59,7 +62,7 @@ the same count for the same reason: a turn loop, a permission seam, and a store.
 /// Score a prompt's difficulty as the probability that the strong model wins.
 ///
 /// # Arguments
-/// * `prompt` — the last user message, WHERE `prompt` is non-empty and already
+/// * `prompt`: the last user message, WHERE `prompt` is non-empty and already
 ///   truncated to at most `MAX_ROUTING_TOKENS`.
 ///
 /// # Returns
@@ -106,14 +109,14 @@ matter of not fighting the idiom.
 | Mutators | `set_x(v)` | `set_x(v)` |
 | Errors | `XError` | `XError` |
 
-Lea's `Ifc` interface suffix is dropped — Rust traits and Python protocols are already
+Lea's `Ifc` interface suffix is dropped: Rust traits and Python protocols are already
 distinguishable at the point of use.
 
 ## Structure
 
 - One significant type per file. Where a trait and its implementations are meaningless apart,
   they may share a file; the header lists them.
-- A function does one thing. Enforced by a cyclomatic-complexity gate, which is a proxy — it
+- A function does one thing. Enforced by a cyclomatic-complexity gate, which is a proxy: it
   catches the egregious cases and cannot judge cohesion. Review does the rest.
 - No public struct fields. State is reached through accessors, so invariants have somewhere to
   live.
@@ -127,7 +130,7 @@ distinguishable at the point of use.
 - No assignment inside a condition.
 - A fallible function returns `Result`; it does not signal failure through a sentinel.
 - `#[must_use]` on anything whose result carries meaning. A deliberately discarded result is
-  written `let _ = ...` with a comment saying why — the standard asks that ignored returns be
+  written `let _ = ...` with a comment saying why; the standard asks that ignored returns be
   documented, and this is where.
 - Panics are for broken invariants, never for input. Anything reachable from a request returns
   an error instead.
@@ -141,7 +144,7 @@ async function documents its `# Rely`, and every method over shared state docume
 `# Atomic` guarantee.
 
 Where locks are taken, the acquisition order is documented at the type holding them. The router
-holds two — one in `cache.rs` and one in `embed.rs` — and there is no order between them,
+holds two, one in `cache.rs` and one in `embed.rs`, and there is no order between them,
 because no path takes both. Each documents one acquisition per method, which is the whole of
 what a caller needs.
 
@@ -209,3 +212,9 @@ issue linked to the parent. Both are enforced; see `.github/workflows/pr-governa
 
 Prose documentation follows the same standard as code: say what is true, say why, and leave
 out what the reader can see for themselves.
+
+The em-dash is not used, and neither is the en-dash. Every appearance of one is doing one of
+four jobs, and each of those jobs has a mark that says which it is: a colon where the clause
+explains, a semicolon where it joins, a full stop where it breaks, a comma or a pair of
+parentheses where it is an aside. Deciding between them is the edit, which is why removing
+them was not a substitution.

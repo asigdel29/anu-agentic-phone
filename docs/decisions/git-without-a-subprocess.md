@@ -2,7 +2,7 @@
 
 Everything on the board shells out to `git`. `hermes_cli/web_git.py:9` says so outright.
 A phone has no shell, so the operations have to come from a library, and this records what
-that costs before anything depends on it — because most of the cost is invisible until
+that costs before anything depends on it, because most of the cost is invisible until
 somebody trusts the result.
 
 ## The route in, and the one that was assumed
@@ -33,7 +33,7 @@ Finished `release` profile [optimized] target(s) in 11.41s   aarch64-apple-ios-s
 
 No CMake, no submodule, no second build system, and no third-party Swift wrapper to keep
 alive. `libgit2-sys` vendors the C and compiles it with `cc`, which is the toolchain the
-router already crosses with. One crate, one static library per slice, one xcframework —
+router already crosses with. One crate, one static library per slice, one xcframework;
 the alternative was two of each, and two Rust static libraries in one binary means two
 copies of the standard library.
 
@@ -43,12 +43,12 @@ None of this is a bug and none of it is fixable here. It is what the library is.
 
 **Credential helpers are not run.** They are programs, and libgit2 does not exec programs.
 Credentials are supplied through a callback instead. Anything a developer has configured
-in `credential.helper` — a keychain helper, a corporate SSO helper — does not happen.
+in `credential.helper` (a keychain helper, a corporate SSO helper) does not happen.
 
 **Hooks are not run, by design.** This is the one with a consequence #139 does not state.
 A repository the agent commits to on a phone is a repository whose `pre-commit` never ran.
 If a team relies on hooks for formatting, linting, secret scanning or signing, none of it
-happened — and the commit looks identical to one where it did. The failure surfaces in
+happened, and the commit looks identical to one where it did. The failure surfaces in
 somebody else's CI, attributed to the author.
 
 **LFS pointers clone as pointer files.** A repository using LFS will check out text files
@@ -69,7 +69,7 @@ Local git first: status, diff, add, commit, log, branch. Every limit above excep
 belongs to the *network* half, and the local half is testable today against a repository a
 test creates in a temporary directory.
 
-The network half — fetch, push, credentials, pull request creation — is a separate
+The network half (fetch, push, credentials, pull request creation) is a separate
 decision, taken separately. Splitting it is not caution for its own sake: it is that the
 first half has no privacy story to argue and the second is almost entirely privacy story.
 

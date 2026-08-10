@@ -12,7 +12,7 @@ So this routes a question to the argument that answers it.
 
 ## Standing records
 
-A decision earns a file here when it is about the repository rather than about a change —
+A decision earns a file here when it is about the repository rather than about a change:
 nothing in a diff records it, so no pull request body can either.
 
 | Record | The question it answers |
@@ -62,7 +62,7 @@ that somebody chose which questions get asked. `gh pr view <n>` reads one.
 ## When a question is not here
 
 `gh pr list --state merged --search <term>` searches titles and bodies. The titles are written
-to be searched — they say what the change does, not which files it touches.
+to be searched: they say what the change does, not which files it touches.
 
 ## Adding to this
 
