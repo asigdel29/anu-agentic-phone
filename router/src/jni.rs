@@ -107,9 +107,14 @@ pub extern "system" fn Java_com_getlora_wattrouter_Core_nativeConfigure<'a>(
 
 /// Build a router.
 ///
+/// The `Box` is made here and unmade in [`Java_com_getlora_wattrouter_Core_nativeFree`]
+/// directly below, and the two belong together. A handle is a `jlong` because
+/// that is what a Kotlin field can hold; the boxing exists to give that number
+/// something to mean, and it used to live in `ffi.rs` because a C caller needed
+/// the same trick. This is the only caller left, so the trick lives with it.
+///
 /// # Returns
-/// A handle to pass back, or `0` IF configuration was rejected — which is what
-/// `ffi.rs` reports as null, said as a number because a `jlong` is what crosses.
+/// A handle to pass back, or `0` IF configuration was rejected.
 ///
 /// # Safety
 /// The returned handle must reach `nativeFree` exactly once.
@@ -121,15 +126,17 @@ pub extern "system" fn Java_com_getlora_wattrouter_Core_nativeNew(
     catch_unwind(|| {
         // The configured default head. Kotlin has no path to hand in, because on
         // a phone there is no head to load — the policy has an unscored path and
-        // that is what Android takes, as iOS does.
-        let head = std::ptr::null();
-        let router = unsafe { crate::ffi::wattrouter_new(head) };
-        router as jlong
+        // that is what Android takes.
+        Router::new(None).map_or(0, |router| Box::into_raw(Box::new(router)) as jlong)
     })
     .unwrap_or(0)
 }
 
 /// Release a router.
+///
+/// The other half of `nativeNew`'s `Box`. `Router` has no `Drop` of its own; the
+/// cache and the head are released because the box is, so this dropping is the
+/// whole of the release.
 ///
 /// # Safety
 /// `handle` must come from `nativeNew` and not already be freed. Zero is
@@ -143,8 +150,8 @@ pub extern "system" fn Java_com_getlora_wattrouter_Core_nativeFree(
     if handle == 0 {
         return;
     }
-    let _ = catch_unwind(AssertUnwindSafe(|| unsafe {
-        crate::ffi::wattrouter_free(handle as *mut Router);
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        drop(unsafe { Box::from_raw(handle as *mut Router) });
     }));
 }
 
@@ -269,6 +276,8 @@ fn chain(router: &Router, tier: Tier) -> Vec<Attempt> {
 
 #[cfg(test)]
 mod tests {
+    use crate::ffi::Router;
+
     /// One Kotlin class, and the Rust that has to satisfy it.
     ///
     /// A list rather than a second copy of the test: a third binding should be
@@ -368,11 +377,10 @@ mod tests {
         // The reason this is one call. A tier is a role; what answers is the
         // chain, and a Kotlin caller holding only the tier cannot dispatch.
         crate::testenv::with_env(&[("NEURALWATT_API_KEY", Some("jni-test"))], || {
-            let router = unsafe { crate::ffi::wattrouter_new(std::ptr::null()) };
-            assert!(!router.is_null(), "router builds without a head");
+            let router = Router::new(None).expect("router builds without a head");
 
             let decided = super::decide(
-                unsafe { &*router },
+                &router,
                 r#"{"messages":[{"role":"user","content":"hello there"}]}"#,
                 "",
             )
@@ -391,8 +399,6 @@ mod tests {
                 assert!(!attempt.model.is_empty());
                 assert!(["local", "remote"].contains(&attempt.backend.as_str()));
             }
-
-            unsafe { crate::ffi::wattrouter_free(router) };
         });
     }
 
@@ -401,9 +407,8 @@ mod tests {
         // Reported as an error envelope by the entry point above. Here it is the
         // absence that entry point turns into one.
         crate::testenv::with_env(&[("NEURALWATT_API_KEY", Some("jni-test"))], || {
-            let router = unsafe { crate::ffi::wattrouter_new(std::ptr::null()) };
-            assert!(super::decide(unsafe { &*router }, "not json", "").is_none());
-            unsafe { crate::ffi::wattrouter_free(router) };
+            let router = Router::new(None).expect("router builds without a head");
+            assert!(super::decide(&router, "not json", "").is_none());
         });
     }
 
@@ -458,9 +463,8 @@ mod tests {
                 ("NEURALWATT_API_KEY", Some("jni-test")),
                 ("WATTROUTER_MODEL_MID", Some("built-with-this")),
             ],
-            || unsafe { crate::ffi::wattrouter_new(std::ptr::null()) },
+            || Router::new(None).expect("the router did not build"),
         );
-        assert!(!router.is_null(), "the router did not build");
 
         // Found by name rather than written down, so renaming a tier moves this
         // with it. A `Tier` now, not the index one used to cross as.
@@ -474,10 +478,8 @@ mod tests {
                 ("NEURALWATT_API_KEY", Some("jni-test")),
                 ("WATTROUTER_MODEL_MID", Some("changed-underneath")),
             ],
-            || super::chain(unsafe { &*router }, mid),
+            || super::chain(&router, mid),
         );
-
-        unsafe { crate::ffi::wattrouter_free(router) };
 
         assert!(!read.is_empty(), "a tier with no chain behind it");
         assert_eq!(
