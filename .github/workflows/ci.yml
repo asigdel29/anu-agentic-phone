@@ -43,7 +43,7 @@ jobs:
       python: ${{ steps.probe.outputs.python }}
       kotlin: ${{ steps.probe.outputs.kotlin }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: probe
         run: |
           set -euo pipefail
@@ -57,7 +57,7 @@ jobs:
     needs: detect
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Shell and YAML exist from the first commit, so these two always run.
       - name: shfmt
@@ -97,7 +97,7 @@ jobs:
     needs: detect
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: shellcheck
         run: |
@@ -171,7 +171,7 @@ jobs:
     if: ${{ needs.detect.outputs.rust == 'true' || needs.detect.outputs.python == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: ./.github/actions/rust-setup
         if: needs.detect.outputs.rust == 'true'
@@ -202,7 +202,7 @@ jobs:
     if: ${{ needs.detect.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/rust-setup
         with:
           target: aarch64-unknown-linux-gnu
@@ -235,7 +235,7 @@ jobs:
     if: ${{ needs.detect.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Check the header compiles as C
         run: |
           set -euo pipefail
@@ -260,7 +260,7 @@ jobs:
     if: ${{ needs.detect.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/rust-setup
         with:
           cache-key: perf
@@ -292,9 +292,9 @@ jobs:
     if: ${{ needs.detect.outputs.kotlin == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
@@ -307,7 +307,7 @@ jobs:
       # The action's wrapper validation stays on and passes over nothing, which
       # is the right way round. Turning it off would mean a wrapper jar arriving
       # later goes unchecked as well as unwanted.
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '9.7.0'
 
@@ -345,7 +345,7 @@ jobs:
     if: ${{ needs.detect.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build the image
         run: docker build --tag wattrouter:ci .
       - name: It starts and answers liveness

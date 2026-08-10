@@ -50,6 +50,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.getlora.wattrouter.Agent
 import com.getlora.wattrouter.Budget
 import com.getlora.wattrouter.Budgeted
+import com.getlora.wattrouter.Confirmed
 import com.getlora.wattrouter.CalendarTool
 import com.getlora.wattrouter.ChainWalk
 import com.getlora.wattrouter.ContactsTool
@@ -94,6 +95,15 @@ class MainActivity : ComponentActivity() {
     private val budget = Budget()
 
     /**
+     * How involved this person wants to be, read per action by [Confirmed].
+     *
+     * Built here rather than per composition: a store rebuilt on every
+     * recomposition is a file opened on every recomposition, and the mode is
+     * read from a turn rather than from the composition anyway.
+     */
+    private val modes by lazy { Modes(applicationContext) }
+
+    /**
      * What another app shared, until a turn takes it.
      *
      * Compose state rather than a field, because the composition is what
@@ -129,7 +139,7 @@ class MainActivity : ComponentActivity() {
                             if (checking) {
                                 Checklist { checking = false }
                             } else {
-                                Conversation(driverFor(now, credential), handed)
+                                Conversation(driverFor(now, credential), handed, modes)
                             }
                         Startup.NoCredential, Startup.CoreRefused ->
                             SignInScreen(refused = now == Startup.CoreRefused) { typed ->
@@ -269,7 +279,15 @@ class MainActivity : ComponentActivity() {
      * trap behind it — which is the only place somebody learns about either.
      */
     private fun driving(): List<Tool> {
-        val screen = Budgeted(AndroidPhone(applicationContext), budget)
+        // Confirmed outside Budgeted, which #553 argues: the other way round
+        // spends a budgeted action on a prompt somebody then declines, so a
+        // turn refused twenty times has nothing left for the one they would
+        // have allowed.
+        val screen = Confirmed(
+            Budgeted(AndroidPhone(applicationContext), budget),
+            { modes.now },
+            AndroidConsent(),
+        )
         return listOf(
             ReadScreenTool(screen),
             TapTool(screen),
@@ -344,7 +362,15 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun Conversation(driver: TurnDriver, handed: MutableState<String?>) {
+private fun Conversation(
+    driver: TurnDriver,
+    handed: MutableState<String?>,
+    modes: Modes,
+) {
+    // Held in composition as well as in the store, because a chip has to
+    // repaint when it is tapped and the store is not observable. The store
+    // stays the truth: it is what the turn loop reads.
+    var mode by remember { mutableStateOf(modes.now) }
     val rows by driver.rows.collectAsState()
     val isRunning by driver.isRunning.collectAsState()
     val routing by driver.routing.collectAsState()
@@ -394,6 +420,11 @@ private fun Conversation(driver: TurnDriver, handed: MutableState<String?>) {
         rows = rows,
         isRunning = isRunning,
         routing = routing,
+        mode = mode,
+        onMode = {
+            mode = it
+            modes.now = it
+        },
         onSend = { text ->
             // Asked at the first send rather than at launch: a permission
             // prompt before anybody has done anything is one people refuse.

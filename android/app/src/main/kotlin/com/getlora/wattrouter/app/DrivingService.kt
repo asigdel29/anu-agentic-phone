@@ -86,6 +86,14 @@ class DrivingService : AccessibilityService() {
     private var head: ChatHead? = null
     private var shown = false
 
+    /**
+     * The question, while one is being asked.
+     *
+     * Private, with only [asking] outside it: a caller wants to know whether
+     * one is up, never which one.
+     */
+    private var pending: Asked? = null
+
     /** What the stop button does. Set by whoever started the turn. */
     var onStop: (() -> Unit)? = null
 
@@ -178,6 +186,57 @@ class DrivingService : AccessibilityService() {
         }.isSuccess
         if (put) head = bubble
     }
+
+    /**
+     * Put a question up, over whatever is about to be touched.
+     *
+     * Modal, unlike the banner, and [Asked] says why that is safe. One at a
+     * time is the caller's guarantee rather than this one's: the turn loop runs
+     * tools in order, so a second question cannot be asked while a first is up.
+     *
+     * # Rely
+     * The main thread, as every WindowManager call is.
+     *
+     * @param onAnswer called once, with what was chosen. Not called at all if
+     *   the overlay is refused a place on the display or if [stopAsking] takes
+     *   it away first — [AndroidConsent] is what turns either into an answer.
+     */
+    fun ask(question: String, onAnswer: (Boolean) -> Unit) {
+        val put = Asked(this, question) { yes ->
+            stopAsking()
+            onAnswer(yes)
+        }
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            // Neither of the banner's two flags, which is the whole difference:
+            // this takes the touches that land on it rather than passing them
+            // to the app underneath.
+            0,
+            android.graphics.PixelFormat.TRANSLUCENT,
+        ).apply { gravity = Gravity.CENTER }
+
+        // Silent on failure, as attach: a phone that will not take an overlay
+        // has nowhere to show a question, and AndroidConsent reads `asking`
+        // afterwards as nobody having been asked.
+        if (runCatching {
+                getSystemService(WindowManager::class.java).addView(put.view, params)
+            }.isSuccess
+        ) {
+            pending = put
+        }
+    }
+
+    /** Take the question away, however it ended. */
+    fun stopAsking() {
+        val up = pending ?: return
+        runCatching { getSystemService(WindowManager::class.java).removeView(up.view) }
+        pending = null
+    }
+
+    /** Whether a question is on the display. */
+    val asking: Boolean get() = pending != null
 
     /** Take it away, and forget where it was. */
     private fun detachHead() {

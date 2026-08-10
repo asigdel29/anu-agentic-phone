@@ -27,6 +27,37 @@
     <string name="banner_stop">Stop</string>
 
     <!--
+      The autonomy modes. One word each, because they sit in a row of chips
+      above the field; the sentence under them is where the meaning is.
+    -->
+    <string name="mode_auto">Auto</string>
+    <string name="mode_ask">Ask</string>
+    <string name="mode_plan">Plan</string>
+
+    <!--
+      What each one means, shown for whichever is chosen. Written as what the
+      agent will do rather than as what the setting is called: somebody
+      choosing between two words needs the difference, not a restatement.
+    -->
+    <string name="mode_auto_means">It acts on its own. A strip across the top says
+        what it is doing, with a stop button.</string>
+    <string name="mode_ask_means">It asks before every tap, every word it types and
+        every app it opens.</string>
+    <string name="mode_plan_means">It writes down what it intends to do, you approve
+        that once, and it then runs on its own.</string>
+
+    <!--
+      On the question, over whatever the agent is about to touch. Two words at
+      most: it sits beside the thing being asked about, and that is the part to
+      read.
+    -->
+    <string name="asked_yes">Allow</string>
+
+    <!-- Not "Cancel". Cancel is what the app underneath might call a button,
+         and this overlay is not part of it. -->
+    <string name="asked_no">Don\'t</string>
+
+    <!--
       On the bubble. One character, because the bubble is a thumb wide and sits
       over somebody else's design; a word would either not fit or would have to
       shrink until it could not be read.
