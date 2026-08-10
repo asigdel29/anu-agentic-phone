@@ -31,79 +31,22 @@
 //! bodies in a closure re-indents both, which put that change over the limit.
 
 use jni::JNIEnv;
-use jni::objects::JString;
 use jni::sys::jstring;
-use std::ffi::{CStr, CString, c_char};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
-/// A Java string as a C string.
+/// Hand JSON to Kotlin.
+///
+/// `answered` was the same idea over a `*mut c_char` that it also freed. Nothing
+/// crossing owns a Rust allocation now, so this is that helper minus the free.
+/// It is here rather than in either caller because both need it, and a second
+/// copy is what #468 and #482 were about.
 ///
 /// # Returns
-/// `None` IF the reference was null, IF the JVM would not give the text back,
-/// or IF the text contains an interior NUL and so cannot cross as a C string.
-///
-/// # Rely
-/// Clears any pending exception before returning `None`. Leaving one set is not
-/// a tidiness question: the caller goes on to read its other arguments and to
-/// allocate a string, and the specification forbids both while an exception is
-/// pending. `jni.rs`'s `read` makes the same guarantee for the same reason.
-///
-/// The reachable failure — a null reference — is refused by the crate before
-/// the JVM is asked, so it raises nothing and there is nothing to clear. The
-/// clear is for the arm where the JVM itself refuses, which no test can reach.
-pub(crate) fn owned(env: &mut JNIEnv<'_>, value: &JString<'_>) -> Option<CString> {
-    // Nullable in Kotlin compiles to a null jstring without complaint, and
-    // `get_string` on one raises rather than answering.
-    if value.is_null() {
-        return None;
-    }
-
-    let Ok(read) = env.get_string(value) else {
-        // Discarded deliberately: there is nothing to do about a failed clear,
-        // and the caller is already returning the absence.
-        let _ = env.exception_clear();
-        return None;
-    };
-
-    // `into` rather than `to_string_lossy`, which is what the two copies of
-    // this did. `JavaStr` derefs through `JNIStr` to `CStr`, so
-    // `to_string_lossy` reads the bytes as standard UTF-8 — and a JVM is
-    // permitted to write modified UTF-8, where a supplementary character is a
-    // surrogate pair that decode replaces with U+FFFD.
-    //
-    // Measured before changing it: ART does not exercise that permission, and
-    // an emoji survived the old route intact on a device. So this is not a
-    // corruption being fixed, it is one runtime's behaviour being stopped from
-    // being load-bearing. The conversion below tries modified UTF-8 and falls
-    // back to the standard kind, so it is right under either.
-    let text: String = read.into();
-    CString::new(text).ok()
-}
-
-/// Hand an envelope to Kotlin and free the Rust copy.
-///
-/// # Returns
-/// The envelope as a `jstring`, or null IF `raw` was null or the JVM would not
-/// allocate. A JVM that will not allocate a string is out of memory and there is
+/// Null IF the JVM would not allocate, which is an out-of-memory condition with
 /// nothing useful to say to it.
-///
-/// # Rely
-/// Frees `raw` on every path, so no caller keeps it. A Kotlin `String` is a copy
-/// by the time `new_string` returns, and leaving the Rust allocation would leak
-/// once per call.
-pub(crate) fn answered(env: &mut JNIEnv<'_>, raw: *mut c_char) -> jstring {
-    if raw.is_null() {
-        return std::ptr::null_mut();
-    }
-    let read = unsafe { CStr::from_ptr(raw) }
-        .to_str()
-        .ok()
-        .and_then(|json| env.new_string(json).ok());
-
-    // Before returning, and whether or not the conversion worked.
-    unsafe { crate::ffi_answer::wattrouter_string_free(raw) };
-
-    read.map_or(std::ptr::null_mut(), jni::objects::JString::into_raw)
+pub(crate) fn handed(env: &mut JNIEnv<'_>, json: String) -> jstring {
+    env.new_string(json)
+        .map_or(std::ptr::null_mut(), jni::objects::JString::into_raw)
 }
 
 /// Run `body`, answering `refusal` rather than unwinding into the JVM.

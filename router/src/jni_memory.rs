@@ -24,7 +24,7 @@
 
 use crate::ffi_memory::Memory;
 use crate::jni::read;
-use crate::jni_answer::{answered, guarded, owned};
+use crate::jni_answer::{guarded, handed};
 use jni::JNIEnv;
 use jni::objects::{JClass, JString};
 use jni::sys::{jlong, jstring};
@@ -100,23 +100,19 @@ pub extern "system" fn Java_com_getlora_wattrouter_Memory_nativeRemember<'a>(
     ts: jlong,
 ) -> jstring {
     guarded(std::ptr::null_mut(), || {
-        let (Some(session), Some(speaker), Some(text)) = (
-            owned(&mut env, &session),
-            owned(&mut env, &speaker),
-            owned(&mut env, &text),
+        // The null-handle check is here now. It was `memory.as_ref()` inside
+        // `ffi_memory`, which is where it had to be while that function took a
+        // pointer. The pointer stops at this file.
+        let (Some(memory), Some(session), Some(speaker), Some(text)) = (
+            unsafe { (handle as *const Memory).as_ref() },
+            read(&mut env, &session),
+            read(&mut env, &speaker),
+            read(&mut env, &text),
         ) else {
             return std::ptr::null_mut();
         };
 
-        answered(&mut env, unsafe {
-            crate::ffi_memory::wattrouter_memory_remember(
-                handle as *const Memory,
-                session.as_ptr(),
-                speaker.as_ptr(),
-                text.as_ptr(),
-                ts,
-            )
-        })
+        handed(&mut env, memory.remember(&session, &speaker, &text, ts))
     })
 }
 
@@ -133,16 +129,16 @@ pub extern "system" fn Java_com_getlora_wattrouter_Memory_nativeRecall<'a>(
     most: jlong,
 ) -> jstring {
     guarded(std::ptr::null_mut(), || {
-        let Some(query) = owned(&mut env, &query) else {
+        let (Some(memory), Some(query)) = (
+            unsafe { (handle as *const Memory).as_ref() },
+            read(&mut env, &query),
+        ) else {
             return std::ptr::null_mut();
         };
 
-        answered(&mut env, unsafe {
-            crate::ffi_memory::wattrouter_memory_recall(
-                handle as *const Memory,
-                query.as_ptr(),
-                usize::try_from(most.max(0)).unwrap_or(usize::MAX),
-            )
-        })
+        handed(
+            &mut env,
+            memory.recall(&query, usize::try_from(most.max(0)).unwrap_or(usize::MAX)),
+        )
     })
 }
