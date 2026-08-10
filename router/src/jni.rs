@@ -222,15 +222,13 @@ fn read(env: &mut JNIEnv<'_>, text: &JString<'_>) -> Option<String> {
 }
 
 /// The decision, and the chain standing behind it.
+///
+/// The two `CString`s this used to build were the whole of what the crossing
+/// cost: a copy of the request body and of the session, allocated so a pointer
+/// could be handed to a function in this process. `Router::decide` takes the
+/// `&str` the JVM already gave us.
 fn decide(router: &Router, body: &str, session: &str) -> Option<Decided> {
-    let raw = std::ffi::CString::new(body).ok()?;
-    let held = std::ffi::CString::new(session).ok()?;
-    let answer = unsafe {
-        crate::ffi::wattrouter_decide(router, raw.as_ptr(), std::ptr::null(), held.as_ptr())
-    };
-    if answer.tier == u8::MAX {
-        return None;
-    }
+    let answer = router.decide(body, None, session)?;
 
     Some(Decided {
         tier: name(crate::ffi::wattrouter_tier_name(answer.tier))?,
