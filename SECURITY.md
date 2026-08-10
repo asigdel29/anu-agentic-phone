@@ -123,6 +123,18 @@ why the switch does not work.
 One consequence worth stating: **you are trusting a build you made yourself from this source**,
 which is the right way round for something with these capabilities.
 
+That sentence is true of an APK and would stop being true on the phone
+[`docs/decisions/an-agentic-android.md`](docs/decisions/an-agentic-android.md) describes. A
+privileged application is not sideloaded, not built by the person running it, and holds the
+permissions an image allowlisted rather than ones they granted one at a time from a Settings
+screen. What is being trusted moves from a build to a whole operating system and the key that
+signed it, and the checklist screen this document keeps pointing at stops being where the
+capabilities are decided.
+
+Nothing here runs that way today and no such image exists. It is written down now because the
+sentence above is the kind that goes on being quoted after it stops being true, and because a
+document about what you are trusting should be the first to say when the answer changes.
+
 ## What has and has not been verified
 
 Nothing in this repository has run on a physical phone. Every claim above is a host suite or an
