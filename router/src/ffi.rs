@@ -18,12 +18,10 @@
 //! strings below are a translation they pay for rather than one anything asks
 //! for. Removing it is #565, not this file's business today.
 //!
-//! One entry point, not one per stage: exposing `classify`, `score` and `decide`
-//! separately would move their ordering into the caller, where it would drift
-//! from the server's.
-//!
-//! No panic may cross this boundary — that is undefined behaviour. Every entry
-//! point catches and reports failure as a value.
+//! No panic may cross this boundary — that is undefined behaviour. Every
+//! `wattrouter_*` entry point still catches and reports failure as a value.
+//! `Router::decide` no longer does: it is ordinary Rust with an ordinary
+//! caller, and `jni.rs` guards its own boundary already.
 
 use crate::backend::Backend;
 use crate::cache::DecisionCache;
@@ -65,25 +63,21 @@ pub(crate) struct ChainEntry {
     pub(crate) model: String,
 }
 
-/// A decision, by value so the caller frees nothing.
-#[repr(C)]
+/// A decision: which tier will serve a request, why, and how hard the prompt
+/// looked.
+///
+/// Absence is [`Option`] now rather than a `tier` of `255`. The sentinel existed
+/// because C has no way to answer "no decision" in a struct returned by value;
+/// it also meant one value stood for four different failures, and a caller could
+/// only tell it apart from a real decision by knowing to check.
 #[derive(Debug, Clone, Copy)]
 pub struct Decision {
-    /// Tier discriminant; `255` IF the call failed.
+    /// Tier discriminant.
     pub tier: u8,
-    /// Reason code; meaningless when `tier` is `255`.
+    /// Reason code.
     pub reason: u8,
     /// Difficulty score, or `-1.0` IF unscored.
     pub score: f32,
-}
-
-impl Decision {
-    /// Returned when a call could not decide: one field to check, nothing to free.
-    const FAILED: Self = Self {
-        tier: u8::MAX,
-        reason: u8::MAX,
-        score: -1.0,
-    };
 }
 
 /// A stable wire code, written out rather than taken from the discriminant (as
@@ -179,71 +173,64 @@ pub unsafe extern "C" fn wattrouter_free(router: *mut Router) {
     let _ = catch_unwind(AssertUnwindSafe(|| drop(unsafe { Box::from_raw(router) })));
 }
 
-/// Decide which tier serves a request: classify, score, apply policy, apply
-/// session stickiness. The server's ordering, because it is the server's code.
-///
-/// # Arguments
-/// * `body_json` — an OpenAI-shaped chat completion request.
-/// * `pin` — a tier name to force, or null.
-/// * `session` — a session identifier for stickiness, or null.
-///
-/// # Returns
-/// A [`Decision`], or `tier == 255` IF `router` was null, the body was not valid
-/// UTF-8 JSON, or the call panicked.
-///
-/// # Safety
-/// Pointers must be null or valid NUL-terminated strings outliving the call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn wattrouter_decide(
-    router: *const Router,
-    body_json: *const c_char,
-    pin: *const c_char,
-    session: *const c_char,
-) -> Decision {
-    catch_unwind(AssertUnwindSafe(|| {
-        let Some(router) = (unsafe { router.as_ref() }) else {
-            return Decision::FAILED;
-        };
-        let Some(raw) = (unsafe { borrow(body_json) }) else {
-            return Decision::FAILED;
-        };
-        let Ok(body) = serde_json::from_str::<serde_json::Value>(raw) else {
-            return Decision::FAILED;
-        };
+impl Router {
+    /// Decide which tier serves a request: classify, score, apply policy, apply
+    /// session stickiness. The server's ordering, because it is the server's
+    /// code.
+    ///
+    /// One entry point, not one per stage: exposing `classify`, `score` and
+    /// `decide` separately would move their ordering into the caller, where it
+    /// would drift from the server's.
+    ///
+    /// # Arguments
+    /// * `body_json` — an OpenAI-shaped chat completion request.
+    /// * `pin` — a tier name to force. Nothing on a phone supplies one; the
+    ///   server does, from a header, and the parameter stays so that both reach
+    ///   the policy the same way.
+    /// * `session` — a session identifier for stickiness.
+    ///
+    /// # Returns
+    /// [`None`] IF the body is not an OpenAI-shaped chat completion. That was
+    /// one of four conditions behind a single sentinel; the other three were
+    /// a null router and a body that was null or not UTF-8, none of which a
+    /// `&str` and a `&self` can be, and a panic, which now reaches the caller's
+    /// own guard instead of being reported here as an undecidable request.
+    pub(crate) fn decide(
+        &self,
+        body_json: &str,
+        pin: Option<&str>,
+        session: &str,
+    ) -> Option<Decision> {
+        let body = serde_json::from_str::<serde_json::Value>(body_json).ok()?;
+        let classified = classify(&body, pin);
 
-        let classified = classify(&body, unsafe { borrow(pin) });
-        let session = unsafe { borrow(session) }.unwrap_or_default();
-
-        let score = router.head.as_ref().and_then(|head| {
+        let score = self.head.as_ref().and_then(|head| {
             if classified.text.is_empty() {
                 return None;
             }
-            if let Some(cached) = router.cache.score_for(&classified.text) {
+            if let Some(cached) = self.cache.score_for(&classified.text) {
                 return Some(cached);
             }
-            let vector = router.embedder.embed(&classified.text).ok()?;
+            let vector = self.embedder.embed(&classified.text).ok()?;
             let score = head.score(&vector);
-            router.cache.remember_score(&classified.text, score);
+            self.cache.remember_score(&classified.text, score);
             Some(score)
         });
 
-        let mut decision = decide(&classified.signals, score, &router.thresholds);
+        let mut decision = decide(&classified.signals, score, &self.thresholds);
         if decision.reason != Reason::Pinned {
-            let effective = router.cache.escalate(session, decision.tier);
+            let effective = self.cache.escalate(session, decision.tier);
             if effective > decision.tier {
                 decision = crate::policy::Decision::new(effective, Reason::Sticky);
             }
         }
-        Decision {
+        Some(Decision {
             tier: decision.tier as u8,
             reason: reason_code(decision.reason),
             score: score.unwrap_or(-1.0),
-        }
-    }))
-    .unwrap_or(Decision::FAILED)
-}
+        })
+    }
 
-impl Router {
     /// `tier`'s chain, in the order it will be tried, or an empty slice IF
     /// `tier` names none.
     ///
@@ -318,7 +305,7 @@ mod tests {
     use crate::policy::Reason;
     use crate::testenv::with_env;
     use crate::tier::Tier;
-    use std::ffi::{CStr, CString};
+    use std::ffi::CStr;
 
     /// One router may be shared across threads, and nothing but this decides
     /// that claim: the cache is behind a mutex and everything else is read-only
@@ -353,17 +340,9 @@ mod tests {
     }
 
     fn decide(router: *mut Router, json: &str, pin: Option<&str>, sess: &str) -> Decision {
-        let body = CString::new(json).unwrap();
-        let pin = pin.map(|p| CString::new(p).unwrap());
-        let session = CString::new(sess).unwrap();
-        unsafe {
-            super::wattrouter_decide(
-                router,
-                body.as_ptr(),
-                pin.as_ref().map_or(std::ptr::null(), |p| p.as_ptr()),
-                session.as_ptr(),
-            )
-        }
+        unsafe { &*router }
+            .decide(json, pin, sess)
+            .expect("a decidable request")
     }
 
     #[test]
@@ -406,16 +385,21 @@ mod tests {
     }
 
     #[test]
-    fn hostile_input_returns_a_value_rather_than_unwinding() {
-        // A panic across the boundary is undefined behaviour; each of these
-        // must return the sentinel instead.
+    fn a_body_that_is_not_a_request_is_absence_rather_than_a_fault() {
+        // These had to answer with a sentinel, because a panic across a C
+        // boundary is undefined behaviour and there was no other way to say
+        // "no decision" in a struct returned by value. The answer is `None`
+        // now, which a caller cannot mistake for a tier.
+        //
+        // A null router is no longer one of the cases: `decide` takes `&self`,
+        // so the condition is unrepresentable rather than handled.
         with_router(|router| {
+            let router = unsafe { &*router };
             for bad in ["not json", ""] {
-                assert_eq!(decide(router, bad, None, "").tier, u8::MAX, "for {bad:?}");
+                assert!(router.decide(bad, None, "").is_none(), "for {bad:?}");
             }
         });
-        assert_eq!(decide(std::ptr::null_mut(), "{}", None, "").tier, u8::MAX);
-        // Freeing null must also be a no-op rather than a fault.
+        // Freeing null must still be a no-op rather than a fault.
         unsafe { super::wattrouter_free(std::ptr::null_mut()) };
     }
 
@@ -435,7 +419,7 @@ mod tests {
             let name = unsafe { CStr::from_ptr(super::wattrouter_tier_name(tier as u8)) };
             assert_eq!(name.to_str().unwrap(), tier.name());
         }
-        assert!(super::wattrouter_tier_name(Decision::FAILED.tier).is_null());
+        assert!(super::wattrouter_tier_name(u8::MAX).is_null());
     }
 
     #[test]
@@ -445,7 +429,7 @@ mod tests {
             let name = unsafe { CStr::from_ptr(super::wattrouter_reason_name(code)) };
             assert_eq!(name.to_str().unwrap(), reason.label());
         }
-        assert!(super::wattrouter_reason_name(Decision::FAILED.reason).is_null());
+        assert!(super::wattrouter_reason_name(u8::MAX).is_null());
     }
 
     #[test]
