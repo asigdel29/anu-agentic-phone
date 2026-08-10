@@ -14,6 +14,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 private class Counting : Phone {
+    override suspend fun attached() = true
     var acts = 0
     var reads = 0
 
