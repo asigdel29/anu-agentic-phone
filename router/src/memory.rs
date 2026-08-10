@@ -1,4 +1,4 @@
-//! `memory.rs` — the horizon, in public SQL.
+//! `memory.rs`: the horizon, in public SQL.
 //!
 //! History
 //!   2026-08-08  A. Sigdel  Created.
@@ -50,7 +50,7 @@ pub struct Moved {
 /// The schema the archive needs, which zeromem does not know about.
 ///
 /// Separate tables rather than a flag on the live ones, which would still be
-/// loaded by `SELECT ... FROM turns` — the whole thing being avoided.
+/// loaded by `SELECT ... FROM turns`, which is the whole thing being avoided.
 const ARCHIVE: &str = "
     CREATE TABLE IF NOT EXISTS archived_turns (
         id INTEGER PRIMARY KEY,
@@ -70,11 +70,11 @@ const ARCHIVE: &str = "
 /// Move everything past the horizon into the archive.
 ///
 /// # Arguments
-/// * `path` — the memory database, WHERE it may not exist yet.
-/// * `keep` — how many of the most recent turns `zeromem` should still see.
+/// * `path`: the memory database, WHERE it may not exist yet.
+/// * `keep`: how many of the most recent turns `zeromem` should still see.
 ///
 /// # Returns
-/// What moved, and `Moved::default()` when there was nothing to do — no database
+/// What moved, and `Moved::default()` when there was nothing to do: no database
 /// or fewer turns than the horizon, both ordinary.
 ///
 /// # Errors

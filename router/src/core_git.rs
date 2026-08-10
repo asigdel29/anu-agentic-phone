@@ -1,4 +1,4 @@
-//! `core_git.rs` — the git operations, as an envelope a model can read.
+//! `core_git.rs`: the git operations, as an envelope a model can read.
 //!
 //! History
 //!   2026-08-08  A. Sigdel  Created.
@@ -76,7 +76,7 @@ pub(crate) fn head(path: &Path) -> String {
 /// # Returns
 /// An owned JSON string to pass to [`wattrouter_string_free`], carrying `ok` with
 /// the head, `staged` and `unstaged` as `{path, kind}`, and `untracked` and
-/// `conflicted` as paths — or `error` with the reason. Null on the terms
+/// `conflicted` as paths, or `error` with the reason. Null on the terms
 /// [`wattrouter_git_head`] states.
 ///
 /// # Safety
@@ -88,7 +88,7 @@ pub(crate) fn status(path: &Path) -> String {
 /// Stage paths, and answer with the status that results.
 ///
 /// # Arguments
-/// * `paths_json` — a JSON array of strings relative to the repository root,
+/// * `paths_json`: a JSON array of strings relative to the repository root,
 ///   WHERE a directory stages what is under it. JSON rather than a C array
 ///   because the model writes these as JSON and the tool decodes them there;
 ///   rebuilding that as `char **` only to parse it back is three shapes for one
@@ -96,7 +96,7 @@ pub(crate) fn status(path: &Path) -> String {
 ///
 /// # Returns
 /// An owned JSON string to pass to [`wattrouter_string_free`], carrying `ok` with
-/// the status after staging, or `error` — which names the missing path IF one is
+/// the status after staging, or `error`, which names the missing path IF one is
 /// missing, so a model that misspelt one of four is told which. Null on the terms
 /// [`wattrouter_git_head`] states.
 ///
@@ -238,7 +238,7 @@ mod tests {
 
     #[test]
     fn paths_that_are_not_a_json_array_say_what_was_expected() {
-        // Not a git failure, so it must not read as one — a model told "git:"
+        // Not a git failure, so it must not read as one: a model told "git:"
         // goes looking at the repository rather than at what it wrote.
         let (scratch, _repo) = repository("git-add-bad-json");
 

@@ -1,4 +1,4 @@
-//! upstream.rs — forwarding a request to the provider.
+//! upstream.rs: forwarding a request to the provider.
 //!
 //! History
 //!   2026-08-05  A. Sigdel  Created.
@@ -8,7 +8,7 @@
 //!   `Upstream`       The client, its pool, and the fallback chain.
 //! The response body is never buffered. This sits between the agent and the
 //! model, so anything held here lands directly on time-to-first-token. Buffering
-//! would turn a streaming response into a batch one, and would do so silently —
+//! would turn a streaming response into a batch one, and would do so silently:
 //! everything still works, only slower. Hence a test asserting the first chunk
 //! arrives well before the last.
 
@@ -74,7 +74,7 @@ impl Upstream {
     }
 
     /// Open a connection ahead of the first real request, which would otherwise
-    /// pay for DNS, TCP and TLS — a visible fraction of a second on a small board.
+    /// pay for DNS, TCP and TLS, a visible fraction of a second on a small board.
     ///
     /// # Rely
     /// Called at startup, after binding. Failure is logged and ignored: an
@@ -97,8 +97,8 @@ impl Upstream {
     /// the chosen model since the client asked for `auto`.
     ///
     /// # Arguments
-    /// * `chain` — models to try in order, WHERE `chain` is non-empty.
-    /// * `body` — taken by value and mutated in place; the caller has no further
+    /// * `chain`: models to try in order, WHERE `chain` is non-empty.
+    /// * `body`: taken by value and mutated in place; the caller has no further
     ///   use for it.
     ///
     /// # Returns
@@ -329,7 +329,7 @@ mod tests {
 
         assert!(
             first_at < total / 2,
-            "first chunk at {first_at:?} of {total:?} total — the body is being buffered"
+            "first chunk at {first_at:?} of {total:?} total, so the body is being buffered"
         );
     }
 }

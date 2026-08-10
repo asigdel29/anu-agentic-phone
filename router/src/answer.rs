@@ -1,4 +1,4 @@
-//! `answer.rs` — the envelope git and memory answer with.
+//! `answer.rs`: the envelope git and memory answer with.
 //!
 //! History
 //!   2026-08-08  A. Sigdel  Created, from core_git.rs, when memory became the

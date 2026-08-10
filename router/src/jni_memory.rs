@@ -1,4 +1,4 @@
-//! `jni_memory.rs` — the memory store, reached from Kotlin.
+//! `jni_memory.rs`: the memory store, reached from Kotlin.
 //!
 //! History
 //!   2026-08-09  A. Sigdel  Created.
@@ -11,7 +11,7 @@
 //! reach the store by the same path and a change to one is a change to both.
 //!
 //! A store is a handle with a lifetime, which is the second thing Kotlin owns
-//! and must free — `Core` was the first, and `Memory.kt` copies its shape: a
+//! and must free; `Core` was the first, and `Memory.kt` copies its shape: a
 //! private constructor over a `Long`, `AutoCloseable`, an idempotent `close`.
 //!
 //! Every allocating call here frees the Rust string before returning. A Kotlin
@@ -20,7 +20,7 @@
 //!
 //! `owned`, `answered` and `guarded` are `jni_answer.rs`'s. The copy that used
 //! to be at the bottom of this file was identical to `jni_git.rs`'s and neither
-//! applied the rules `jni.rs` states — see #468 and #482.
+//! applied the rules `jni.rs` states; see #468 and #482.
 
 use crate::core_memory::Memory;
 use crate::jni::read;
@@ -48,8 +48,8 @@ pub extern "system" fn Java_com_getlora_wattrouter_Memory_nativeOpen<'a>(
 
         // Negative keep would wrap into an enormous usize and bound nothing,
         // which is the one way this could quietly do the opposite of its job.
-        // The saturation beside it cannot fire on any ABI this ships for —
-        // `abiFilters` is arm64-v8a alone — and is written for the one it does
+        // The saturation beside it cannot fire on any ABI this ships for, since
+        // `abiFilters` is arm64-v8a alone, and is written for the one it does
         // not, rather than left to be found later and mistaken for a hazard.
         let keep = usize::try_from(keep.max(0)).unwrap_or(usize::MAX);
 

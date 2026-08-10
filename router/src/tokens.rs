@@ -1,4 +1,4 @@
-//! tokens.rs — who is allowed to ask.
+//! tokens.rs: who is allowed to ask.
 //!
 //! History
 //!   2026-08-09  A. Sigdel  Created with #533.
@@ -10,7 +10,7 @@
 //!
 //! `SECURITY.md` called an exposed router out of scope, and that was right while
 //! it ran on a board on a desk. It stops being right the moment a phone talks to
-//! it over the internet — the application ships to other people, so the provider
+//! it over the internet: the application ships to other people, so the provider
 //! key cannot be in the APK, so this holds it, so this is reachable.
 //!
 //! A trait rather than a set, and the reason is the next unit rather than
@@ -63,7 +63,7 @@ impl Listed {
     ///
     /// Empty when the variable is absent, and that is a refusal rather than an
     /// opening: a server with no tokens answers nothing on `/v1`, which is
-    /// noisy and safe. The alternative — no tokens meaning no checking — is the
+    /// noisy and safe. The alternative, no tokens meaning no checking, is the
     /// configuration mistake that puts an unmetered proxy to a paid provider on
     /// the internet.
     ///
@@ -156,7 +156,7 @@ pub fn presented(header: Option<&str>) -> Option<&str> {
 ///
 /// The hash rather than the token, because that is what the database holds and
 /// what arrives here. A token is shown once, when it is issued, and nothing can
-/// recover it afterwards — so a leaked dump is not a leaked account.
+/// recover it afterwards, so a leaked dump is not a leaked account.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Issued {
     /// Lowercase hex of the SHA-256 of the token.
@@ -178,7 +178,7 @@ pub enum Refreshed {
 ///
 /// The shape [`Tokens`] asks for. `caller` is on the request path before a body
 /// is read, and its documentation says an implementation that blocks belongs
-/// behind a cache — so this is that cache, and a lookup is a hash and a map read
+/// behind a cache, so this is that cache, and a lookup is a hash and a map read
 /// with no I/O at all.
 ///
 /// **Revocation takes up to one refresh interval.** That is the price of the
@@ -206,7 +206,7 @@ impl Cached {
     /// everybody out; the cache is still the best information available, and the
     /// alternative is an outage caused by a network that recovered on its own.
     ///
-    /// A first load that fails therefore leaves it empty, and empty is nobody —
+    /// A first load that fails therefore leaves it empty, and empty is nobody:
     /// the rule [`Listed`] follows for an absent variable, and for the same
     /// reason: a server that answers nothing is noisy and safe, where one that
     /// cannot tell whether it checked is not.
@@ -284,8 +284,8 @@ impl Tokens for Cached {
 /// Lowercase hex of the SHA-256 of a token.
 ///
 /// Not a password KDF. A token is thirty-two random bytes this server issued, so
-/// there is no dictionary to run against it and nothing a work factor would buy
-/// — it would cost every request the time it is meant to cost an attacker.
+/// there is no dictionary to run against it and nothing a work factor would
+/// buy: it would cost every request the time it is meant to cost an attacker.
 #[must_use]
 pub fn hashed(token: &str) -> String {
     use sha2::Digest as _;
