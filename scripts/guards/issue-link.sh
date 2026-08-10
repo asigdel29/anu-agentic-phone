@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# issue-link.sh — require that a pull request references an issue.
+# issue-link.sh: require that a pull request references an issue.
 #
 # History
 #   2026-08-05  A. Sigdel  Created.
@@ -25,7 +25,7 @@ branch="${PR_HEAD_REF:-}"
 
 # The one exemption, and it is narrow on purpose. A bot cannot open an issue
 # first, and inventing one per dependency bump is worse than not having the
-# rule — it would be an issue whose whole content is the pull request beside it.
+# rule: it would be an issue whose whole content is the pull request beside it.
 #
 # Only this guard. pr-size still applies and should: it already excludes
 # lockfiles, so a Cargo bump is a few lines of a manifest, and a dependency

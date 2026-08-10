@@ -7,8 +7,8 @@
 # Everything here is deliberate; docs/decisions/INDEX.md routes to the reasoning.
 
 model:
-  # The router decides. Pin a tier by name — heavy, code, long, mid, cheap,
-  # aux — only to override a decision that came out wrong.
+  # The router decides. Pin a tier by name (heavy, code, long, mid, cheap,
+  # aux) only to override a decision that came out wrong.
   default: "auto"
   provider: "neuralwatt"
   base_url: "http://127.0.0.1:8080/v1"
@@ -31,7 +31,7 @@ providers:
 memory:
   memory_enabled: true
   # Retrieval and indexing make no LLM calls, so remembering costs no tokens.
-  # Swap this line for a bundled provider if zeromem misbehaves — nothing else
+  # Swap this line for a bundled provider if zeromem misbehaves, and nothing else
   # in the stack depends on it.
   provider: zeromem
   write_approval: false

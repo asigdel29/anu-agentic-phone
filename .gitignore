@@ -16,8 +16,8 @@ venv/
 #
 # The bge-small ONNX model is ~130MB and is fetched on first run into the cache
 # directory shared with zeromem; it is never committed. `weights.json` IS
-# committed — it is 384 floats plus a bias, and the router cannot route without
-# it — but the intermediate embedding matrices used to fit it are not.
+# committed, being 384 floats plus a bias that the router cannot route without,
+# but the intermediate embedding matrices used to fit it are not.
 /train/.cache/
 /train/embeddings-*.npy
 *.onnx
@@ -47,7 +47,7 @@ venv/
 
 # The routing core, compiled for iOS. 84 MB of build output, reproducible from
 # the Rust beside it by scripts/build-ios-core.sh, and rebuilt on every change to
-# the core — a repository carrying it would carry those bytes again each time.
+# the core, so a repository carrying it would carry those bytes again each time.
 ios/WattRouterFFI.xcframework/
 ios/.build/
 

@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# lib.sh — what every guard needs to agree on before it can judge anything.
+# lib.sh: what every guard needs to agree on before it can judge anything.
 #
 # History
 #   2026-08-07  A. Sigdel  Created, from the copies in pr-size.sh and slopgate.sh.
@@ -14,7 +14,7 @@
 # registry.json already describes it once for both guards that use it, and it was
 # the code that kept two copies.
 #
-# That is not a hypothetical cost. The copies had already drifted — pr-size.sh
+# That is not a hypothetical cost. The copies had already drifted: pr-size.sh
 # was still using unanchored pathspecs after slopgate.sh learned it had to anchor
 # them, so the two guards disagreed about what the diff was whenever either ran
 # from a subdirectory.
@@ -58,7 +58,7 @@ guard_pr_text() {
 #
 # `top` anchors each at the repository root. Without it a pathspec is read
 # relative to the working directory, so a guard run from anywhere but the root
-# excludes nothing — silently, since a pathspec that matches no file is not an
+# excludes nothing, silently, since a pathspec that matches no file is not an
 # error.
 readonly GUARD_EXCLUDES=(
     ':(exclude,top)*.lock'

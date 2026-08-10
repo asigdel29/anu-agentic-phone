@@ -1,4 +1,4 @@
-# ci.yml — formatting, lints and tests for every pull request.
+# ci.yml: formatting, lints and tests for every pull request.
 #
 # History
 #   2026-08-05  A. Sigdel  Created with the static checks: formatting and lints.
@@ -111,7 +111,7 @@ jobs:
           #
           # -x follows a sourced file, which a guard now has. Without it the
           # source is reported unresolved and every variable the sourced file
-          # defines reads as undefined — noise that would push somebody towards
+          # defines reads as undefined, which is noise that would push somebody towards
           # suppressing the check rather than fixing it.
           git ls-files -z '*.sh' | xargs -0 -r shellcheck -x --severity=style
 
@@ -205,7 +205,7 @@ jobs:
   # is the difference between a 1m25s build and a 15m one.
   #
   # WATTROUTER_BENCH_QUICK trims the sweeps to what the gates need. It reduces
-  # levels and waiting, never the samples within a level — the benches document
+  # levels and waiting, never the samples within a level; the benches document
   # why, having once reported connection warmup as a throughput collapse.
   perf:
     name: Performance gates
@@ -237,7 +237,7 @@ jobs:
   # the emulator would run under full QEMU and never meet the 300s boot limit
   # scripts/test-android.sh allows. macos-latest is Apple silicon and could, at
   # several minutes a run. Until that trade is worth making, the only suite that
-  # can load the library stays a local gate — android/AGENTS.md says so, and it
+  # can load the library stays a local gate. android/AGENTS.md says so, and it
   # is why a pull request there has to name which of the two it ran.
   android:
     name: Android
@@ -252,8 +252,8 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      # There is no wrapper here — a wrapper is a jar, and this repository does
-      # not track binaries it cannot review — so the version is named rather
+      # There is no wrapper here (a wrapper is a jar, and this repository does
+      # not track binaries it cannot review) so the version is named rather
       # than read out of a properties file, and it is the full release name:
       # `9.7` is not a version this resolves, `9.7.0` is.
       #

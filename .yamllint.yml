@@ -3,7 +3,7 @@
 # History
 #   2026-08-05  A. Sigdel  Created.
 #
-# Workflow YAML is wide by nature — expression syntax does not wrap — so the line
+# Workflow YAML is wide by nature, since expression syntax does not wrap, so the line
 # limit is relaxed rather than fought. Everything else is left strict.
 
 extends: default
@@ -23,8 +23,8 @@ rules:
 
 # Build output, not sources. Gradle writes YAML nothing here wrote and nothing
 # here can fix, and a local run
-# that drowns in it is a run people stop doing. CI never sees these — it builds
-# from a fresh checkout — so this only makes the local gate match the one in CI.
+# that drowns in it is a run people stop doing. CI never sees these, since it
+# builds from a fresh checkout, so this only makes the local gate match CI.
 ignore: |
   .venv/
   router/target/

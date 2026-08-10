@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pr-size.sh — cap a pull request at 300 changed lines.
+# pr-size.sh: cap a pull request at 300 changed lines.
 #
 # History
 #   2026-08-05  A. Sigdel  Created.
