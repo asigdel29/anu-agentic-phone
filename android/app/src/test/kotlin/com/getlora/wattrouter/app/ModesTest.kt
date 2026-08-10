@@ -1,10 +1,10 @@
-// ModesTest.kt — what a saved mode reads back as, and what is offered.
+// ModesTest.kt: what a saved mode reads back as, and what is offered.
 //
 // History
 //   2026-08-10  A. Sigdel  Created with #558.
 //
 // On the JVM. The store itself is SharedPreferences and needs a device; what
-// does not is the decision either side of it — what an unknown string means,
+// does not is the decision either side of it: what an unknown string means,
 // and which modes a person is shown. Both are the kind of thing that looks
 // obviously right and is wrong on an upgrade.
 
@@ -44,7 +44,7 @@ class ModesTest {
     @Test
     fun planIsNotOfferedWhileItDoesNothing() {
         // It would behave exactly like Auto, and a picker with a setting that
-        // does nothing teaches somebody the picker does not work — which is a
+        // does nothing teaches somebody the picker does not work, which is a
         // lesson they keep after it starts working.
         assertTrue("$shown", Autonomy.PLAN !in shown)
         assertEquals(listOf(Autonomy.AUTO, Autonomy.ASK), shown)

@@ -1,4 +1,4 @@
-// RecollectionTest.kt — reading what the store answered.
+// RecollectionTest.kt: reading what the store answered.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.

@@ -1,4 +1,4 @@
-// DecisionTest.kt — reading the envelope the core answers with.
+// DecisionTest.kt: reading the envelope the core answers with.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
@@ -37,7 +37,7 @@ class DecisionTest {
 
     @Test
     fun anAbsentScoreIsAbsentRatherThanZero() {
-        // The unscored path — a heuristic decision never reaches the head. #314
+        // The unscored path: a heuristic decision never reaches the head. #314
         // made the core omit the key rather than send null, and zero here would
         // be a number somebody compares against a threshold.
         val read = Decision.from(
@@ -50,7 +50,7 @@ class DecisionTest {
 
     @Test
     fun aLocalStepIsToldFromARemoteOne() {
-        // Nothing runs locally yet — #188 is the checklist for when one does —
+        // Nothing runs locally yet (#188 is the checklist for when one does)
         // but a walk has to skip local steps rather than dial them.
         val read = Decision.from(
             """

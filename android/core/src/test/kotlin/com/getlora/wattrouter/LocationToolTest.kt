@@ -1,4 +1,4 @@
-// LocationToolTest.kt — how much of a fix to claim, and how old it is.
+// LocationToolTest.kt: how much of a fix to claim, and how old it is.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -59,7 +59,7 @@ class LocationToolTest {
     @Test
     fun aCoarseFixIsNotPrintedAsADoorstep() {
         // The decision this file exists for. Coarse is what AndroidAsking asks
-        // for, so a two-kilometre circle is the normal case — rendered to six
+        // for, so a two-kilometre circle is the normal case, and rendered to six
         // places it reads as a street address and the model repeats it.
         assertEquals(1, LocationTool.decimalsFor(2_000f))
         assertEquals(2, LocationTool.decimalsFor(900f))

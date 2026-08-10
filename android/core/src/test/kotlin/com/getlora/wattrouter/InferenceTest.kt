@@ -1,10 +1,10 @@
-// InferenceTest.kt — the seam a model's answer arrives through.
+// InferenceTest.kt: the seam a model's answer arrives through.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
 //
 // On the JVM. There is no model here and no network: what these check is the
-// shape a chain walk will read — which failures are worth another model, and
+// shape a chain walk will read: which failures are worth another model, and
 // that a cold flow asks nothing until it is collected.
 
 package com.getlora.wattrouter

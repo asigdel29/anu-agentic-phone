@@ -1,4 +1,4 @@
-// AndroidWhereaboutsDeviceTest.kt — coarse permission is enough for this call.
+// AndroidWhereaboutsDeviceTest.kt: coarse permission is enough for this call.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -44,7 +44,7 @@ class AndroidWhereaboutsDeviceTest {
         // claim is that the call completes: the provider chosen is one coarse
         // permission may read, the callback resolves the coroutine, and nothing
         // in the framework objected. The timeout is the assertion that it
-        // resolves at all — getCurrentLocation that never calls back would
+        // resolves at all: getCurrentLocation that never calls back would
         // otherwise hang this suite rather than fail it.
         //
         // A block rather than an expression body: `= runBlocking { … }` returns

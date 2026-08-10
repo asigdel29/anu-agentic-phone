@@ -1,4 +1,4 @@
-// HandlesTest.kt — what survives the wire, and what is refused at it.
+// HandlesTest.kt: what survives the wire, and what is refused at it.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -67,7 +67,7 @@ class HandlesTest {
 
     @Test
     fun anIndexThatIsNotOneIsRefused() {
-        // Assembled with a default instead, this would resolve — against the
+        // Assembled with a default instead, this would resolve, against the
         // first of however many nodes matched.
         assertNull(decode("h:send|button|Send||"))
         assertNull(decode("h:send|button|Send||first"))
@@ -86,7 +86,7 @@ class HandlesTest {
 
     @Test
     fun aHandleThatNamesNothingStillTravels() {
-        // encode does not judge — isFindable is resolve's refusal to make, and
+        // encode does not judge: isFindable is resolve's refusal to make, and
         // making it twice would put the same rule in two places.
         val nothing = Handle(role = "button", siblingIndex = 4)
 

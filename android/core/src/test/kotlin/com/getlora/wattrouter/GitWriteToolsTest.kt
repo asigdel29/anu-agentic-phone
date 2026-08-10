@@ -1,4 +1,4 @@
-// GitWriteToolsTest.kt — what the two write tools refuse, and what they say.
+// GitWriteToolsTest.kt: what the two write tools refuse, and what they say.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
