@@ -1,4 +1,4 @@
-// Viewing.kt — reading the screen and aiming at it through one counter.
+// Viewing.kt: reading the screen and aiming at it through one counter.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -12,7 +12,7 @@
 // an action against a reading that has moved is refused rather than attempted.
 //
 // Aiming fetches the tree and notes it, which is what advances the counter if
-// the shape moved — so the check is not a separate call somebody can forget, and
+// the shape moved, so the check is not a separate call somebody can forget, and
 // there is no window between checking and acting.
 //
 // And a refusal carries the new screen. A bare "that is stale" costs a round
@@ -40,8 +40,8 @@ sealed interface Aim {
      * This is still the screen, and the handle names nothing on it.
      *
      * Reachable only through a content change: a node disappearing moves the
-     * shape, and that is [Moved]. What lands here is a recycled list row —
-     * #405's case — or a handle the model invented.
+     * shape, and that is [Moved]. What lands here is a recycled list row,
+     * #405's case, or a handle the model invented.
      */
     data class Lost(val resolution: Resolution) : Aim
 }
