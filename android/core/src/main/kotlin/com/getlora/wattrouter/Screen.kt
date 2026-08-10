@@ -1,4 +1,4 @@
-// Screen.kt — what is on screen, in a shape a test can hold.
+// Screen.kt: what is on screen, in a shape a test can hold.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -9,8 +9,8 @@
 //   Handle  A recipe for finding that thing again.
 //
 // AccessibilityNodeInfo is final, has no public constructor, and comes from a
-// service. Written against it, every rule in Phase 3 — the handle, the pruning,
-// the resolution, the refusals — would be checkable only on a device. This is
+// service. Written against it, every rule in Phase 3 (the handle, the pruning,
+// the resolution, the refusals) would be checkable only on a device. This is
 // the seam Conversation.kt took for the same reason, and the stakes are higher:
 // this is the largest body of rules in the milestone.
 //
@@ -24,7 +24,7 @@ package com.getlora.wattrouter
  * One thing on screen.
  *
  * Deliberately smaller than what the framework offers. Everything here is
- * either part of a handle, part of a pruning decision, or a refusal — and a
+ * either part of a handle, part of a pruning decision, or a refusal, and a
  * field carried without a use is a field the conformance has to keep correct
  * for nobody.
  */
@@ -59,7 +59,7 @@ interface Node {
 
     /**
      * Whether the framework marks this a password field. Never read, and the
-     * safety layer refuses it rather than the renderer omitting it — a rule
+     * safety layer refuses it rather than the renderer omitting it: a rule
      * that lives where the value is used is one the next reader moves.
      */
     val isPassword: Boolean
@@ -74,7 +74,7 @@ interface Node {
  * A resource id as a handle records it.
  *
  * `com.example.app:id/send_button` and `send_button` are the same node, and the
- * prefix changes when a screen appears inside another app's flow — a handle
+ * prefix changes when a screen appears inside another app's flow, so a handle
  * keeping the whole thing fails to match the node it describes.
  *
  * @return the name after the last `/`, or null when there was no id. Blank is
@@ -100,7 +100,7 @@ data class Handle(
      * Where it sat among its siblings.
      *
      * Recorded whether or not it is needed. It costs nothing and it is the only
-     * field separating two identical rows in a list — which is what a list is,
+     * field separating two identical rows in a list, which is what a list is,
      * so this is the common case rather than the corner one.
      */
     val siblingIndex: Int = 0,

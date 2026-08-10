@@ -1,4 +1,4 @@
-// Handles.kt — a handle as the model reads and writes one.
+// Handles.kt: a handle as the model reads and writes one.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -13,7 +13,7 @@
 // only when the shape moves, so a scrolled list keeps its generation, and a
 // table looked up in the current reading answers 3 with whatever scrolled into
 // row three. Closing that means keying the table by which read it came from,
-// keeping several readings alive, and deciding when to drop them — three pieces
+// keeping several readings alive, and deciding when to drop them: three pieces
 // of state to get right inside a service the system restarts.
 //
 // Carrying the recipe needs none of it, and every safety property already
@@ -49,7 +49,7 @@ fun encode(handle: Handle): String = MARK + listOf(
  *
  * @return null for anything that is not one this build wrote: a missing mark,
  *   the wrong number of fields, an index that is not a number. Strict on
- *   purpose — a handle assembled from a malformed token with defaults filled in
+ *   purpose: a handle assembled from a malformed token with defaults filled in
  *   would go on to resolve against something.
  */
 fun decode(token: String?): Handle? {

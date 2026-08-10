@@ -1,4 +1,4 @@
-// GitStatus.kt — what the repository answered, as values and as lines.
+// GitStatus.kt: what the repository answered, as values and as lines.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -59,7 +59,7 @@ data class GitStatus(
          * Read an envelope into a status, or into the words that explain it.
          *
          * @return the status, or the error's own message. Null only when there
-         *   was no envelope at all — the runtime failing to allocate, which is
+         *   was no envelope at all, the runtime failing to allocate, which is
          *   not something the core said and not something to quote.
          */
         fun from(envelope: String?): Result<GitStatus>? {
