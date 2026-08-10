@@ -271,6 +271,15 @@ jobs:
         working-directory: android
         run: gradle test --rerun-tasks --console=plain
 
+      # The one lint the `lint` job does not call, because that job has no Java,
+      # no Gradle and no SDK and this reads a resolved dependency graph. Running
+      # it there would exit 2 on every run, which is a check nobody keeps.
+      #
+      # After `gradle test` rather than before, so a compile failure reports as a
+      # compile failure rather than as a graph that would not resolve.
+      - name: no Play Services
+        run: bash scripts/lint/no-google.sh
+
   # One check for branch protection to require, so adding a job does not mean
   # editing the ruleset. Skipped is a pass: a job guarded off by `detect` has
   # nothing to say.
