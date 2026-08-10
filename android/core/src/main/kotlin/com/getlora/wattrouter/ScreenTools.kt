@@ -401,7 +401,7 @@ class TapTool(private val phone: Phone) : Tool {
         val seen = decodeSeen(Tools.field(arguments, "screen"))
             ?: return "that is not a screen id. Use the one at the top of a read_screen answer."
 
-        return say(phone, phone.tap(handle, seen))
+        return say(phone, "tapped", phone.tap(handle, seen))
     }
 
     companion object {
@@ -417,25 +417,31 @@ class TapTool(private val phone: Phone) : Tool {
          * Called from the turn loop, straight after the action it describes.
          * Suspends only on the paths with no reading to show, where it asks
          * [Phone.attached] — which reads nothing and touches no tree.
+         *
+         * @param did what the tool actually did, as a past participle — the
+         *   same word reads in all three sentences below. Not defaulted: five
+         *   tools share this function and a default is how four of them came to
+         *   report that they had tapped something (#518). A caller that has to
+         *   supply the word cannot forget to.
          */
-        suspend fun say(phone: Phone, done: Done?): String = when (done) {
+        suspend fun say(phone: Phone, did: String, done: Done?): String = when (done) {
             null -> ReadScreenTool.unreadable(phone.attached())
 
             is Done.Did ->
-                "tapped. The screen may still be settling; this is it now.\n\n" +
+                "$did. The screen may still be settling; this is it now.\n\n" +
                     after(phone, done.now)
 
-            // Not a failure of the tap, and worth wording as an instruction
+            // Not a failure of the action, and worth wording as an instruction
             // rather than an error: the answer already contains what to do.
             is Done.Moved ->
                 "the screen changed before that could happen, so nothing was " +
-                    "tapped. This is what is there now.\n\n" +
+                    "$did. This is what is there now.\n\n" +
                     after(phone, done.now)
 
-            is Done.Lost -> lost(done.resolution)
+            is Done.Lost -> lost(did, done.resolution)
 
             is Done.Refused ->
-                "that is on the screen and could not be tapped: ${done.why}"
+                "that is on the screen and could not be $did: ${done.why}"
         }
 
         /**
@@ -449,10 +455,10 @@ class TapTool(private val phone: Phone) : Tool {
             now?.let { ReadScreenTool.describe(it) }
                 ?: ReadScreenTool.unreadable(phone.attached())
 
-        private fun lost(resolution: Resolution): String = when (resolution) {
+        private fun lost(did: String, resolution: Resolution): String = when (resolution) {
             is Resolution.Ambiguous ->
                 "that handle matches ${resolution.count} things on the screen, so " +
-                    "nothing was tapped. Read the screen again and use a handle " +
+                    "nothing was $did. Read the screen again and use a handle " +
                     "that names one of them."
 
             Resolution.Unusable ->
@@ -502,7 +508,7 @@ class TypeTextTool(private val phone: Phone) : Tool {
             return "no text was given. To empty the field, pass an empty string."
         }
 
-        return TapTool.say(phone, phone.type(handle, seen, text))
+        return TapTool.say(phone, "typed", phone.type(handle, seen, text))
     }
 }
 
@@ -528,7 +534,7 @@ class NavigateTool(private val phone: Phone) : Tool {
         val way = Way.of(Tools.field(arguments, "where"))
             ?: return "there is no button called that. Try one of: ${Way.words}."
 
-        return TapTool.say(phone, phone.navigate(way))
+        return TapTool.say(phone, "pressed", phone.navigate(way))
     }
 }
 
@@ -561,7 +567,7 @@ class ScrollTool(private val phone: Phone) : Tool {
         val onward = Onward.of(Tools.field(arguments, "direction"))
             ?: return "there is no direction called that. Try one of: ${Onward.words}."
 
-        return TapTool.say(phone, phone.scroll(handle, seen, onward))
+        return TapTool.say(phone, "scrolled", phone.scroll(handle, seen, onward))
     }
 }
 
@@ -601,7 +607,7 @@ class OpenAppTool(private val phone: Phone) : Tool {
                     found.joinToString(", ") { it.label } +
                     ". Name one of those exactly."
             } else {
-                TapTool.say(phone, phone.open(found.single().packageName))
+                TapTool.say(phone, "opened", phone.open(found.single().packageName))
             }
         }
     }
