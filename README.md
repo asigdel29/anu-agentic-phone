@@ -12,6 +12,20 @@ It does that through an accessibility service, which means it can read the conte
 applications. That is the whole of what it is for and the whole of why
 [`SECURITY.md`](SECURITY.md) is worth reading before you install it.
 
+## Why this shape
+
+An app that integrates with five services can do five things. An agent that operates the phone
+can do whatever the phone can do, and the phone can already do everything you bought it for.
+That is the whole bet, and everything below is a consequence of it: the tools are a screen
+reader and a set of taps rather than an API per service, the model gets a handle rather than a
+coordinate, and the hard part is what to refuse rather than what to integrate.
+
+The bet has a cost, and it is not incidental. Android grants an ordinary application only so
+much, and every constraint the agent works around today is the same constraint restated:
+[`docs/decisions/an-agentic-android.md`](docs/decisions/an-agentic-android.md) is what that
+would take to remove, what it would cost, and which three of those constraints turn out not to
+need removing at all.
+
 ## What it can do today
 
 Sixteen tools, all of them registered in the app and none of them aspirational.
@@ -75,10 +89,16 @@ What it cannot settle is a real screen, a real calendar, a real contact, and a p
 whether they are comfortable with any of it. [#510](../../issues/510) is the checklist for the
 first time a phone is attached.
 
-**Planned and unbuilt:** a model running on the device itself, vision ([#439](../../issues/439)),
-voice, scheduled background tasks, a terminal, and three autonomy modes: plan, auto, and ask
-before every action ([#452](../../issues/452)). None of those exist; they are named here so the
-list above can be read as complete.
+**Two of the three autonomy modes ship.** Auto is what governs a turn above: the banner, the
+stop button, and a budget of twenty-five actions. Ask confirms every action before it happens,
+over the app being driven, and cannot be answered by the model
+([#452](../../issues/452)). Plan is the one that does not exist: it is a name in an enum, and
+the picker leaves it out on purpose until it does something ([#595](../../issues/595)).
+
+**Planned and unbuilt:** a model running on the device itself, vision
+([#439](../../issues/439)), voice, scheduled background tasks, and a terminal. None of those
+exist; they are named here so the list above can be read as complete, and
+[the roadmap](docs/roadmap.md) says what order they are in.
 
 ## Routing
 
