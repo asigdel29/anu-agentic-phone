@@ -35,6 +35,14 @@ class AndroidPhone(private val context: Context) : Phone {
         DrivingService.connected?.barredNow()?.why
     }
 
+    // The whole of the distinction #517 turned on: `connected` is null when
+    // nobody switched the service on, and non-null with a null reading when
+    // there is simply no focused window yet. One object away, and the answer to
+    // a person is opposite in each case.
+    override suspend fun attached(): Boolean = withContext(Dispatchers.Default) {
+        DrivingService.connected != null
+    }
+
     override suspend fun read(): Reading? = withContext(Dispatchers.Default) {
         DrivingService.connected?.read()
     }
