@@ -111,15 +111,18 @@ class AutonomyTest {
     }
 
     @Test
-    fun theRefusalSaysAPersonSaidNoRatherThanThatARuleDidNot() = runTest {
+    fun theRefusalNamesAPersonRatherThanARule() = runTest {
         // A model told a rule refused it looks for another way through. One
-        // told somebody said no stops, which is the point of asking.
+        // told a person did not allow it stops, which is the point of asking.
+        // Not "said no": #556 found the case where nobody could be asked.
         val done = Confirmed(Acting(), { Autonomy.ASK }, Decided(answer = false))
             .tap(handle, generation)
 
         val why = (done as Done.Refused).why
-        assertTrue(why, why.contains("person"))
-        assertTrue(why, why.contains("said no"))
+        assertTrue(why, why.contains("person using the phone did not allow"))
+        // "send", the id — not "Send", the label. The refusal is worded from
+        // the same field the prompt was, so the two cannot drift apart.
+        assertTrue(why, why.contains("tap send"))
         assertTrue(why, why.contains("Do not try it another way"))
     }
 

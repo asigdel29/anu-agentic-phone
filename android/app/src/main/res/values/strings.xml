@@ -27,6 +27,17 @@
     <string name="banner_stop">Stop</string>
 
     <!--
+      On the question, over whatever the agent is about to touch. Two words at
+      most: it sits beside the thing being asked about, and that is the part to
+      read.
+    -->
+    <string name="asked_yes">Allow</string>
+
+    <!-- Not "Cancel". Cancel is what the app underneath might call a button,
+         and this overlay is not part of it. -->
+    <string name="asked_no">Don\'t</string>
+
+    <!--
       On the bubble. One character, because the bubble is a thumb wide and sits
       over somebody else's design; a word would either not fit or would have to
       shrink until it could not be read.
