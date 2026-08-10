@@ -24,10 +24,13 @@ share, and the build and deployment scripts.
 
 ### Not in scope
 
-- **The router being reachable from a network.** It has no authentication on any endpoint —
-  `/healthz`, `/v1/models`, `/v1/chat/completions` and `/metrics` are open to anything that can
-  reach the socket. It binds `127.0.0.1` for that reason. Exposing it is out of scope rather
-  than a hardening exercise, and `.env.example` says so beside `WATTROUTER_ADDR`.
+- **What a token does not protect.** Since #533 the router refuses `/v1/models`,
+  `/v1/chat/completions` and `/metrics` without a bearer token it issued; `/healthz` stays
+  open because a platform health check arrives with no credential, and it answers only
+  whether the process is alive. What a token buys is that a stranger cannot spend the
+  provider credit behind it. It is **not** authorisation: every valid token can do
+  everything, there are no quotas, and a leaked token is a leaked account until it is
+  removed from the list. Metering arrives with accounts.
 - **NeuralWatt, Hermes Agent and zeromem.** Report those to the people who wrote them.
 - **The platform's own behaviour.** What an accessibility service is allowed to do is Android's
   decision; the section below records it rather than disputing it.

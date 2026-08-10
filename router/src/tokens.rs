@@ -16,7 +16,8 @@
 //! A trait rather than a set, and the reason is the next unit rather than
 //! taste: accounts arrive in Postgres, and a lookup behind a seam becomes one
 //! more implementation instead of a change to every handler. `Listed` is the
-//! implementation that makes the server deployable today.
+//! implementation that makes the server deployable today, and #534 is where
+//! the server started refusing anything without one.
 //!
 //! Comparison is constant-time. A set lookup on a `String` compares byte by byte
 //! and returns on the first difference, which over enough requests says how much
