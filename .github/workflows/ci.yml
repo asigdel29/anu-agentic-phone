@@ -350,9 +350,54 @@ jobs:
   # for and its result ignored, which is worse than not gating it at all: the
   # aggregator reports green over a red job. Adding one without proving it can
   # turn this check red is trusting the YAML.
+  # The Dockerfile is how the router reaches a platform, and nothing else in this
+  # workflow compiles it. A break specific to the image -- a missing system
+  # library, a stale base tag, a layer order that stops caching -- would
+  # otherwise surface during a deployment, which is the worst place to find it.
+  #
+  # It also makes a claim nobody could make locally: #537 was written on a
+  # machine whose Docker had a corrupt content store and 3.5GB of disk, so the
+  # image had never been built anywhere when the Dockerfile was merged. This job
+  # is what changed that.
+  #
+  # Built and not pushed. A registry is a credential and a decision about where
+  # images live, and neither belongs in a check that only has to answer whether
+  # the thing compiles.
+  image:
+    name: Image
+    needs: detect
+    if: ${{ needs.detect.outputs.rust == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build --tag wattrouter:ci .
+      - name: It starts and answers liveness
+        run: |
+          set -euo pipefail
+          # A build that produces an image which cannot start is a build that
+          # passed for no reason. PORT rather than an address, because that is
+          # what a platform sets and the path #537 added.
+          docker run --rm --detach --name probe \
+            --env PORT=8080 \
+            --env NEURALWATT_API_KEY=not-a-real-key \
+            --publish 8080:8080 wattrouter:ci
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/healthz >/dev/null 2>&1; then
+              printf 'the image starts and answers /healthz\n'
+              docker rm --force probe >/dev/null
+              exit 0
+            fi
+            sleep 1
+          done
+          printf 'the image never answered /healthz\n' >&2
+          docker logs probe >&2 || true
+          docker rm --force probe >/dev/null 2>&1 || true
+          exit 1
+
   required:
     name: Required
-    needs: [detect, format, lint, test, cross-build, ios-build, perf, android]
+    needs: [detect, format, lint, test, cross-build, ios-build, perf, android, image]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -367,6 +412,7 @@ jobs:
             ios-build:${{ needs.ios-build.result }}
             perf:${{ needs.perf.result }}
             android:${{ needs.android.result }}
+            image:${{ needs.image.result }}
         run: |
           set -euo pipefail
           fail=0
