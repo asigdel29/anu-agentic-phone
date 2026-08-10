@@ -47,14 +47,35 @@ Measured rather than reasoned about, after this paragraph claimed otherwise for 
 reads it: the window comes back with its labels intact. That test exists to notice if a future
 Android makes the old sentence true.
 
-So the agent is **not** blind on the apps where a mistake costs most. It sees them as it sees
-anything else, and the only protection the framework offers here is narrow: a node marked
-`isPassword` has its text withheld, which is why `type_text` refuses one (#423). Everything
-else on a banking screen (the balance, the payee list, the last transaction) is readable by
-anything the person has switched an accessibility service on for, including this.
+So `FLAG_SECURE` does not blind the agent on the apps where a mistake costs most. It sees them
+as it sees anything else, and the protection that flag offers is none: the narrow one nearby is
+that a node marked `isPassword` has its text withheld, which is why `type_text` refuses one
+(#423). Everything else on a banking screen (the balance, the payee list, the last transaction)
+is readable by anything the person has switched an accessibility service on for, including
+this.
 
 That is a fact about the platform rather than a decision this repository made, and it belongs
 in the security posture rather than in a sentence calling it a feature.
+
+**An application does have a way to hide, and it is the newer one.** This paragraph used to end
+by saying the agent is not blind, full stop. That was over-broad. Since API 34 a view can carry
+`accessibilityDataSensitive`, and the framework withholds it from every service that has not
+declared `android:isAccessibilityTool`. `SensitiveScreenDeviceTest` puts one in front of the
+service and reads: the ordinary button beside it comes back and the marked one does not.
+
+`driving.xml` does not declare `isAccessibilityTool` and should not. This is an automation agent
+rather than an accessibility tool, and the attribute is the framework asking a question it would
+be answering falsely to see through a marker an application set deliberately. So an application
+that has learned `FLAG_SECURE` leaves the node tree alone has a mechanism that does not, and it
+works against this agent today.
+
+**`takeScreenshot` is refused without `canTakeScreenshot`.** #439 says the call "needs no extra
+capability". Measured false: the same test asks for one and the binder throws
+`SecurityException: Services don't have the capability of taking the screenshot`, before the
+callback is reached at all. The attribute is not added either, because nothing calls
+`takeScreenshot` and a capability declared ahead of its caller is one nobody can weigh, which is
+the rule `app/src/main/AndroidManifest.xml` already states about permissions. Vision adds it
+beside its first call, and the estimate for that work is one attribute larger than #439 assumed.
 
 **The service is killed and must survive it.** An accessibility service is restarted by the
 system, at which point in-memory state is gone; and it is disabled outright by a settings

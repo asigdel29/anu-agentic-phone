@@ -74,8 +74,19 @@ They were wrong and are corrected:
 true.
 
 So: with the accessibility service enabled, this application can read a banking application's
-balance and a password manager's entry list. The only protection the framework offers here is
-narrow: a node marked `isPassword` has its text withheld.
+balance and a password manager's entry list. Two things stand against that and both are narrow.
+A node marked `isPassword` has its text withheld.
+
+**And a view marked `accessibilityDataSensitive` is withheld entirely.** That is the newer
+mechanism, from API 34, and it works: the framework hides such a view from every service that
+has not declared `android:isAccessibilityTool`. This application does not declare it and will
+not, because it is an automation agent rather than an accessibility tool and declaring
+otherwise would be seeing through a marker an application set on purpose.
+`SensitiveScreenDeviceTest` is the measurement and the tripwire: it fails if the declaration is
+ever added, which is a request to come back and rewrite this paragraph rather than a bug.
+
+So an application that wants to hide from this agent has a way. `FLAG_SECURE` is not it, and
+that is the whole of the correction #472 made.
 
 ### What leaves the device
 
