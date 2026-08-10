@@ -38,12 +38,12 @@ Nothing. The application links this repository's own core and Apple's frameworks
 
 ---
 
-## Rust dependencies (303 packages, all features)
+## Rust dependencies (310 packages, all features)
 
 | Licence | Packages |
 |---|---|
-| MIT OR Apache-2.0 | 158 |
-| MIT | 52 |
+| MIT OR Apache-2.0 | 164 |
+| MIT | 53 |
 | Unicode-3.0 | 18 |
 | MIT/Apache-2.0 | 16 |
 | Apache-2.0 OR MIT | 13 |
@@ -90,6 +90,7 @@ Nothing. The application links this repository's own core and Apple's frameworks
 | base64 | 0.13.1 | MIT/Apache-2.0 |
 | base64 | 0.22.1 | MIT OR Apache-2.0 |
 | bitflags | 2.13.1 | MIT OR Apache-2.0 |
+| block-buffer | 0.10.4 | MIT OR Apache-2.0 |
 | bumpalo | 3.20.3 | MIT OR Apache-2.0 |
 | byteorder | 1.5.0 | Unlicense OR MIT |
 | bytes | 1.12.1 | MIT |
@@ -104,11 +105,13 @@ Nothing. The application links this repository's own core and Apple's frameworks
 | console | 0.16.4 | MIT |
 | cookie | 0.18.1 | MIT OR Apache-2.0 |
 | cookie_store | 0.22.1 | MIT OR Apache-2.0 |
+| cpufeatures | 0.2.17 | MIT OR Apache-2.0 |
 | cpufeatures | 0.3.0 | MIT OR Apache-2.0 |
 | crc32fast | 1.5.0 | MIT OR Apache-2.0 |
 | crossbeam-deque | 0.8.7 | MIT OR Apache-2.0 |
 | crossbeam-epoch | 0.9.20 | MIT OR Apache-2.0 |
 | crossbeam-utils | 0.8.22 | MIT OR Apache-2.0 |
+| crypto-common | 0.1.7 | MIT OR Apache-2.0 |
 | darling | 0.20.11 | MIT |
 | darling_core | 0.20.11 | MIT |
 | darling_macro | 0.20.11 | MIT |
@@ -117,6 +120,7 @@ Nothing. The application links this repository's own core and Apple's frameworks
 | derive_builder | 0.20.2 | MIT OR Apache-2.0 |
 | derive_builder_core | 0.20.2 | MIT OR Apache-2.0 |
 | derive_builder_macro | 0.20.2 | MIT OR Apache-2.0 |
+| digest | 0.10.7 | MIT OR Apache-2.0 |
 | dirs | 6.0.0 | MIT OR Apache-2.0 |
 | dirs-sys | 0.5.0 | MIT OR Apache-2.0 |
 | displaydoc | 0.2.7 | MIT OR Apache-2.0 |
@@ -142,6 +146,7 @@ Nothing. The application links this repository's own core and Apple's frameworks
 | futures-sink | 0.3.33 | MIT OR Apache-2.0 |
 | futures-task | 0.3.33 | MIT OR Apache-2.0 |
 | futures-util | 0.3.33 | MIT OR Apache-2.0 |
+| generic-array | 0.14.7 | MIT |
 | getrandom | 0.2.17 | MIT OR Apache-2.0 |
 | getrandom | 0.3.4 | MIT OR Apache-2.0 |
 | getrandom | 0.4.3 | MIT OR Apache-2.0 |
@@ -268,6 +273,7 @@ Nothing. The application links this repository's own core and Apple's frameworks
 | serde_json | 1.0.151 | MIT OR Apache-2.0 |
 | serde_path_to_error | 0.1.20 | MIT OR Apache-2.0 |
 | serde_urlencoded | 0.7.1 | MIT/Apache-2.0 |
+| sha2 | 0.10.9 | MIT OR Apache-2.0 |
 | sharded-slab | 0.1.7 | MIT |
 | shlex | 2.0.1 | MIT OR Apache-2.0 |
 | signal-hook-registry | 1.4.8 | MIT OR Apache-2.0 |
@@ -312,6 +318,7 @@ Nothing. The application links this repository's own core and Apple's frameworks
 | tracing-log | 0.2.0 | MIT |
 | tracing-subscriber | 0.3.23 | MIT |
 | try-lock | 0.2.5 | MIT |
+| typenum | 1.20.1 | MIT OR Apache-2.0 |
 | unicode-ident | 1.0.24 | (MIT OR Apache-2.0) AND Unicode-3.0 |
 | unicode-normalization-alignments | 0.1.12 | MIT/Apache-2.0 |
 | unicode-segmentation | 1.13.3 | MIT OR Apache-2.0 |
