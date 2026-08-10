@@ -2,6 +2,7 @@
 #
 # History
 #   2026-08-07  A. Sigdel  Created, from the constants at the top of slopgate.sh.
+#   2026-08-10  A. Sigdel  The dashes, and twenty-one words the strip made eligible.
 #
 # Sourced by slopgate.sh, and the only file that guard excludes from the diff it
 # reads. It has to exclude something: a list of forbidden words contains every
@@ -18,9 +19,14 @@
 # five candidates. `additionally`, `significant`, `notably`, `unlock` and
 # `landscape` are all in files written here, so none of them can be banned. Check
 # before adding.
+#
+# The rule is also why the dashes are here now and could not have been before.
+# They were on 879 lines across 229 files, which is a guard that reports the whole
+# repository on its first run and is therefore a guard nobody keeps. #582 took
+# them out over seven pull requests; this is what stops the next one arriving.
 
 # Marketing register: words that describe a thing rather than say it.
-readonly REGISTER='leverages?|leveraging|utili[sz]e[sd]?|delve[sd]?|seamless(ly)?|robust|comprehensive|powerful|plethora|myriad|elevates?|boasts|testament|cutting-edge|state-of-the-art|best-in-class|meticulous(ly)?'
+readonly REGISTER='leverages?|leveraging|utili[sz]e[sd]?|delve[sd]?|seamless(ly)?|robust|comprehensive|powerful|plethora|myriad|elevates?|boasts|testament|cutting-edge|state-of-the-art|best-in-class|meticulous(ly)?|furthermore|moreover|crucial|pivotal|underscores|holistic|synerg|streamline[sd]?|empower(s|ed|ing)?|bespoke|essentially|fundamentally|realm|tapestry|showcase[sd]?|facilitate[sd]?|revolutioni|it is important to|a wide range of|the world of|in order to'
 
 # Chat-context shorthand: phrases addressed to a conversation rather than to a
 # reader who was not in it.
@@ -34,3 +40,13 @@ readonly ATTRIBUTION='co-authored-by:|generated (with|by) \['
 # Markers. A marker naming an issue is a plan; one naming nothing is a note to
 # somebody who has already left.
 readonly MARKER='\b(TODO|FIXME|HACK|XXX)\b'
+
+# The em-dash and the en-dash, as UTF-8 bytes for the reason EMOJI is: the match
+# must not depend on the locale grep was handed. E2 80 94 and E2 80 93.
+#
+# Bytes rather than the marks themselves buys a second thing, and it is the one
+# worth stating. Written literally, this file would be the single place in the
+# repository still holding them, and `git grep` for either would answer with the
+# guard that bans them forever after. Written as bytes, the answer stays zero and
+# means what it says.
+readonly DASHES=$'\xe2\x80\x94|\xe2\x80\x93'
