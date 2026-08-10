@@ -1,4 +1,4 @@
-//! `jni_git.rs` — a repository, reached from Kotlin.
+//! `jni_git.rs`: a repository, reached from Kotlin.
 //!
 //! History
 //!   2026-08-09  A. Sigdel  Created.
@@ -10,19 +10,19 @@
 //! These go through `core_git` rather than `crate::git` directly, so the envelope
 //! a model reads is built in one place. That used to be phrased as both phones
 //! reaching a repository by one path; there is one phone since #545, and the
-//! reason survives it — the envelope is the thing being kept single, not the
+//! reason survives it: the envelope is the thing being kept single, not the
 //! number of callers.
 //!
 //! One structural difference decides what the Kotlin looks like. A repository is
 //! a path rather than a handle: `git::open` runs inside every call and there is
-//! nothing to hold between them. So `Repository.kt` is not `Memory.kt` — no
+//! nothing to hold between them. So `Repository.kt` is not `Memory.kt`: no
 //! handle, no `AutoCloseable`, no close. That ceremony would invent a lifetime
 //! which does not exist, and hand somebody a `close` to forget.
 //!
 //! What is left here is five translations and nothing else. `guarded` is
 //! `jni_answer.rs`'s, because the copy that used to be at the bottom of this file
 //! was identical to the one at the bottom of `jni_memory.rs` and neither applied
-//! the rules `jni.rs` states — see #468 and #482. `read` is `jni.rs`'s, for the
+//! the rules `jni.rs` states; see #468 and #482. `read` is `jni.rs`'s, for the
 //! same reason: it clears a pending exception, which `owned` also did and which
 //! nothing here should be reimplementing.
 

@@ -1,4 +1,4 @@
-//! `jni.rs` — the decision core, as Kotlin calls it.
+//! `jni.rs`: the decision core, as Kotlin calls it.
 //!
 //! History
 //!   2026-08-08  A. Sigdel  Created.
@@ -26,7 +26,7 @@
 //! sides, so this is a translation layer and the translation is where the
 //! mistakes are.
 //!
-//! No panic may cross into the JVM — undefined behaviour, exactly as into C, and
+//! No panic may cross into the JVM: undefined behaviour, exactly as into C, and
 //! the guard belongs here for the same reason it belongs in `core.rs`.
 //!
 //! The symbol names are the contract with `Core.kt` and nothing checks them at
@@ -52,8 +52,8 @@ struct Decided {
     /// Difficulty in `[0, 1]`, or absent where nothing scored it.
     ///
     /// Absent rather than null. `null` is a value a caller has to know to skip,
-    /// and the rule everywhere else in this boundary — `Message`'s empty
-    /// `tool_calls`, `answer`'s envelope — is that a key that means nothing
+    /// and the rule everywhere else in this boundary (`Message`'s empty
+    /// `tool_calls`, `answer`'s envelope) is that a key that means nothing
     /// is not written. A test on the emulator is what noticed the difference.
     #[serde(skip_serializing_if = "Option::is_none")]
     score: Option<f32>,
@@ -71,19 +71,19 @@ struct Attempt {
 
 /// Put the provider credential where the core reads it.
 ///
-/// `Config::from_env` reads the environment, and Kotlin has no `setenv` — so
+/// `Config::from_env` reads the environment, and Kotlin has no `setenv`, so
 /// without this `nativeNew` returns zero on every Android device and the reason
 /// is invisible. iOS solves it the same way, in `Startup.install`.
 ///
 /// # Safety
 /// The environment is process-global and this writes it. Call before
 /// [`Java_com_getlora_wattrouter_Core_nativeNew`] and from one thread, which is
-/// what `Core.open` does — the same rely `config.rs` states and `Startup.swift`
+/// what `Core.open` does: the same rely `config.rs` states and `Startup.swift`
 /// keeps by confining every write to one actor.
 ///
 /// # Returns
 /// Whether the credential was taken. `false` for null or non-UTF-8, and for an
-/// empty one — which reaches the provider as a 401 rather than as a refusal
+/// empty one, which reaches the provider as a 401 rather than as a refusal
 /// here, and is the failure people spend an afternoon on.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_getlora_wattrouter_Core_nativeConfigure<'a>(
@@ -125,7 +125,7 @@ pub extern "system" fn Java_com_getlora_wattrouter_Core_nativeNew(
 ) -> jlong {
     catch_unwind(|| {
         // The configured default head. Kotlin has no path to hand in, because on
-        // a phone there is no head to load — the policy has an unscored path and
+        // a phone there is no head to load; the policy has an unscored path and
         // that is what Android takes.
         Router::new(None).map_or(0, |router| Box::into_raw(Box::new(router)) as jlong)
     })
@@ -251,7 +251,7 @@ fn decide(router: &Router, body: &str, session: &str) -> Option<Decided> {
 /// This used to call `Config::from_env` and `chain_for`, and #476 has the three
 /// reasons it no longer does. The shortest: `nativeConfigure` writes the
 /// environment with `set_var`, this read it, and since #474 the two run on
-/// different threads — which `config.rs`'s own `# Rely` forbids and the
+/// different threads, which `config.rs`'s own `# Rely` forbids and the
 /// standard library calls undefined behaviour.
 ///
 /// The router resolved every chain once when it was built; this reads that,
@@ -416,7 +416,7 @@ mod tests {
     fn the_kotlin_frees_what_it_opens() {
         // A handle the Kotlin never releases is a leak nothing here can see, and
         // one it releases twice is a double free. Both are prevented by close()
-        // being idempotent, which is worth asserting is still written that way —
+        // being idempotent, which is worth asserting is still written that way,
         // for every class that owns a handle, not only the first one to.
         for binding in BINDINGS {
             if !binding.handle {
@@ -446,7 +446,7 @@ mod tests {
     ///
     /// #476's shape, and the only one of its three problems a test can reach
     /// from here: the other two are a hot-path allocation and a data race with
-    /// `set_var`, and neither has an assertion. This one does — build a router,
+    /// `set_var`, and neither has an assertion. This one does: build a router,
     /// change the environment under it, and read a chain.
     ///
     /// Before the change it read `first-model`, because it went back to the
