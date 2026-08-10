@@ -250,7 +250,7 @@ class TapToolTest {
     fun aTapAnswersWithTheScreenAndSaysItMaySettle() = runTest {
         val after = Reading(Generation("k3f9", 5), listOf(Sighting(send, "button", "Send", isClickable = true)))
 
-        val said = TapTool.say(Static(after), Done.Did(after))
+        val said = TapTool.say(Static(after), "tapped", Done.Did(after))
 
         assertTrue(said, said.startsWith("tapped."))
         assertTrue(said, said.contains("still be settling"))
@@ -263,7 +263,7 @@ class TapToolTest {
         // right for one of the four outcomes and wrong for this one.
         val now = Reading(Generation("k3f9", 5), listOf(Sighting(send, "button", "Send", isClickable = true)))
 
-        val said = TapTool.say(Static(now), Done.Moved(now))
+        val said = TapTool.say(Static(now), "tapped", Done.Moved(now))
 
         assertTrue(said, said.contains("nothing was tapped"))
         assertTrue(said, said.contains("screen k3f9.5"))
@@ -272,14 +272,14 @@ class TapToolTest {
     @Test
     fun eachWayOfMissingGetsItsOwnInstruction() = runTest {
         val phone = Static(null)
-        assertTrue(TapTool.say(phone, Done.Lost(Resolution.Ambiguous(3))).contains("matches 3 things"))
-        assertTrue(TapTool.say(phone, Done.Lost(Resolution.Unusable)).contains("does not describe anything"))
-        assertTrue(TapTool.say(phone, Done.Lost(Resolution.Missing)).contains("not on it any more"))
+        assertTrue(TapTool.say(phone, "tapped", Done.Lost(Resolution.Ambiguous(3))).contains("matches 3 things"))
+        assertTrue(TapTool.say(phone, "tapped", Done.Lost(Resolution.Unusable)).contains("does not describe anything"))
+        assertTrue(TapTool.say(phone, "tapped", Done.Lost(Resolution.Missing)).contains("not on it any more"))
     }
 
     @Test
     fun theOneThatIsAboutTheTapSaysSo() = runTest {
-        val said = TapTool.say(Static(null), Done.Refused("it is disabled"))
+        val said = TapTool.say(Static(null), "tapped", Done.Refused("it is disabled"))
 
         assertTrue(said, said.contains("could not be tapped: it is disabled"))
     }
@@ -309,6 +309,17 @@ class TypeTextToolTest {
 
         assertEquals(field to generation, phone.asked)
         assertEquals("meet at six", phone.typed)
+    }
+
+    @Test
+    fun typingSaysItTypedRatherThanTapped() = runTest {
+        // #518. Every acting tool shares TapTool.say, and before the verb was a
+        // parameter all five of them reported that they had tapped something.
+        // The transcript is the model's account of what it did.
+        val said = TypeTextTool(Tapping(Done.Did(null))).run(call())
+
+        assertTrue(said, said.startsWith("typed."))
+        assertTrue(said, !said.contains("tapped"))
     }
 
     @Test
@@ -349,10 +360,10 @@ class TypeTextToolTest {
         // differently is two things for a model to learn about one event.
         val phone = Static(null)
         assertEquals(
-            TapTool.say(phone, Done.Lost(Resolution.Missing)),
-            TapTool.say(phone, Done.Lost(Resolution.Missing)),
+            TapTool.say(phone, "tapped", Done.Lost(Resolution.Missing)),
+            TapTool.say(phone, "tapped", Done.Lost(Resolution.Missing)),
         )
-        assertTrue(TapTool.say(phone, Done.Refused("that is a password field")).contains("password field"))
+        assertTrue(TapTool.say(phone, "tapped", Done.Refused("that is a password field")).contains("password field"))
     }
 }
 
@@ -366,6 +377,15 @@ class NavigateToolTest {
 
             assertEquals(way, phone.pressed)
         }
+    }
+
+    @Test
+    fun pressingSaysItPressedRatherThanTapped() = runTest {
+        // #518. A system button is not a node and was never tapped.
+        val said = NavigateTool(Tapping(Done.Did(null))).run("""{"where":"back"}""")
+
+        assertTrue(said, said.startsWith("pressed."))
+        assertTrue(said, !said.contains("tapped"))
     }
 
     @Test
@@ -454,6 +474,15 @@ class ScrollToolTest {
         """{"handle":"$handle","screen":"$screen","direction":"$direction"}"""
 
     @Test
+    fun scrollingSaysItScrolledRatherThanTapped() = runTest {
+        // #518. Completes the set: five acting tools, five verbs, one helper.
+        val said = ScrollTool(Tapping(Done.Did(null))).run(call())
+
+        assertTrue(said, said.startsWith("scrolled."))
+        assertTrue(said, !said.contains("tapped"))
+    }
+
+    @Test
     fun bothDirectionsReachThePhone() = runTest {
         Onward.entries.forEach { onward ->
             val phone = Tapping(Done.Did(null))
@@ -498,7 +527,7 @@ class ScrollToolTest {
     fun beingAtTheEndIsAnAnswerRatherThanAFailure() = runTest {
         // Told it failed, a model retries. Told the list is at its end, it
         // stops — which is the answer to "is there any more".
-        val said = TapTool.say(Static(null), Done.Refused("it is already at the end, so nothing moved"))
+        val said = TapTool.say(Static(null), "tapped", Done.Refused("it is already at the end, so nothing moved"))
 
         assertTrue(said, said.contains("already at the end"))
     }
@@ -513,6 +542,16 @@ class OpenAppToolTest {
 
     private fun phone(vararg apps: Launchable) =
         Tapping(Done.Did(null)).also { it.installed = apps.toList() }
+
+    @Test
+    fun openingSaysItOpenedRatherThanTapped() = runTest {
+        // #518, and the run that found it: open_app answered "tapped." while
+        // Clock genuinely came to the front.
+        val said = OpenAppTool(phone(gmail)).run("""{"name":"Gmail"}""")
+
+        assertTrue(said, said.startsWith("opened."))
+        assertTrue(said, !said.contains("tapped"))
+    }
 
     @Test
     fun anExactNameWinsOutright() {
