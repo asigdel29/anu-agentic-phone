@@ -1,6 +1,6 @@
-# anu-agentic-stack
+# anu-agentic-phone
 
-[![CI](https://github.com/asigdel29/anu-agentic-stack/actions/workflows/ci.yml/badge.svg)](https://github.com/asigdel29/anu-agentic-stack/actions/workflows/ci.yml)
+[![CI](https://github.com/asigdel29/anu-agentic-phone/actions/workflows/ci.yml/badge.svg)](https://github.com/asigdel29/anu-agentic-phone/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **An agent you talk to, that spends as little as it can answering — and on Android, one that

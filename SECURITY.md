@@ -58,7 +58,7 @@ This is the largest risk here and it is not fully mitigated. What stands against
 
 What does not stand against it: **there is no confirmation prompt**. Every candidate rule for
 when one should fire is a guess, and the argument is in
-[#452](https://github.com/asigdel29/anu-agentic-stack/issues/452). The decision taken is a
+[#452](https://github.com/asigdel29/anu-agentic-phone/issues/452). The decision taken is a
 per-person setting defaulting to off, which is not built yet.
 
 ### What the agent can read is more than you would expect
@@ -69,7 +69,7 @@ screen reader has to work in a banking application.
 
 Two decision records in this repository used to say the opposite and one called it a feature.
 They were wrong and are corrected —
-[#472](https://github.com/asigdel29/anu-agentic-stack/issues/472) has the measurement, and
+[#472](https://github.com/asigdel29/anu-agentic-phone/issues/472) has the measurement, and
 `SecureScreenDeviceTest` is the test that would notice if a future Android made the old claim
 true.
 
@@ -116,7 +116,7 @@ which is the right way round for something with these capabilities.
 
 Nothing in this repository has run on a physical phone. Every claim above is a host suite or an
 emulator, and
-[#510](https://github.com/asigdel29/anu-agentic-stack/issues/510) is the checklist for the first
+[#510](https://github.com/asigdel29/anu-agentic-phone/issues/510) is the checklist for the first
 time one is attached. Treat the mitigations as implemented and untested in the field.
 
 What the emulator has settled is narrower than it sounds and worth naming: the release build

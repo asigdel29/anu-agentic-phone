@@ -20,7 +20,7 @@
 
 set -euo pipefail
 
-REPO="${REPO:-asigdel29/anu-agentic-stack}"
+REPO="${REPO:-asigdel29/anu-agentic-phone}"
 BRANCH="${BRANCH:-main}"
 NAME="main is reached through a pull request"
 

@@ -1,7 +1,7 @@
 # Support
 
 **Questions and problems:** open an
-[issue](https://github.com/asigdel29/anu-agentic-stack/issues). There are two templates — one
+[issue](https://github.com/asigdel29/anu-agentic-phone/issues). There are two templates — one
 for something that behaves wrongly, one for a decision or a design question.
 
 **Vulnerabilities:** not an issue. [`SECURITY.md`](SECURITY.md) has the private route, and a

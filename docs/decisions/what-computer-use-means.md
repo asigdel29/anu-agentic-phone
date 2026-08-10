@@ -6,7 +6,7 @@ for.*
 ## Why this is a record
 
 There is no diff. Choosing among the three decides what several later changes are, and none of
-those changes is the place to argue which one they are. [#233](https://github.com/asigdel29/anu-agentic-stack/issues/233)
+those changes is the place to argue which one they are. [#233](https://github.com/asigdel29/anu-agentic-phone/issues/233)
 said it should be settled before item 6 lands rather than after, and this is that.
 
 ## The three
@@ -55,7 +55,7 @@ actually needs to drive a machine they cannot install on.
 
 ## The question Android forces
 
-[#229](https://github.com/asigdel29/anu-agentic-stack/issues/229) records that an Android agent
+[#229](https://github.com/asigdel29/anu-agentic-phone/issues/229) records that an Android agent
 can drive the phone through `AccessibilityService`. "The agent takes control of a computer" and
 "the agent takes control of the phone" then become the same sentence pointed at different
 hardware, and the temptation is to make them the same mechanism.
