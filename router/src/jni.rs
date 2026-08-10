@@ -250,27 +250,22 @@ fn decide(router: &Router, body: &str, session: &str) -> Option<Decided> {
 /// different threads — which `config.rs`'s own `# Rely` forbids and the
 /// standard library calls undefined behaviour.
 ///
-/// The router resolved every chain once when it was built, which is what
-/// `ffi.rs` means by the request path allocating nothing. The C ABI reads it
-/// back through these three; there was never a reason for a second source.
+/// The router resolved every chain once when it was built; this reads that,
+/// and there was never a reason for a second source.
+///
+/// A borrow of the whole chain rather than a length and two lookups per index.
+/// The names come from [`Backend::name`] now: this used to match `0` and `1`
+/// into the same two words by hand, which was a second copy of a vocabulary
+/// that already had one home, and a step whose code it did not recognise was
+/// dropped from the chain rather than reported. An exhaustive match cannot
+/// have that arm, so a step can no longer vanish.
 fn chain(router: &Router, tier: u8) -> Vec<Attempt> {
-    let length = unsafe { crate::ffi::wattrouter_chain_length(router, tier) };
-    (0..length)
-        .filter_map(|index| {
-            let model = name(unsafe { crate::ffi::wattrouter_chain_model(router, tier, index) })?;
-            let backend = unsafe { crate::ffi::wattrouter_chain_backend(router, tier, index) };
-            Some(Attempt {
-                model,
-                // The codes `backend_code` writes, and the same spellings the
-                // Swift side decodes. Anything else is a step this build does
-                // not understand, and reporting it as remote would send work
-                // off the phone on the strength of a number nobody recognised.
-                backend: match backend {
-                    0 => "local".to_owned(),
-                    1 => "remote".to_owned(),
-                    _ => return None,
-                },
-            })
+    router
+        .chain(tier)
+        .iter()
+        .map(|entry| Attempt {
+            model: entry.model.clone(),
+            backend: entry.backend.name().to_owned(),
         })
         .collect()
 }
