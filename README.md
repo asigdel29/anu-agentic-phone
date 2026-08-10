@@ -3,93 +3,82 @@
 [![CI](https://github.com/asigdel29/anu-agentic-phone/actions/workflows/ci.yml/badge.svg)](https://github.com/asigdel29/anu-agentic-phone/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**An Android assistant that uses your phone the way you would**, and spends as little as it
-can doing it. It reads whatever is on screen and taps, types and scrolls its way through the
-apps you already have. Every prompt is scored for difficulty first and sent to the cheapest
-model that can handle it.
+**An Android assistant that uses your phone the way you would.** You ask for something; it
+reads whatever is on screen, taps, types and scrolls its way through the apps you already
+have, and tells you what happened. It is not an app that integrates with five services — it
+drives the ones on your phone.
 
-The scoring is a Rust core linked into the application, so it happens on the phone. Inference
-goes to [NeuralWatt](https://neuralwatt.com) through a small server that holds the key.
+It does that through an accessibility service, which means it can read the contents of other
+applications. That is the whole of what it is for and the whole of why
+[`SECURITY.md`](SECURITY.md) is worth reading before you install it.
 
-### Where this is up to
+## What it can do today
 
-One author, MIT, and public because there is no reason for it not to be. It is a personal
-project rather than a finished product, and it is being built so that people other than its
-author can install it.
+Sixteen tools, all of them registered in the app and none of them aspirational.
 
-**Nothing here has run on a physical phone.** Every claim is a host suite or an emulator —
-[#510](../../issues/510) is the checklist for the first time hardware is attached.
+| | |
+|---|---|
+| **The screen** | `read_screen`, `tap`, `type_text`, `scroll`, `navigate`, `open_app`, `wait_for_change`, `find_on_screen` |
+| **Your things** | `read_calendar`, `find_contact`, `where_am_i` |
+| **Code** | `read_repository`, `stage_paths`, `commit` |
+| **Memory** | `remember`, `recall` |
+| **Anything else** | tools from an [MCP](https://modelcontextprotocol.io) server you connect |
 
-Contributions are welcome and the gates are strict: every pull request references an issue and
-changes at most 300 lines, and the first of those is enforced. [`CONTRIBUTING.md`](CONTRIBUTING.md)
-has the four rules that would otherwise fail a first attempt. If you are here to read rather than
-to build, [`docs/decisions/INDEX.md`](docs/decisions/INDEX.md) is the better door: it routes a
-question to the change that argued it.
+The model never receives a coordinate. It gets a *handle*, which is re-resolved against a
+freshly read screen before every action; zero matches or more than one is a refusal that says
+which. A turn cannot act more than 25 times. Some screens cannot be acted on at all — a locked
+phone, the permission screens, the accessibility settings, and the assistant's own. A password
+field cannot be typed into.
 
-Security matters more than usual here, because the Android build reads other applications'
-screens. [`SECURITY.md`](SECURITY.md) says what that means before you install anything.
+While it is working, a banner sits over whatever it is driving, naming what it is doing, with
+a stop button one tap away. A bubble floats over every app when it is not working, so you can
+reach it without leaving what you are doing, and the assist gesture — long-press home — can be
+pointed at it too.
+
+## How a request flows
 
 ```
-  you ── CLI / chat ──►  Hermes Agent   (conversation, tools, coding)
-                           └─ memory: zeromem      (Rust core, SQLite, zero LLM calls)
-                                     │
-                                     │  OpenAI-compatible, 127.0.0.1
-                                     ▼
-                           wattrouter  (Rust)
-                             heuristics → sticky tier → embed → score → tier
-                                     │  pooled HTTPS, streaming passthrough
-                                     ▼
-                           api.neuralwatt.com/v1
+  phone                          your server                    provider
+  ─────                          ───────────                    ────────
+  scores the prompt  ─────────►  holds the API key  ─────────►  answers
+  picks a tier                   authenticates you
+  runs the tools                 (Railway)                      NeuralWatt
 ```
 
-On a phone the middle of that picture collapses: there is one address space, so the router
-is linked as a static library and called through its C ABI rather than proxied over a
-socket. `router/src/ffi.rs` says why.
+**Routing happens on the phone.** A Rust core, linked into the app through JNI, scores the
+prompt for difficulty and picks the cheapest of six tiers that can answer. It is instant and
+works offline, and it is why the phone sends a *tier* rather than a model name.
 
-## The pieces
+**The server holds the key.** An API key cannot ship inside an APK that other people install,
+so the phone talks to a small server that holds it and forwards. That server is this same Rust
+binary in a container — it authenticates the caller, resolves the tier to a model, and proxies.
 
-**Hermes Agent** is the same router reached from a terminal, and the reference this is
-measured against: the product statement is what a person with a terminal can do.
+**The provider answers.** [NeuralWatt](https://neuralwatt.com). Which model serves which tier
+is the table below, and every one of the six can be overridden.
 
-**zeromem** is the memory provider. Its point is in the name: indexing and retrieval are
-deterministic, so remembering something costs zero tokens. It keeps raw conversation turns
-with provenance rather than LLM-written summaries, which means recall returns what was
-actually said, not a paraphrase of it.
+## Where this is up to
 
-**wattrouter** is the core, and the one thing every deployment shares. It scores each prompt
-for difficulty and routes it to the cheapest tier that can handle it. In the application it is
-a library reached over JNI. In a container it is a proxy speaking the OpenAI wire protocol in
-both directions, which is what holds the provider key.
+One author, MIT, public. **It is being built to be installed by people other than its author,
+and it is not there yet.**
 
-## Where it runs
+**Nothing in this repository has run on a physical phone.** That sentence is the most important
+one on this page. What an emulator has settled, exactly:
 
-### Android — `android/`
+- the release build loads its native library with R8 and resource shrinking on
+- a turn routes, reaches the provider, and surfaces a structured refusal without crashing
+- the tool loop drives another application — `open_app` then `read_screen`, with Clock genuinely
+  coming to the front
+- the overlay reaches the display, and leaves when a turn starts
+- the readiness checklist recomputes rather than caching
 
-Two Gradle modules: `core/`, the routing core as a library over four JNI entry points, and
-`app/`, a Compose chat over it.
+What it cannot settle is a real screen, a real calendar, a real contact, and a person deciding
+whether they are comfortable with any of it. [#510](../../issues/510) is the checklist for the
+first time a phone is attached.
 
-What exists: sign-in over the Android Keystore; a streaming turn that survives backgrounding
-in a foreground service; memory across JNI; calendar, contacts and location behind a
-permission seam that caches nothing, because Android's permissions are revocable and a
-permanent denial has its own name; git over libgit2; and `ACTION_SEND` intake.
-
-And the part only Android can do: **it reads and drives other apps.** An `AccessibilityService`
-behind eight tools — read the screen, tap, type, scroll, navigate, open an app, wait for a
-change, search what was not printed. The model never sees a coordinate: it holds a *handle*,
-which is a recipe re-resolved against a freshly fetched tree before every action, and zero
-matches or more than one is a refusal that says which.
-`docs/decisions/how-the-agent-drives.md` argues all of it, including the two decisions that
-only work together — the generation follows the tree's shape rather than its content, and
-resolution refuses when the field that would tell two rows apart matches neither.
-
-What is not verified: **any of it on a real phone.** Every claim above is a host suite or an
-emulator. Driving *other* apps needs a device with apps on it, no real calendar, contact,
-location fix or repository has been read, and the onboarding checklist has not been looked at
-by anybody. `android/AGENTS.md` says which of the two Android test recipes may claim what.
-
-What is missing: a screenshot tool, blocked because nothing in the stack carries an image
-(#439); and a confirmation prompt, deferred because every rule for when it should fire is a
-guess (#452).
+**Planned and unbuilt:** a model running on the device itself, vision ([#439](../../issues/439)),
+voice, scheduled background tasks, a terminal, and three autonomy modes — plan, auto, and ask
+before every action ([#452](../../issues/452)). None of those exist; they are named here so the
+list above can be read as complete.
 
 ## Routing
 
