@@ -23,10 +23,12 @@
 //! applied the rules `jni.rs` states — see #468 and #482.
 
 use crate::ffi_memory::Memory;
+use crate::jni::read;
 use crate::jni_answer::{answered, guarded, owned};
 use jni::JNIEnv;
 use jni::objects::{JClass, JString};
 use jni::sys::{jlong, jstring};
+use std::path::Path;
 
 /// Open a store, applying the horizon on the way in.
 ///
@@ -40,7 +42,7 @@ pub extern "system" fn Java_com_getlora_wattrouter_Memory_nativeOpen<'a>(
     keep: jlong,
 ) -> jlong {
     guarded(0, || {
-        let Some(path) = owned(&mut env, &path) else {
+        let Some(path) = read(&mut env, &path) else {
             return 0;
         };
 
@@ -51,8 +53,13 @@ pub extern "system" fn Java_com_getlora_wattrouter_Memory_nativeOpen<'a>(
         // not, rather than left to be found later and mistaken for a hazard.
         let keep = usize::try_from(keep.max(0)).unwrap_or(usize::MAX);
 
-        let store = unsafe { crate::ffi_memory::wattrouter_memory_open(path.as_ptr(), keep) };
-        store as jlong
+        // The `Box` is made here and unmade in `nativeFree` directly below. They
+        // are a pair and they move together: a state where one has changed and
+        // the other has not compiles cleanly and corrupts memory on the first
+        // close, and no suite in this repository except the instrumented one can
+        // see it happen.
+        crate::ffi_memory::open(Path::new(&path), keep)
+            .map_or(0, |store| Box::into_raw(Box::new(store)) as jlong)
     })
 }
 
@@ -69,7 +76,10 @@ pub extern "system" fn Java_com_getlora_wattrouter_Memory_nativeFree(
 ) {
     guarded((), || {
         if handle != 0 {
-            unsafe { crate::ffi_memory::wattrouter_memory_free(handle as *mut Memory) };
+            // The other half of `nativeOpen`'s `Box`. `Memory` has no `Drop` of
+            // its own: the SQLite handle inside it is closed because the box is
+            // dropped, so this has to stay a drop and must not become a forget.
+            drop(unsafe { Box::from_raw(handle as *mut Memory) });
         }
     });
 }

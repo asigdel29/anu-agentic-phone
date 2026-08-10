@@ -50,58 +50,28 @@ enum Failed {
 /// * `keep` — how many recent turns to leave in front of the horizon.
 ///
 /// # Returns
-/// A handle to pass to [`wattrouter_memory_free`], or null IF `path` was null or
-/// not UTF-8, IF the horizon failed, or IF the store would not open. Null rather
-/// than an envelope: with no handle there is nothing to free and nothing to hang
-/// a message on.
+/// [`None`] IF the horizon failed or the store would not open. A path that could
+/// not be read is no longer one of the cases: this takes a `&Path`.
 ///
-/// # Safety
-/// `path` must be null or a valid NUL-terminated string outliving the call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn wattrouter_memory_open(path: *const c_char, keep: usize) -> *mut Memory {
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let Some(path) = (unsafe { borrowed(path) }) else {
-            return std::ptr::null_mut();
-        };
-        let path = Path::new(path);
+/// Absence rather than an envelope, which is the shape the pointer version had
+/// for the same reason: with no store there is nothing to hold and nothing to
+/// hang a message on.
+pub(crate) fn open(path: &Path, keep: usize) -> Option<Memory> {
+    // Before open, not after: opening is what loads everything.
+    memory::apply(path, keep).ok()?;
 
-        // Before open, not after: opening is what loads everything.
-        if memory::apply(path, keep).is_err() {
-            return std::ptr::null_mut();
-        }
+    // The hash embedder, always: the ONNX one cannot come to a phone, and a
+    // store written by one is cleared when opened by the other.
+    let store = zeromem::ZeroMem::open(
+        path,
+        zeromem::config::Config::default(),
+        Box::new(zeromem::embed::HashEmbedder::default()),
+    )
+    .ok()?;
 
-        // The hash embedder, always: the ONNX one cannot come to a phone, and a
-        // store written by one is cleared when opened by the other.
-        let store = zeromem::ZeroMem::open(
-            path,
-            zeromem::config::Config::default(),
-            Box::new(zeromem::embed::HashEmbedder::default()),
-        );
-        match store {
-            Ok(store) => Box::into_raw(Box::new(Memory {
-                inner: Mutex::new(store),
-            })),
-            Err(_) => std::ptr::null_mut(),
-        }
-    }))
-    .unwrap_or(std::ptr::null_mut())
-}
-
-/// Release a store.
-///
-/// # Safety
-/// `memory` must come from [`wattrouter_memory_open`] and not already be freed.
-/// Null is accepted and ignored.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn wattrouter_memory_free(memory: *mut Memory) {
-    if memory.is_null() {
-        return;
-    }
-    // Discarded deliberately: a caller freeing a store has nowhere to report a
-    // failure to, and nothing it could do about one.
-    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        drop(unsafe { Box::from_raw(memory) });
-    }));
+    Some(Memory {
+        inner: Mutex::new(store),
+    })
 }
 
 /// Put a turn in.
@@ -208,16 +178,16 @@ mod tests {
     use serde_json::Value;
     use std::ffi::{CStr, CString, c_char};
 
-    /// Open a store as the app will, and free it afterwards.
+    /// Open a store as the app will. Dropping it is the whole of closing it, so
+    /// nothing here has to remember to.
+    ///
+    /// The pointer is still what `remember` and `recall` take, so the body gets
+    /// one; the `Box` behind it is this function's to own until they stop.
     fn with_store<T>(name: &str, keep: usize, body: impl FnOnce(*mut super::Memory) -> T) -> T {
         let scratch = Scratch::new(name);
-        let path = CString::new(scratch.path().join("memory.db").to_str().unwrap()).unwrap();
-        let store = unsafe { super::wattrouter_memory_open(path.as_ptr(), keep) };
-        assert!(!store.is_null(), "the store did not open");
-
-        let out = body(store);
-        unsafe { super::wattrouter_memory_free(store) };
-        out
+        let path = scratch.path().join("memory.db");
+        let mut store = super::open(&path, keep).expect("the store did not open");
+        body(&raw mut store)
     }
 
     /// Take ownership of an envelope and read it.
@@ -316,10 +286,9 @@ mod tests {
 
     #[test]
     fn hostile_input_returns_a_value_rather_than_unwinding() {
-        // A panic across the boundary is undefined behaviour, and so is a bad free.
-        assert!(unsafe { super::wattrouter_memory_open(std::ptr::null(), 10) }.is_null());
-        unsafe { super::wattrouter_memory_free(std::ptr::null_mut()) };
-
+        // A panic across the boundary is undefined behaviour. Opening and freeing
+        // are no longer part of this: `open` takes a `&Path` and answers an
+        // `Option`, and the `Box` it used to hand out lives in `jni_memory` now.
         let t = CString::new("x").unwrap();
         let (p, n) = (t.as_ptr(), std::ptr::null());
         assert!(unsafe { super::wattrouter_memory_remember(n, p, p, p, 1) }.is_null());
