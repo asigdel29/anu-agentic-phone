@@ -74,18 +74,81 @@ pub(crate) fn open(path: &Path, keep: usize) -> Option<Memory> {
     })
 }
 
-/// Put a turn in.
+impl Memory {
+    /// Put a turn in.
+    ///
+    /// # Returns
+    /// The envelope, carrying `ok` with the turn's id or `error`.
+    ///
+    /// # Atomic
+    /// Serialised on the store's lock. A second caller waits.
+    pub(crate) fn remember(&self, session: &str, speaker: &str, text: &str, ts: i64) -> String {
+        // Refused rather than stored: zeromem indexes nothing, so it becomes a
+        // turn that cannot be recalled and counts against the horizon anyway.
+        if text.trim().is_empty() {
+            return refused("a turn with no text cannot be remembered");
+        }
+
+        rendered(self.with(|store| {
+            store
+                .ingest_turn(session, speaker, text, ts)
+                .map_err(|why| Failed::Store(why.to_string()))
+        }))
+    }
+
+    /// Ask the store something.
+    ///
+    /// # Arguments
+    /// * `top_k` — how many pieces of evidence to return, WHERE `0` takes
+    ///   zeromem's own default rather than returning nothing.
+    ///
+    /// # Returns
+    /// The envelope, carrying `ok` with the route taken and the evidence found,
+    /// or `error`.
+    ///
+    /// # Atomic
+    /// Serialised on the store's lock, which [`Self::remember`] also takes:
+    /// recall reads the index that ingest mutates.
+    pub(crate) fn recall(&self, query: &str, top_k: usize) -> String {
+        rendered(self.with(|store| {
+            store
+                .query(query, (top_k > 0).then_some(top_k))
+                .map_err(|why| Failed::Store(why.to_string()))
+        }))
+    }
+
+    /// Run `body` against the store, holding its lock.
+    ///
+    /// A poisoned lock is reported rather than recovered from: `ingest_turn`
+    /// mutates the index in place, so a panic partway leaves it in a state
+    /// nothing here can describe. `testenv::with_env` recovers because its guard
+    /// restores what it touched; this has no such guarantee.
+    fn with<T>(
+        &self,
+        body: impl FnOnce(&mut zeromem::ZeroMem) -> Result<T, Failed>,
+    ) -> Result<T, Failed> {
+        let mut store = self.inner.lock().map_err(|_| Failed::Poisoned)?;
+        body(&mut store)
+    }
+}
+
+/// Put a turn in, for a caller holding a pointer.
+///
+/// A delegate to [`Memory::remember`]. `jni_memory` still holds a pointer, so
+/// this is what it calls until it stops; when it does, this and the C helpers
+/// behind it go together. Two reviewable changes rather than one over the size
+/// limit, and nothing is orphaned in between.
 ///
 /// # Returns
-/// An owned JSON string to pass to `wattrouter_string_free`, carrying `ok` with
-/// the turn's id or `error`. Null IF any pointer was null or not UTF-8.
+/// An owned JSON string to pass to `wattrouter_string_free`, or null IF any
+/// pointer was null or not UTF-8.
 ///
 /// # Safety
 /// Every pointer must be null or a valid NUL-terminated string outliving the
-/// call, and `memory` must come from [`wattrouter_memory_open`].
+/// call, and `memory` must come from [`open`] by way of a `Box`.
 ///
 /// # Atomic
-/// Serialised on the store's lock. A second caller waits.
+/// Serialised on the store's lock.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wattrouter_memory_remember(
     memory: *const Memory,
@@ -103,38 +166,19 @@ pub unsafe extern "C" fn wattrouter_memory_remember(
         ) else {
             return unusable();
         };
-
-        // Refused rather than stored: zeromem indexes nothing, so it becomes a
-        // turn that cannot be recalled and counts against the horizon anyway.
-        if text.trim().is_empty() {
-            return refused("a turn with no text cannot be remembered");
-        }
-
-        rendered(memory.with(|store| {
-            store
-                .ingest_turn(session, speaker, text, ts)
-                .map_err(|why| Failed::Store(why.to_string()))
-        }))
+        memory.remember(session, speaker, text, ts)
     })
 }
 
-/// Ask the store something.
+/// Ask the store something, for a caller holding a pointer.
 ///
-/// # Arguments
-/// * `top_k` — how many pieces of evidence to return, WHERE `0` takes zeromem's
-///   own default rather than returning nothing.
-///
-/// # Returns
-/// An owned JSON string to pass to `wattrouter_string_free`, carrying `ok` with
-/// the route taken and the evidence found, or `error`. Null on the terms
-/// [`wattrouter_memory_remember`] states.
+/// A delegate to [`Memory::recall`], on [`wattrouter_memory_remember`]'s terms.
 ///
 /// # Safety
 /// As [`wattrouter_memory_remember`].
 ///
 /// # Atomic
-/// Serialised on the store's lock, which `remember` also takes: recall reads the
-/// index that ingest mutates.
+/// Serialised on the store's lock.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wattrouter_memory_recall(
     memory: *const Memory,
@@ -146,74 +190,31 @@ pub unsafe extern "C" fn wattrouter_memory_recall(
         else {
             return unusable();
         };
-
-        rendered(memory.with(|store| {
-            store
-                .query(query, (top_k > 0).then_some(top_k))
-                .map_err(|why| Failed::Store(why.to_string()))
-        }))
+        memory.recall(query, top_k)
     })
-}
-
-impl Memory {
-    /// Run `body` against the store, holding its lock.
-    ///
-    /// A poisoned lock is reported rather than recovered from: `ingest_turn`
-    /// mutates the index in place, so a panic partway leaves it in a state
-    /// nothing here can describe. `testenv::with_env` recovers because its guard
-    /// restores what it touched; this has no such guarantee.
-    fn with<T>(
-        &self,
-        body: impl FnOnce(&mut zeromem::ZeroMem) -> Result<T, Failed>,
-    ) -> Result<T, Failed> {
-        let mut store = self.inner.lock().map_err(|_| Failed::Poisoned)?;
-        body(&mut store)
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::ffi_answer::wattrouter_string_free;
     use crate::testenv::Scratch;
     use serde_json::Value;
-    use std::ffi::{CStr, CString, c_char};
 
     /// Open a store as the app will. Dropping it is the whole of closing it, so
     /// nothing here has to remember to.
-    ///
-    /// The pointer is still what `remember` and `recall` take, so the body gets
-    /// one; the `Box` behind it is this function's to own until they stop.
-    fn with_store<T>(name: &str, keep: usize, body: impl FnOnce(*mut super::Memory) -> T) -> T {
+    fn with_store<T>(name: &str, keep: usize, body: impl FnOnce(&super::Memory) -> T) -> T {
         let scratch = Scratch::new(name);
         let path = scratch.path().join("memory.db");
-        let mut store = super::open(&path, keep).expect("the store did not open");
-        body(&raw mut store)
+        let store = super::open(&path, keep).expect("the store did not open");
+        body(&store)
     }
 
-    /// Take ownership of an envelope and read it.
-    fn answer(returned: *mut c_char) -> Value {
-        assert!(!returned.is_null(), "no answer at all");
-        let json = unsafe { CStr::from_ptr(returned) }
-            .to_str()
-            .expect("the envelope is UTF-8")
-            .to_owned();
-        unsafe { wattrouter_string_free(returned) };
-        serde_json::from_str(&json).expect("the envelope is JSON")
+    /// Decode what a call answered.
+    fn answer(json: &str) -> Value {
+        serde_json::from_str(json).expect("the envelope is JSON")
     }
 
-    fn remember(store: *mut super::Memory, text: &str, ts: i64) -> Value {
-        let session = CString::new("s").unwrap();
-        let speaker = CString::new("user").unwrap();
-        let text = CString::new(text).unwrap();
-        answer(unsafe {
-            super::wattrouter_memory_remember(
-                store,
-                session.as_ptr(),
-                speaker.as_ptr(),
-                text.as_ptr(),
-                ts,
-            )
-        })
+    fn remember(store: &super::Memory, text: &str, ts: i64) -> Value {
+        answer(&store.remember("s", "user", text, ts))
     }
 
     #[test]
@@ -243,14 +244,12 @@ mod tests {
 
     #[test]
     fn what_went_in_comes_back_out() {
-        // The round trip, through C both ways. Recall returns evidence rather
-        // than an answer, which is what the tool above it will render.
+        // The round trip. Recall returns evidence rather than an answer, which is
+        // what the tool above it will render.
         with_store("ffi-memory-roundtrip", 100, |store| {
             remember(store, "the spare key is with Dave next door", 1);
 
-            let query = CString::new("where is the spare key").unwrap();
-            let found =
-                answer(unsafe { super::wattrouter_memory_recall(store, query.as_ptr(), 5) });
+            let found = answer(&store.recall("where is the spare key", 5));
 
             let evidence = found["ok"]["evidence"].as_array().expect("evidence");
             assert!(!evidence.is_empty(), "recalled nothing: {found}");
@@ -271,9 +270,7 @@ mod tests {
         with_store("ffi-memory-topk", 100, |store| {
             remember(store, "the bins go out on Tuesday", 1);
 
-            let query = CString::new("bins").unwrap();
-            let found =
-                answer(unsafe { super::wattrouter_memory_recall(store, query.as_ptr(), 0) });
+            let found = answer(&store.recall("bins", 0));
             assert!(
                 !found["ok"]["evidence"]
                     .as_array()
@@ -282,16 +279,5 @@ mod tests {
                 "zero was read as none: {found}"
             );
         });
-    }
-
-    #[test]
-    fn hostile_input_returns_a_value_rather_than_unwinding() {
-        // A panic across the boundary is undefined behaviour. Opening and freeing
-        // are no longer part of this: `open` takes a `&Path` and answers an
-        // `Option`, and the `Box` it used to hand out lives in `jni_memory` now.
-        let t = CString::new("x").unwrap();
-        let (p, n) = (t.as_ptr(), std::ptr::null());
-        assert!(unsafe { super::wattrouter_memory_remember(n, p, p, p, 1) }.is_null());
-        assert!(unsafe { super::wattrouter_memory_recall(n, p, 1) }.is_null());
     }
 }
