@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  AndroidManifest.xml — what this library declares, which is nothing.
+  AndroidManifest.xml: what this library declares, which is nothing.
 
   History
     2026-08-08  A. Sigdel  Created.
 
   Empty on purpose. A library module needs a manifest and this one asks for no
   permission and contributes no component: it is Core.kt and a shared object.
-  Every permission #233's later items need — accessibility, overlay, foreground
-  service — belongs to the app that requests it, declared where somebody reading
+  Every permission #233's later items need (accessibility, overlay, foreground
+  service) belongs to the app that requests it, declared where somebody reading
   the app can see the whole list rather than assembled from merged fragments.
 -->
 <manifest />

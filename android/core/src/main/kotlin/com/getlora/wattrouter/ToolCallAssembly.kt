@@ -1,4 +1,4 @@
-// ToolCallAssembly.kt — putting a tool call back together.
+// ToolCallAssembly.kt: putting a tool call back together.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
@@ -9,7 +9,7 @@
 // time across many lines. The state lives here, in the one type whose job it is.
 //
 // Nothing is emitted as it arrives. Inference promises that a yielded event
-// commits the chain — a second model cannot un-deliver one — and a half-built
+// commits the chain (a second model cannot un-deliver one) and a half-built
 // call commits to something that does not exist yet. Nothing on the wire marks
 // the end of an individual call either; only the finish reason marks the end of
 // all of them, so the caller decides when to ask.

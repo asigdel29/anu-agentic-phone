@@ -1,4 +1,4 @@
-// Generation.kt — which reading of the screen something came from.
+// Generation.kt: which reading of the screen something came from.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -16,7 +16,7 @@
 //
 // The counter follows the tree's shape and not its content. A clock, a progress
 // bar and an unread badge change several times a second, and a generation moving
-// with them would make every handle stale before the model could use one — a
+// with them would make every handle stale before the model could use one, and a
 // system that refuses everything is indistinguishable from a broken one.
 //
 // That is only safe because of #405. A scrolled list keeps its ids and its shape
@@ -42,7 +42,7 @@ data class Generation(val epoch: String, val counter: Long)
  * What counts as a different screen.
  *
  * Shape rather than content: which nodes exist, where they sit, and what they
- * are. Invisible nodes are left out, consistently with [prune] and [resolve] —
+ * are. Invisible nodes are left out, consistently with [prune] and [resolve]:
  * a drawer opening is a new screen, and one that was always shut is not part of
  * the old one.
  */
@@ -116,7 +116,7 @@ class Generations(private val epoch: String) {
      * Whether something read then may be acted on now.
      *
      * A generation from another life of the service fails on the epoch, however
-     * its counter compares — which is the whole reason there are two fields.
+     * its counter compares, which is the whole reason there are two fields.
      */
     fun isCurrent(generation: Generation): Boolean = generation == current
 

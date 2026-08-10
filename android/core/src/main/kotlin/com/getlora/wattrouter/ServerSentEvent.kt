@@ -1,4 +1,4 @@
-// ServerSentEvent.kt — one line of a streamed completion.
+// ServerSentEvent.kt: one line of a streamed completion.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
@@ -11,13 +11,13 @@
 // The provider answers a streaming request in text/event-stream: a line-framed
 // format carrying JSON, most of whose lines carry nothing. Reading it is a pure
 // function of a line, so it is written and tested as one, apart from the client
-// that will do the reading — a wire format and a transport fail in different
+// that will do the reading: a wire format and a transport fail in different
 // ways and are worth debugging separately.
 //
 // One line is not one event. A delta can carry text *and* several tool call
 // fragments, and the choice around it can carry a finish reason at the same
 // time; parallel calls are an array. So reading a line yields a list, and there
-// is no Ignored case — an ignored line yields an empty list, which says the
+// is no Ignored case: an ignored line yields an empty list, which says the
 // same thing. Returning one event and picking whichever looked most important
 // is how a tool call goes missing behind a stray space of content.
 //
@@ -25,8 +25,8 @@
 // is an error rather than a skip, because the alternative is dropping the
 // model's text and reporting success: an answer that silently loses a sentence
 // looks like a short answer, and nothing in the stack would say otherwise.
-// Lines that are not data — comments, blanks, fields this client does not read
-// — yield nothing, because that is the format working as intended.
+// Lines that are not data (comments, blanks, fields this client does not read)
+// yield nothing, because that is the format working as intended.
 
 package com.getlora.wattrouter
 
