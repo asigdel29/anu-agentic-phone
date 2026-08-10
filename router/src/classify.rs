@@ -1,4 +1,4 @@
-//! classify.rs — reading routing signals off a request.
+//! classify.rs: reading routing signals off a request.
 //!
 //! History
 //!   2026-08-05  A. Sigdel  Created.
@@ -19,7 +19,7 @@ use crate::tier::Tier;
 
 /// Cap on the text handed to the scorer.
 ///
-/// Routing cost must not grow with conversation length — a hundred-turn
+/// Routing cost must not grow with conversation length: a hundred-turn
 /// conversation should cost the same to route as a one-turn one. Roughly 512
 /// tokens, which is also where the embedding model's own window stops being
 /// useful.
@@ -45,8 +45,8 @@ pub struct Classified {
 /// Read routing signals from a request body and its pinning header.
 ///
 /// # Arguments
-/// * `body` — a parsed chat completion request. Any shape is tolerated.
-/// * `tier_header` — the value of `x-wattrouter-tier`, IF present.
+/// * `body`: a parsed chat completion request. Any shape is tolerated.
+/// * `tier_header`: the value of `x-wattrouter-tier`, IF present.
 ///
 /// # Returns
 /// Signals for the policy, always. Fields that cannot be determined take their
@@ -105,7 +105,7 @@ pub fn classify(body: &serde_json::Value, tier_header: Option<&str>) -> Classifi
 ///
 /// Multipart content is skipped rather than flattened. It is rare on this path,
 /// and mis-flattening it would feed the scorer a mangled string, which is worse
-/// than feeding it nothing — the policy has an answer for nothing.
+/// than feeding it nothing, and the policy has an answer for nothing.
 fn content_of(message: &serde_json::Value) -> Option<&str> {
     message.get("content").and_then(|c| c.as_str())
 }
@@ -156,7 +156,7 @@ fn looks_like_code(text: &str) -> bool {
 ///
 /// The explicit marker is authoritative. The `max_tokens` fallback exists because
 /// agents issue titling and summarising calls without marking them, and those are
-/// the highest-volume requests in a session — routing them to a large model is
+/// the highest-volume requests in a session, and routing them to a large model is
 /// the single most wasteful thing the router could do.
 fn is_background(body: &serde_json::Value) -> bool {
     if body

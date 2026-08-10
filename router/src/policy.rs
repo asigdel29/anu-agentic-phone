@@ -1,4 +1,4 @@
-//! policy.rs — choosing a tier.
+//! policy.rs: choosing a tier.
 //!
 //! History
 //!   2026-08-05  A. Sigdel  Created.
@@ -44,7 +44,7 @@ pub struct Signals {
 /// Score boundaries between tiers.
 ///
 /// A score is in `[0, 1]`, higher meaning harder. Defaults aim at roughly half
-/// the traffic cheap, a third middle, the rest heavy — retune from real traffic.
+/// the traffic cheap, a third middle, the rest heavy; retune from real traffic.
 #[derive(Debug, Clone, Copy)]
 pub struct Thresholds {
     cheap_max: f32,
@@ -55,8 +55,8 @@ impl Thresholds {
     /// Build a threshold set.
     ///
     /// # Arguments
-    /// * `cheap_max` — top of the cheap band, WHERE `0 <= cheap_max < mid_max`.
-    /// * `mid_max` — top of the middle band, WHERE `mid_max <= 1`.
+    /// * `cheap_max`: top of the cheap band, WHERE `0 <= cheap_max < mid_max`.
+    /// * `mid_max`: top of the middle band, WHERE `mid_max <= 1`.
     ///
     /// # Returns
     /// `Some` IF the bounds are ordered and in range. An unordered set is
@@ -151,7 +151,7 @@ impl Decision {
 /// default. Each rule's reasoning sits with it below.
 ///
 /// # Arguments
-/// * `score` — `Some(s)` WHERE `s` is in `[0, 1]`, higher meaning harder. Values
+/// * `score`: `Some(s)` WHERE `s` is in `[0, 1]`, higher meaning harder. Values
 ///   outside the range are clamped rather than rejected: a broken head should
 ///   degrade routing, not fail requests.
 ///

@@ -1,4 +1,4 @@
-//! decide.rs — how long the router spends deciding, with no network in the way.
+//! decide.rs: how long the router spends deciding, with no network in the way.
 //!
 //! History
 //!   2026-08-06  A. Sigdel  Created.
@@ -7,7 +7,7 @@
 //!   `bench`  Times one closure and reports nanoseconds per call.
 //!   `main`   Times each stage of the decision path and the whole of it.
 //!
-//! End-to-end request latency is dominated by the upstream — a round trip plus
+//! End-to-end request latency is dominated by the upstream: a round trip plus
 //! inference, milliseconds to seconds, which nothing here can touch. What this
 //! measures is the part the router owns: the work between reading a body and
 //! opening a socket. That is pure CPU, it runs on every request, and it is the

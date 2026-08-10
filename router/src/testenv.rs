@@ -1,4 +1,4 @@
-//! testenv.rs — the environment, as the crate's tests are allowed to touch it.
+//! testenv.rs: the environment, as the crate's tests are allowed to touch it.
 //!
 //! History
 //!   2026-08-07  A. Sigdel  Created, from the lock that lived in config's tests.
@@ -11,7 +11,7 @@
 //!
 //! Environment variables are process-global and the lib tests share one process,
 //! so a test that sets one races every test that reads one. `config` knew this
-//! and kept a mutex — but inside its own `mod tests`, where nothing else could
+//! and kept a mutex, but inside its own `mod tests`, where nothing else could
 //! take it, while its comment claimed nothing else read the environment
 //! meanwhile. `core` did, both writing the credential and reading it back through
 //! `Config::from_env`, and CI duly failed an unrelated change with
@@ -27,8 +27,8 @@ static ENV: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 /// A directory that removes itself, so a failing case leaves nothing behind.
 ///
-/// Gated on the features whose tests want one. A build with neither — `android`
-/// on its own is one — would otherwise carry it as dead code, and dead code is
+/// Gated on the features whose tests want one. A build with neither (`android`
+/// on its own is one) would otherwise carry it as dead code, and dead code is
 /// denied.
 #[cfg(any(feature = "git", feature = "memory"))]
 pub(crate) struct Scratch(std::path::PathBuf);
@@ -38,7 +38,7 @@ impl Scratch {
     /// A fresh empty directory, named after the case that asked for it.
     ///
     /// # Arguments
-    /// * `name` — WHERE `name` is unique across the crate's tests. They share one
+    /// * `name`: WHERE `name` is unique across the crate's tests. They share one
     ///   process and run in parallel, so two cases naming theirs the same get one
     ///   directory between them and fail each other.
     pub(crate) fn new(name: &str) -> Self {
@@ -64,10 +64,10 @@ impl Drop for Scratch {
 /// Run `body` with `vars` applied, restoring previous values afterwards.
 ///
 /// # Arguments
-/// * `vars` — variables to set, WHERE `None` removes one for the duration.
+/// * `vars`: variables to set, WHERE `None` removes one for the duration.
 ///
 /// # Returns
-/// Whatever `body` returned, with every named variable back as it was — a leaked
+/// Whatever `body` returned, with every named variable back as it was: a leaked
 /// variable would silently change whichever test ran next.
 ///
 /// # Panics
@@ -76,7 +76,7 @@ impl Drop for Scratch {
 /// and failing every later test as well would only hide the first one.
 ///
 /// # Atomic
-/// Serialised against every other caller. Not reentrant — the lock is a plain
+/// Serialised against every other caller. Not reentrant: the lock is a plain
 /// mutex, so `body` must not call this again or it will deadlock rather than
 /// nest.
 pub(crate) fn with_env<T>(vars: &[(&str, Option<&str>)], body: impl FnOnce() -> T) -> T {

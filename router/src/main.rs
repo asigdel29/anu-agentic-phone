@@ -1,4 +1,4 @@
-//! main.rs — the wattrouter binary.
+//! main.rs: the wattrouter binary.
 //!
 //! History
 //!   2026-08-05  A. Sigdel  Created with configuration and the two endpoints a
@@ -38,8 +38,8 @@ use wattrouter::upstream::Upstream;
 /// Shared application state.
 ///
 /// Read-only after construction, so it is handed to every request through an
-/// [`Arc`] with no lock. The mutable pieces the router grows later — the
-/// embedder, the decision cache, the connection pool — carry their own
+/// [`Arc`] with no lock. The mutable pieces the router grows later (the
+/// embedder, the decision cache, the connection pool) carry their own
 /// synchronisation and document it where they are defined.
 #[derive(Debug)]
 struct AppState {
@@ -120,13 +120,13 @@ async fn list_models(State(state): State<Arc<AppState>>) -> (StatusCode, Json<Va
 /// reported on the response so an operator can see what happened without reading
 /// logs, and so the verification script has something to assert against.
 ///
-/// With no head loaded the policy takes its unscored path — a defined behaviour
+/// With no head loaded the policy takes its unscored path, a defined behaviour
 /// rather than a gap, since pinning, background detection and the capability rule
 /// all still apply.
 ///
 /// # Returns
 /// The upstream response, body still streaming, with `x-wattrouter-tier` added.
-/// `502` IF every model in the chain failed — the request was well-formed and
+/// `502` IF every model in the chain failed: the request was well-formed and
 /// the failure is upstream, which is what that status means.
 ///
 /// # Rely
@@ -146,7 +146,7 @@ async fn chat_completions(
         .and_then(|v| v.to_str().ok());
     // Without one every request is independent, which is correct rather than
     // merely tolerated. Counted because nothing in this repository sends one
-    // today, so stickiness — which `cache.rs` calls the larger win — has never
+    // today, so stickiness, which `cache.rs` calls the larger win, has never
     // fired, and a response cannot say so: no session and an unseen session
     // route identically.
     let session = headers
@@ -227,7 +227,7 @@ async fn chat_completions(
             tracing::error!(error = %e, tier = decision.tier.name(), "every model failed");
             // Reported here too. The decision is as true of a failure as of a
             // success, and which tier failed is the first thing anyone asks of a
-            // 502 — answering it from the logs means still having them.
+            // 502, and answering it from the logs means still having them.
             let mut response = (
                 StatusCode::BAD_GATEWAY,
                 Json(json!({"error": {"message": e.to_string(), "type": "upstream_error"}})),
@@ -283,7 +283,7 @@ fn app(
 ) -> Router {
     // A head's scores occupy a narrow band around 0.5, so the absolute defaults
     // would strand whole tiers. When the head carries thresholds calibrated
-    // against its own distribution, those win — they are the only ones that can
+    // against its own distribution, those win: they are the only ones that can
     // be right for it.
     let thresholds = head
         .as_ref()
@@ -360,7 +360,7 @@ async fn guard(
 /// Build the embedding backend the configuration asked for.
 ///
 /// The binary constructed `HashEmbedder` unconditionally, which made the `onnx`
-/// feature — on by default — build a backend the server had no path to. Worse,
+/// feature, on by default, build a backend the server had no path to. Worse,
 /// [`Head::load`] pairs a head against the embedder that will actually be used,
 /// so a head fitted on ONNX vectors could never be loaded: the only head the
 /// server would accept was one fitted on hash vectors, and `train-head` records
@@ -645,7 +645,7 @@ mod tests {
         let app = test_app();
         let body = || Body::from(r#"{"messages":[{"role":"user","content":"hello there"}]}"#);
 
-        // One with, one without. The upstream refuses, so both 502 — which does
+        // One with, one without. The upstream refuses, so both 502, which does
         // not matter here: the header is read before anything is forwarded.
         for session in [Some("verify-1"), None] {
             let mut request = Request::builder()

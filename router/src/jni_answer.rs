@@ -1,4 +1,4 @@
-//! `jni_answer.rs` — what the JNI bindings share across the boundary.
+//! `jni_answer.rs`: what the JNI bindings share across the boundary.
 //!
 //! History
 //!   2026-08-09  A. Sigdel  Created, from `jni_git.rs` and `jni_memory.rs`,
@@ -12,7 +12,7 @@
 //! `answer.rs` beside this is the same module for the C ABI, and it exists
 //! for the reason recorded in its header: two envelopes that agree today, and a
 //! caller unwrapping two shapes the day one changes. The JNI half had that
-//! duplication — `owned` and `answered` were byte-identical in two files — and
+//! duplication (`owned` and `answered` were byte-identical in two files) and
 //! neither copy applied the three rules `jni.rs` states for this boundary.
 //!
 //! None of the three was a live failure, and #468 says so with the measurement.
@@ -52,7 +52,7 @@ pub(crate) fn handed(env: &mut JNIEnv<'_>, json: String) -> jstring {
 /// Run `body`, answering `refusal` rather than unwinding into the JVM.
 ///
 /// # Arguments
-/// * `refusal` — what the entry point answers on a panic, WHERE it is the value
+/// * `refusal`: what the entry point answers on a panic, WHERE it is the value
 ///   that entry point already uses to mean it could not do the thing: a null
 ///   `jstring`, a zero handle, or nothing at all.
 ///

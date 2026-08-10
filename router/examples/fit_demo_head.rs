@@ -1,11 +1,11 @@
-//! fit_demo_head.rs — a head fitted from word lists, to show one changes routing.
+//! fit_demo_head.rs: a head fitted from word lists, to show one changes routing.
 //!
 //! History
 //!   2026-08-05  A. Sigdel  Created.
 //!
 //! Fits a throwaway head from two labelled word lists, to demonstrate that a
-//! head changes routing. Not the real training path — that lands with the
-//! dataset — but it uses the router's own embedder, so the vectors are exactly
+//! head changes routing. Not the real training path, which lands with the
+//! dataset, but it uses the router's own embedder, so the vectors are exactly
 //! what it sees at runtime.
 use wattrouter::embed::{DIM, Embedder, HashEmbedder};
 

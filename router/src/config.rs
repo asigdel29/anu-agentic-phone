@@ -1,4 +1,4 @@
-//! config.rs — configuration read from the environment.
+//! config.rs: configuration read from the environment.
 //!
 //! History
 //!   2026-08-05  A. Sigdel  Created.
@@ -76,14 +76,14 @@ impl Config {
     /// Where to bind, in the order a deployment expects to be asked.
     ///
     /// `WATTROUTER_ADDR` wins, because somebody who set it meant it. Failing
-    /// that, `PORT` — which every container platform assigns and none of them
-    /// lets you rename — becomes `0.0.0.0:PORT`, because loopback inside a
+    /// that, `PORT` (which every container platform assigns and none of them
+    /// lets you rename) becomes `0.0.0.0:PORT`, because loopback inside a
     /// container is the container: a health check from outside times out and the
     /// deployment is marked failed with a process running perfectly.
     ///
     /// Loopback stays the default when neither is set. A router that binds every
     /// interface unasked is the mistake #533 was about, and a container is the
-    /// one place that is not a mistake — so the container says so, by setting
+    /// one place that is not a mistake, so the container says so, by setting
     /// one of these two.
     fn addr_from_env() -> String {
         if let Some(addr) = optional("WATTROUTER_ADDR") {
@@ -154,7 +154,7 @@ impl Config {
 
         // Hashing unless asked otherwise. ONNX needs a ~130MB download that a
         // first run on a small board should not be surprised by, and a head
-        // fitted on one is unreadable by the other — so this is a deliberate
+        // fitted on one is unreadable by the other, so this is a deliberate
         // choice rather than a default that changes underneath somebody.
         let embedder = match optional("WATTROUTER_EMBEDDER") {
             None => Choice::Hash,

@@ -1,4 +1,4 @@
-//! git.rs — git operations, without a subprocess.
+//! git.rs: git operations, without a subprocess.
 //!
 //! History
 //!   2026-08-08  A. Sigdel  Created.
@@ -13,7 +13,7 @@
 //!   `commit`  Writing what is staged, and refusing to write nothing.
 //!
 //! Everything on the board shells out to `git`. A phone has no shell, so these
-//! come from libgit2 — reached as a Rust dependency of this crate, which already
+//! come from libgit2, reached as a Rust dependency of this crate, which already
 //! crosses to both iOS slices. `docs/decisions/git-without-a-subprocess.md` has
 //! why, and what libgit2 does not do.
 //!
@@ -24,7 +24,7 @@
 //! Two states are not errors and read exactly like them, which is why this is
 //! the first thing written. A freshly initialised repository has a `HEAD`
 //! pointing at a branch that does not exist yet, and `Repository::head()` fails
-//! on it — reported as a failure, that is wrong about the moment the agent is
+//! on it, and reported as a failure, that is wrong about the moment the agent is
 //! most likely to be looking. And a detached `HEAD` has no branch at all, so
 //! naming one is a lie the model would act on.
 
@@ -109,7 +109,7 @@ pub enum Made {
 ///
 /// # Errors
 /// [`Error::Refused`] IF the directory cannot be made or the repository cannot
-/// be initialised there — a path inside a file, or one nothing may write to.
+/// be initialised there: a path inside a file, or one nothing may write to.
 pub fn init(path: &Path) -> Result<Made, Error> {
     // Asked before anything is created, so an existing repository is reported
     // rather than re-initialised. `Repository::init` on one is harmless and
@@ -291,7 +291,7 @@ fn first_of(flags: git2::Status, table: &[(git2::Status, &'static str)]) -> Opti
 /// Stage paths.
 ///
 /// # Arguments
-/// * `paths` — relative to the repository root, WHERE a directory stages what is
+/// * `paths`: relative to the repository root, WHERE a directory stages what is
 ///   under it.
 ///
 /// # Errors
@@ -301,7 +301,7 @@ fn first_of(flags: git2::Status, table: &[(git2::Status, &'static str)]) -> Opti
 ///
 /// # Atomic
 /// Not atomic across paths. The check runs over all of them first, so the common
-/// failure stages nothing — but a path removed between the check and the write
+/// failure stages nothing, but a path removed between the check and the write
 /// leaves the earlier ones staged.
 pub fn add(path: &Path, paths: &[String]) -> Result<Status, Error> {
     let repo = open(path)?;

@@ -1,4 +1,4 @@
-//! core.rs — the decision core, as anything in this process calls it.
+//! core.rs: the decision core, as anything in this process calls it.
 //!
 //! History
 //!   2026-08-06  A. Sigdel  Created.
@@ -100,7 +100,7 @@ impl Router {
     /// to configure the core rather than two that can disagree.
     ///
     /// # Arguments
-    /// * `head_path` — where to load the scoring head from. [`None`] takes the
+    /// * `head_path`: where to load the scoring head from. [`None`] takes the
     ///   configured default. The app passes a path because it keeps weights in
     ///   its own sandbox, which that default cannot reach.
     ///
@@ -151,11 +151,11 @@ impl Router {
     /// would drift from the server's.
     ///
     /// # Arguments
-    /// * `body_json` — an OpenAI-shaped chat completion request.
-    /// * `pin` — a tier name to force. Nothing on a phone supplies one; the
+    /// * `body_json`: an OpenAI-shaped chat completion request.
+    /// * `pin`: a tier name to force. Nothing on a phone supplies one; the
     ///   server does, from a header, and the parameter stays so that both reach
     ///   the policy the same way.
-    /// * `session` — a session identifier for stickiness.
+    /// * `session`: a session identifier for stickiness.
     ///
     /// # Returns
     /// [`None`] IF the body is not an OpenAI-shaped chat completion. That was
@@ -237,7 +237,7 @@ mod tests {
     ///
     /// Holds the crate-wide environment lock for the whole of `body`, not just
     /// the construction. `Router::new` reads the environment, and so does any
-    /// `Config::from_env` a body makes to compare against — the credential
+    /// `Config::from_env` a body makes to compare against: the credential
     /// vanishing between the two is what failed CI, and a stray
     /// `WATTROUTER_MODEL_*` from a concurrent test would have been worse, since
     /// that compares two different configurations and reports a wrong answer

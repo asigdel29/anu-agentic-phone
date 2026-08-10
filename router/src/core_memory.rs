@@ -1,4 +1,4 @@
-//! `core_memory.rs` — the memory store, across the C ABI.
+//! `core_memory.rs`: the memory store, as an envelope a model can read.
 //!
 //! History
 //!   2026-08-08  A. Sigdel  Created.
@@ -11,7 +11,7 @@
 //!   `wattrouter_memory_recall`   Ask it something.
 //!
 //! Opening is where the horizon runs. `ZeroMem::open` loads and indexes every
-//! turn, so bounding afterwards is bounding it after paying for it —
+//! turn, so bounding afterwards is bounding it after paying for it, so
 //! `memory::apply` goes first, in the same call, so no caller can get that wrong.
 //!
 //! A handle rather than a path per call, unlike the git half: libgit2 is cheap to
@@ -45,8 +45,8 @@ enum Failed {
 /// Bound the store, then open it.
 ///
 /// # Arguments
-/// * `path` — the database, WHERE it need not exist yet.
-/// * `keep` — how many recent turns to leave in front of the horizon.
+/// * `path`: the database, WHERE it need not exist yet.
+/// * `keep`: how many recent turns to leave in front of the horizon.
 ///
 /// # Returns
 /// [`None`] IF the horizon failed or the store would not open. A path that could
@@ -98,7 +98,7 @@ impl Memory {
     /// Ask the store something.
     ///
     /// # Arguments
-    /// * `top_k` — how many pieces of evidence to return, WHERE `0` takes
+    /// * `top_k`: how many pieces of evidence to return, WHERE `0` takes
     ///   zeromem's own default rather than returning nothing.
     ///
     /// # Returns

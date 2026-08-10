@@ -1,4 +1,4 @@
-//! metrics.rs — counting what the router did.
+//! metrics.rs: counting what the router did.
 //!
 //! History
 //!   2026-08-05  A. Sigdel  Created.
@@ -64,7 +64,7 @@ impl Metrics {
     }
 
     /// Record a cached score reused. Paired with [`Self::record_embedding`] so
-    /// the hit ratio — the argument for keeping the cache — is readable.
+    /// the hit ratio, the argument for keeping the cache, is readable.
     pub fn record_cache_hit(&self) {
         self.cache_hits.fetch_add(1, Ordering::Relaxed);
     }
@@ -78,7 +78,7 @@ impl Metrics {
     ///
     /// Stickiness is the cache's larger win and it needs that header. Nothing in
     /// this repository sends one yet, so a zero here is the finding rather than
-    /// the absence of one — and no response can report it, since a request with
+    /// the absence of one, and no response can report it, since a request with
     /// no session and one with a session never seen before route identically.
     pub fn record_session(&self) {
         self.with_session.fetch_add(1, Ordering::Relaxed);
@@ -89,7 +89,7 @@ impl Metrics {
         self.upstream_failures.fetch_add(1, Ordering::Relaxed);
     }
 
-    /// Render in the Prometheus text format — the one thing every scraper reads,
+    /// Render in the Prometheus text format: the one thing every scraper reads,
     /// and legible with `curl` alone, which is how it will be read on a board.
     ///
     /// # Returns
@@ -160,7 +160,7 @@ impl Metrics {
 }
 
 /// A stable array index for a reason. Written out rather than taken from the
-/// discriminant, so reordering the enum cannot silently reassign a counter — the
+/// discriminant, so reordering the enum cannot silently reassign a counter; the
 /// numbers would keep flowing, into the wrong series.
 const fn reason_index(reason: Reason) -> usize {
     match reason {

@@ -55,7 +55,7 @@ fn`, `# Atomic` on every method over shared state, and an `# Errors` section nam
 condition rather than only the type.
 
 `clippy.toml` extends `doc-valid-idents` with the product names that appear in prose. Add a
-name there rather than backticking it — a product is not a code item.
+name there rather than backticking it: a product is not a code item.
 
 ## Three things that catch people
 
@@ -65,11 +65,11 @@ lock; do not add a second lock inside a `mod tests`, which is the bug that put `
 here.
 
 **`jni.rs` and the Kotlin agree by name and nothing checks that they link.** `jni.rs` exports
-symbols by name, so a rename is not a compile error on either side — it is an
+symbols by name, so a rename is not a compile error on either side, but an
 `UnsatisfiedLinkError` on a device. A
 test in `jni.rs` reads the Kotlin by path, now for three classes: `Core.kt`, `Memory.kt` and
 `Repository.kt`, all under `android/core/src/main/kotlin/com/getlora/wattrouter/`. That makes
-the path load-bearing — move the Kotlin and edit `jni.rs` in the same commit — and a fourth
+the path load-bearing (move the Kotlin and edit `jni.rs` in the same commit) and a fourth
 binding is a row in that test's `BINDINGS` rather than a second copy of it.
 
 What the test cannot do is link. It compares two files as text, so agreement there is a claim
@@ -78,5 +78,5 @@ has a test on a device that calls every entry point once.
 
 **Locks.** `cache.rs:91` and `embed.rs:335` hold one each. They are independent, no path takes
 both, and each documents one acquisition per method rather than an order across two. Add a path
-that takes both and you owe it an order, stated where it does — that is what the standard asks
+that takes both and you owe it an order, stated where it does. That is what the standard asks
 for, and there is nothing to state until then.
