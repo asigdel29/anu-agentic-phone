@@ -384,31 +384,6 @@ pub extern "C" fn wattrouter_reason_name(reason: u8) -> *const c_char {
     name_at(&NAMES, reason)
 }
 
-/// The name of a backend code, as configuration spells it.
-///
-/// A chain crosses as a model name and a number. The name says what to ask; the
-/// number says whether to ask it over a socket or load it into this process, and
-/// a caller that wants to log or display that half needs the word for it. Here
-/// rather than in the caller for the reason the other two are: the vocabulary
-/// has one home, and a second copy is one that falls behind this one.
-///
-/// # Arguments
-/// * `backend` — a code from [`wattrouter_chain_backend`].
-///
-/// # Returns
-/// A static NUL-terminated name, borrowed for the program's lifetime and never
-/// freed by the caller, or null IF `backend` names no backend — which includes
-/// the past-the-end sentinel.
-#[unsafe(no_mangle)]
-pub extern "C" fn wattrouter_backend_name(backend: u8) -> *const c_char {
-    // Written out rather than indexed off `Backend::ALL`, for the reason
-    // `backend_code` is: the caller is compiled against these codes, and
-    // reordering the enum must not change what a number means to it.
-    // `backend_names_match_the_backend` holds the spellings to the backend's own.
-    const NAMES: [&CStr; 2] = [c"local", c"remote"];
-    name_at(&NAMES, backend)
-}
-
 #[cfg(test)]
 mod tests {
     use super::{Decision, Router, reason_code};
@@ -544,17 +519,6 @@ mod tests {
             assert_eq!(name.to_str().unwrap(), reason.label());
         }
         assert!(super::wattrouter_reason_name(Decision::FAILED.reason).is_null());
-    }
-
-    #[test]
-    fn backend_names_match_the_backend() {
-        for backend in Backend::ALL {
-            let code = super::backend_code(backend);
-            let name = unsafe { CStr::from_ptr(super::wattrouter_backend_name(code)) };
-            assert_eq!(name.to_str().unwrap(), backend.name());
-        }
-        // The code `wattrouter_chain_backend` returns past the end of a chain.
-        assert!(super::wattrouter_backend_name(u8::MAX).is_null());
     }
 
     #[test]
