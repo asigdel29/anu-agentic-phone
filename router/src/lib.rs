@@ -66,6 +66,7 @@ pub mod memory;
 pub mod metrics;
 pub mod policy;
 pub mod tier;
+pub mod tokens;
 pub mod upstream;
 
 // Not part of the crate's surface: one lock the tests share, so that a module
