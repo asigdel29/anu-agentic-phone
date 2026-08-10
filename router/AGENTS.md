@@ -1,7 +1,7 @@
 # Working in `router/`
 
 The routing core: it scores a prompt and picks the cheapest tier that can answer, and it is
-also the C ABI the phone links against. Read the root `AGENTS.md` first; this holds what is
+also what the phone reaches over JNI. Read the root `AGENTS.md` first; this holds what is
 true only here.
 
 ## The modules
@@ -19,12 +19,12 @@ true only here.
 | `cache.rs` | Remembering routing decisions. |
 | `upstream.rs` | Forwarding a request to the provider. |
 | `metrics.rs` | Counting what the router did. |
-| `ffi.rs` | The C ABI the iOS app calls the core through. |
-| `ffi_answer.rs` | The envelope an allocating ABI call answers with, shared by the two below. |
+| `ffi.rs` | The C-shaped core the `jni*` files call through. See below. |
+| `ffi_answer.rs` | The envelope an allocating call answers with, shared by the two below. |
 | `git.rs` | git operations without a subprocess, behind the `git` feature. |
-| `ffi_git.rs` | Those operations across the ABI, behind the same feature. |
+| `ffi_git.rs` | Those operations in the same shape, behind the same feature. |
 | `memory.rs` | Bounding what a store loads at open, behind the `memory` feature. |
-| `ffi_memory.rs` | A memory store across the ABI, behind the same feature. |
+| `ffi_memory.rs` | A memory store in the same shape, behind the same feature. |
 | `jni.rs` | The same core reached from Kotlin, behind the `android` feature. |
 | `jni_git.rs` | A repository from Kotlin, behind `android` and `git`. |
 | `jni_memory.rs` | The memory store from Kotlin, behind `android` and `memory`. |
@@ -57,20 +57,16 @@ condition rather than only the type.
 `clippy.toml` extends `doc-valid-idents` with the product names that appear in prose. Add a
 name there rather than backticking it — a product is not a code item.
 
-## Two things that catch people
+## Three things that catch people
 
 **The environment is process-global and the lib tests share a process.** A test that sets a
 variable races every test that reads one. Use `testenv::with_env`, which holds a crate-wide
 lock; do not add a second lock inside a `mod tests`, which is the bug that put `testenv.rs`
 here.
 
-**The header and the module map have to agree with Swift.** `include/wattrouter.h` is the ABI
-and `include/module.modulemap` names the module `WattRouterFFI`, which must match the binary
-target in `ios/Package.swift`. Changing one without the other breaks the import with a message
-naming neither.
-
-Kotlin has the same problem and a different check. `jni.rs` exports symbols by name, so a
-rename is not a compile error on either side — it is an `UnsatisfiedLinkError` on a device. A
+**`jni.rs` and the Kotlin agree by name and nothing checks that they link.** `jni.rs` exports
+symbols by name, so a rename is not a compile error on either side — it is an
+`UnsatisfiedLinkError` on a device. A
 test in `jni.rs` reads the Kotlin by path, now for three classes: `Core.kt`, `Memory.kt` and
 `Repository.kt`, all under `android/core/src/main/kotlin/com/getlora/wattrouter/`. That makes
 the path load-bearing — move the Kotlin and edit `jni.rs` in the same commit — and a fourth

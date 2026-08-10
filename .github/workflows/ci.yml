@@ -7,6 +7,10 @@
 #                          they depend on lint scripts that do not exist yet.
 #   2026-08-08  A. Sigdel  The Android JVM suite, after six pull requests of
 #                          Kotlin merged with nothing here compiling any of it.
+#   2026-08-10  A. Sigdel  The cross-build and the header check go with #564.
+#                          The board one targeted and the header the other
+#                          compiled were both removed, and a job with nothing
+#                          left to prove still fails for unrelated reasons.
 #
 # Runs on merge_group as well as pull_request: the merge queue builds each
 # candidate on its own ref and waits for these checks, so a change is re-validated
@@ -191,57 +195,6 @@ jobs:
         if: needs.detect.outputs.python == 'true'
         run: uv run --project train pytest train/ -q
 
-  # CI runs on x86-64; the router runs on an aarch64 board. Without this, a
-  # target-specific break — most likely in the ONNX runtime the embedder links
-  # against — would not surface until deployment, where it is expensive to
-  # diagnose. Building release here also keeps the optimised path honest, since
-  # that is what actually ships.
-  cross-build:
-    name: Cross-build (aarch64)
-    needs: detect
-    if: ${{ needs.detect.outputs.rust == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/rust-setup
-        with:
-          target: aarch64-unknown-linux-gnu
-          cache-key: cross
-      - name: Install cross-linker
-        run: |
-          set -euo pipefail
-          sudo apt-get update -y
-          # g++ as well as gcc: ONNX Runtime and the tokenizer's regex engine are
-          # C++, and gcc-aarch64-linux-gnu alone does not bring libstdc++ for the
-          # target, so the link fails with `cannot find -lstdc++`.
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-      - name: Build
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-        run: cargo build --manifest-path router/Cargo.toml --target aarch64-unknown-linux-gnu --release
-
-  # A test in ffi.rs proves the header names what the library exports. It cannot
-  # prove the header is valid C, because nothing in a Rust build ever compiles
-  # it. This does.
-  #
-  # On Linux, and that is the change #544 made: this used to ride along with the
-  # iOS build on a macOS runner, targeting arm64-apple-ios. The app is gone and
-  # the ABI is not -- ffi.rs, ffi_git.rs and ffi_memory.rs are a stable C
-  # interface with tests -- so the check moves to the cheapest runner that can
-  # make it. Valid C is valid C; the target was never what this was asking about.
-  header:
-    name: Header
-    needs: detect
-    if: ${{ needs.detect.outputs.rust == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Check the header compiles as C
-        run: |
-          set -euo pipefail
-          gcc -fsyntax-only -Wall -Wextra -pedantic -std=c11 \
-            router/include/wattrouter.h
-
   # The benches carry gates, and a gate nothing runs is a comment. These are
   # ratios between stages timed in the same run, never absolute figures: a shared
   # runner is slower and noisier than any developer machine, so a threshold in
@@ -373,7 +326,7 @@ jobs:
 
   required:
     name: Required
-    needs: [detect, format, lint, test, cross-build, header, perf, android, image]
+    needs: [detect, format, lint, test, perf, android, image]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -384,8 +337,6 @@ jobs:
             format:${{ needs.format.result }}
             lint:${{ needs.lint.result }}
             test:${{ needs.test.result }}
-            cross-build:${{ needs.cross-build.result }}
-            header:${{ needs.header.result }}
             perf:${{ needs.perf.result }}
             android:${{ needs.android.result }}
             image:${{ needs.image.result }}

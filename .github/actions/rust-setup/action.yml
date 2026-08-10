@@ -8,15 +8,11 @@
 # own version is a job that silently drifts.
 
 name: Rust setup
-description: Install the pinned Rust toolchain, optional extra components and target, and restore the cargo cache.
+description: Install the pinned Rust toolchain and optional extra components, and restore the cargo cache.
 
 inputs:
   components:
     description: Space-separated rustup components, e.g. "clippy rustfmt".
-    required: false
-    default: ""
-  target:
-    description: Additional compilation target, e.g. aarch64-unknown-linux-gnu.
     required: false
     default: ""
   cache-key:

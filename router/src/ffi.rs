@@ -1,14 +1,22 @@
-//! ffi.rs — the C ABI the iOS app calls the decision core through.
+//! ffi.rs — the C-shaped core the JNI layer calls through.
 //!
 //! History
 //!   2026-08-06  A. Sigdel  Created.
+//!   2026-08-10  A. Sigdel  Stopped naming iOS with #564. The header and the
+//!                          module map went with it; the shape here did not,
+//!                          and #565 is where that is argued.
 //!
 //! Contents
 //!   `Router`, `Decision`, and the `wattrouter_*` entry points.
 //!
-//! On a board this crate is an HTTP proxy, because the agent and the coding
-//! harness are separate processes. In an app there is one address space, so the
-//! proxy is the wrong shape: no socket, no TLS, no connection pool.
+//! In a process with the agent there is one address space, so the proxy the
+//! server binary is would be the wrong shape here: no socket, no TLS, no
+//! connection pool.
+//!
+//! The C envelope outlived the C caller. `jni.rs` and its three neighbours are
+//! what call these functions now, in-process, and the pointers and NUL-terminated
+//! strings below are a translation they pay for rather than one anything asks
+//! for. Removing it is #565, not this file's business today.
 //!
 //! One entry point, not one per stage: exposing `classify`, `score` and `decide`
 //! separately would move their ordering into the caller, where it would drift
@@ -410,13 +418,14 @@ mod tests {
     use crate::tier::Tier;
     use std::ffi::{CStr, CString};
 
-    /// The header, as the app's compiler will read it.
-    const HEADER: &str = include_str!("../include/wattrouter.h");
-
-    /// The header tells a caller whether one router may be shared across
-    /// threads. Nothing but this decides that claim: the cache is behind a mutex
-    /// and everything else is read-only after construction. If that stops being
-    /// true this stops compiling, rather than the header quietly becoming wrong.
+    /// One router may be shared across threads, and nothing but this decides
+    /// that claim: the cache is behind a mutex and everything else is read-only
+    /// after construction.
+    ///
+    /// The header used to be what rested on it. `Core.kt` is what rests on it
+    /// now: `decide` runs under `@Synchronized` on whatever dispatcher
+    /// `Core.routing` moved it to, while `close` may run on another, which is
+    /// what #474 was about. If that stops being true this stops compiling.
     const _: fn() = || {
         fn assert_shareable<T: Sync + Send>() {}
         assert_shareable::<Router>();
@@ -548,23 +557,6 @@ mod tests {
         assert!(super::wattrouter_backend_name(u8::MAX).is_null());
     }
 
-    /// Every `wattrouter_*` name `text` uses as a function — the identifier
-    /// immediately followed by an opening parenthesis, which is what separates a
-    /// declaration or a call from a type name or a mention in prose.
-    fn entry_points(text: &str) -> std::collections::BTreeSet<&str> {
-        let mut found = std::collections::BTreeSet::new();
-        for (start, _) in text.match_indices("wattrouter_") {
-            let rest = &text[start..];
-            let end = rest
-                .find(|c: char| !c.is_ascii_alphanumeric() && c != '_')
-                .unwrap_or(rest.len());
-            if rest[end..].starts_with('(') {
-                found.insert(&rest[..end]);
-            }
-        }
-        found
-    }
-
     #[test]
     fn a_chain_crosses_the_boundary_in_order() {
         with_router(|router| {
@@ -635,51 +627,5 @@ mod tests {
                 "duplicate for {backend:?}"
             );
         }
-    }
-
-    #[test]
-    fn the_header_declares_exactly_the_entry_points() {
-        // The header is written by hand, so nothing else stops it describing a
-        // library that no longer exists. A caller compiled against a stale
-        // declaration does not fail to link; it reads the wrong answer.
-        let declared = entry_points(HEADER);
-        assert!(
-            declared.contains("wattrouter_decide"),
-            "the scan found nothing, which would make agreement vacuous"
-        );
-        // Every FFI source, because there is one header over all of them. Read
-        // as text rather than as symbols, so the feature-gated halves count here
-        // even in a build that did not compile them — which is the build this
-        // test usually runs in, and the one that would otherwise report the
-        // header as describing functions that do not exist.
-        let library = concat!(
-            include_str!("ffi.rs"),
-            include_str!("ffi_answer.rs"),
-            include_str!("ffi_git.rs"),
-            include_str!("ffi_memory.rs"),
-        );
-        assert_eq!(
-            declared,
-            entry_points(library),
-            "the header and the FFI sources disagree about the entry points"
-        );
-    }
-
-    #[test]
-    fn the_decision_struct_matches_the_header() {
-        // C reads these offsets from its own declaration of the struct. A
-        // mismatch misreads every field rather than failing to link, so the two
-        // layouts are asserted rather than assumed to agree.
-        assert_eq!(size_of::<Decision>(), 8);
-        assert_eq!(align_of::<Decision>(), 4);
-        assert_eq!(std::mem::offset_of!(Decision, tier), 0);
-        assert_eq!(std::mem::offset_of!(Decision, reason), 1);
-        assert_eq!(std::mem::offset_of!(Decision, score), 4);
-
-        let sentinel = format!("#define WATTROUTER_FAILED {}", Decision::FAILED.tier);
-        assert!(
-            HEADER.contains(&sentinel),
-            "the header's sentinel is not the one the library returns"
-        );
     }
 }

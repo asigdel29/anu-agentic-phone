@@ -51,7 +51,6 @@ RUN mkdir -p src benches \
 
 COPY router/src ./src
 COPY router/benches ./benches
-COPY router/include ./include
 
 # Touched so cargo rebuilds them: the stubs above left artefacts newer than the
 # source that replaced them, and cargo compares timestamps.
