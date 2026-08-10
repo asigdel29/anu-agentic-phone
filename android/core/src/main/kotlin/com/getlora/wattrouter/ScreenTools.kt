@@ -1,4 +1,4 @@
-// ScreenTools.kt — looking at the screen, and the seam that reaches one.
+// ScreenTools.kt: looking at the screen, and the seam that reaches one.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -25,7 +25,7 @@
 //
 // The seam is why this is in core/ at all. DrivingService is an app-module
 // class holding framework types, and everything here is prose, rendering and
-// refusals — none of which needs one. The split every capability in Phase 2
+// refusals, none of which needs one. The split every capability in Phase 2
 // took, for the reason Conversation.kt took it first.
 //
 // A line is an action and a token. The token already says the role and the
@@ -45,7 +45,7 @@ sealed interface Done {
     /**
      * It happened.
      *
-     * @property now the screen afterwards, which may still be settling — a tap
+     * @property now the screen afterwards, which may still be settling: a tap
      *   opening a page is answered before the page has finished arriving.
      */
     data class Did(val now: Reading?) : Done
@@ -70,7 +70,7 @@ interface Phone {
      * service being off, which is a different problem with a different fix.
      *
      * # Rely
-     * As [read]. Cheap — it compares a package and an activity against a list.
+     * As [read]. Cheap: it compares a package and an activity against a list.
      */
     suspend fun barredNow(): String?
 
@@ -79,7 +79,7 @@ interface Phone {
      *
      * Separate from [read] for the reason [barredNow] is: null has more than
      * one cause and the answer needs different words for each. #517 is what
-     * happens without it — a window that had not arrived yet was reported as a
+     * happens without it: a window that had not arrived yet was reported as a
      * permission that was never granted, and the model was told to go and turn
      * on a switch that was already on.
      *
@@ -96,7 +96,7 @@ interface Phone {
      * Called from the turn loop. Fetches a tree rather than answering from one
      * held, so it costs a round trip into the framework each time.
      *
-     * @return null when the screen cannot be read — the service off, or no
+     * @return null when the screen cannot be read: the service off, or no
      *   window focused. [attached] tells the two apart, and a caller answering
      *   null without asking it will blame the wrong one.
      */
@@ -114,7 +114,7 @@ interface Phone {
      * As [read]. Suspends for as long as the framework takes to dispatch, and
      * reads the screen again afterwards.
      *
-     * @return null on [read]'s terms — the screen unreadable, which is not the
+     * @return null on [read]'s terms: the screen unreadable, which is not the
      *   same as a tap that did not land.
      */
     suspend fun tap(at: Handle, from: Generation): Done?
@@ -184,13 +184,13 @@ private fun plain(name: String) = name.lowercase().filterNot { it.isWhitespace()
  * Which apps a name means, best first.
  *
  * Three tiers, because models write app names the way people say them. Exact
- * wins outright. Otherwise a prefix — "Maps" for "Maps Go" — and only then a
+ * wins outright. Otherwise a prefix ("Maps" for "Maps Go") and only then a
  * substring, so "mail" finding Gmail is a last resort rather than a first
  * guess. Case and spacing are ignored throughout: "WhatsApp", "whatsapp" and
  * "Whats App" are one app to everybody except a string comparison.
  *
  * @return the best tier that matched anything, or empty. More than one is for
- *   the caller to refuse rather than choose between — two apps called Calendar
+ *   the caller to refuse rather than choose between: two apps called Calendar
  *   is ordinary on a phone with a work profile, and picking the first is
  *   picking somebody's employer at random.
  */
@@ -211,7 +211,7 @@ internal fun matching(name: String, apps: List<Launchable>): List<Launchable> {
  * Which way through a list.
  *
  * Forward and back rather than down and up. A horizontal carousel scrolls
- * sideways and a vertical list scrolls down, and both are the same action —
+ * sideways and a vertical list scrolls down, and both are the same action.
  * naming it "down" would be right for most lists and wrong for the rest, and a
  * model told "down" on a carousel would be surprised by what moved.
  */
@@ -232,7 +232,7 @@ enum class Onward(val word: String) {
  *
  * Closed, and the refusal lists it. A model writing `go_back` should be told
  * the words that work, the way ToolBox answers an unknown tool with the names
- * that exist — guessing at a near miss is the mistake resolve refuses to make.
+ * that exist. Guessing at a near miss is the mistake resolve refuses to make.
  */
 enum class Way(val word: String) {
     /**
@@ -262,7 +262,7 @@ fun encodeSeen(generation: Generation): String =
  * One back.
  *
  * @return null for anything this build did not write. Strict for [decode]'s
- *   reason — a generation assembled with a default counter would compare equal
+ *   reason: a generation assembled with a default counter would compare equal
  *   to a real reading and let a stale handle through.
  */
 fun decodeSeen(token: String?): Generation? {
@@ -284,13 +284,13 @@ class ReadScreenTool(private val phone: Phone) : Tool {
         "See what is on the phone's screen right now. Every line is one thing: " +
             "what you can do with it, then a handle naming it. Pass a handle and " +
             "the screen id back to act on something. Read again after anything " +
-            "changes — a handle from an older reading is refused, not guessed at."
+            "changes: a handle from an older reading is refused, not guessed at."
 
     override val schema = """{"type":"object","properties":{}}"""
 
     /** # Rely
      *  Obtains no capability. The accessibility service is granted once, from
-     *  Settings, rather than asked for per turn — so there is no dialog here
+     *  Settings, rather than asked for per turn, so there is no dialog here
      *  and nothing to validate before one. */
     override suspend fun run(arguments: String): String {
         // Before the read, not after. read_screen on the permissions page tells
@@ -316,7 +316,7 @@ class ReadScreenTool(private val phone: Phone) : Tool {
          * to read *yet*, and those want opposite advice: one is a switch to
          * turn on, the other is to try again in a moment. #517 is the second
          * being answered with the first, on the one sequence this application
-         * exists for — open an app, then read it.
+         * exists for: open an app, then read it.
          *
          * @param attached whether the service is bound, from [Phone.attached].
          */
@@ -325,7 +325,7 @@ class ReadScreenTool(private val phone: Phone) : Tool {
                 // No mention of Settings. A model told about a permission it
                 // cannot grant itself stops and reports one, and stopping is
                 // exactly wrong here: the next call would have worked.
-                "the screen could not be read just now — most often a window " +
+                "the screen could not be read just now, most often a window " +
                     "that has not finished arriving. Read it again."
             } else {
                 // The failure how-the-agent-drives.md calls the one with no
@@ -410,15 +410,15 @@ class TapTool(private val phone: Phone) : Tool {
          *
          * Takes the phone rather than a reading because an unreadable screen
          * has two causes needing opposite advice, and only the phone knows
-         * which — see [ReadScreenTool.unreadable]. Asked for lazily: the common
+         * which; see [ReadScreenTool.unreadable]. Asked for lazily: the common
          * path never reaches it.
          *
          * # Rely
          * Called from the turn loop, straight after the action it describes.
          * Suspends only on the paths with no reading to show, where it asks
-         * [Phone.attached] — which reads nothing and touches no tree.
+         * [Phone.attached], which reads nothing and touches no tree.
          *
-         * @param did what the tool actually did, as a past participle — the
+         * @param did what the tool actually did, as a past participle, so the
          *   same word reads in all three sentences below. Not defaulted: five
          *   tools share this function and a default is how four of them came to
          *   report that they had tapped something (#518). A caller that has to
@@ -518,7 +518,7 @@ class NavigateTool(private val phone: Phone) : Tool {
 
     override val purpose =
         "Press one of the phone's own buttons: back, home, recents, or " +
-            "notifications. What back does depends on where you press it — from " +
+            "notifications. What back does depends on where you press it: from " +
             "an app's first screen it leaves the app, and over a keyboard it " +
             "closes the keyboard. Read the answer to see where you ended up."
 
@@ -544,7 +544,7 @@ class ScrollTool(private val phone: Phone) : Tool {
 
     override val purpose =
         "Scroll a list, page or carousel. Give the handle from a read_screen " +
-            "line marked `scroll`. Forward means onward through the content — " +
+            "line marked `scroll`. Forward means onward through the content, " +
             "down a list, or sideways through a carousel. If it is already at " +
             "the end you are told so rather than it failing."
 
@@ -577,7 +577,7 @@ class OpenAppTool(private val phone: Phone) : Tool {
 
     override val purpose =
         "Open an app by its name, as it appears under its icon. Answers with the " +
-            "screen afterwards, which will often catch the app still starting — " +
+            "screen afterwards, which will often catch the app still starting, so " +
             "read it again if it looks unfinished."
 
     override val schema = """
@@ -617,7 +617,7 @@ class OpenAppTool(private val phone: Phone) : Tool {
  * Wait until the screen changes.
  *
  * @property pause how to wait between looks. Injected so a test drives the loop
- *   without spending the time — the thing worth testing is how many times it
+ *   without spending the time: the thing worth testing is how many times it
  *   looks and when it stops, not that a delay delays.
  */
 class WaitForChangeTool(
@@ -628,7 +628,7 @@ class WaitForChangeTool(
 
     override val purpose =
         "Wait for the screen to change, after something you did that takes a " +
-            "moment — a page loading, an app starting. Give the screen id you " +
+            "moment: a page loading, an app starting. Give the screen id you " +
             "are waiting to move away from. If it has not changed by the time " +
             "the wait is up you are told that, which is an answer in itself."
 
@@ -692,7 +692,7 @@ class FindOnScreenTool(private val phone: Phone) : Tool {
 
     override val purpose =
         "Search the screen for something by the words on it. Use it when " +
-            "read_screen said it left lines out, or when the screen is long — " +
+            "read_screen said it left lines out, or when the screen is long. " +
             "this searches all of it rather than the part that was printed."
 
     override val schema = """
