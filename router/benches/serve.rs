@@ -1,4 +1,4 @@
-//! serve.rs — what the router costs between the socket and the next socket.
+//! serve.rs: what the router costs between the socket and the next socket.
 //!
 //! History
 //!   2026-08-07  A. Sigdel  Created.
@@ -29,7 +29,7 @@
 //!
 //! What is deliberately NOT measured: axum's route dispatch and extractor
 //! plumbing. A bench links the library, and `app` and `chat_completions` live in
-//! the binary — reproducing them here would time a copy, and a copy free to
+//! the binary, and reproducing them here would time a copy, and a copy free to
 //! drift from the handler is the thing this crate keeps refusing to keep. The
 //! omission is small: dispatch is a match on a path, against a parse and a round
 //! trip. Moving `app` into the library would close it, and is its own change.
@@ -59,10 +59,10 @@ use wattrouter::upstream::Upstream;
 /// Budgets fall as the body grows so a sweep stays under a couple of minutes:
 /// the large sizes are slow precisely because of the effect being measured. Each
 /// is split across [`ROUNDS`], so the smallest still takes a hundred samples per
-/// round — enough that the fastest round is measuring work rather than luck.
+/// round, enough that the fastest round is measuring work rather than luck.
 ///
 /// The last entry sits just under `LONG_CONTEXT_TOKENS * CHARS_PER_TOKEN`, which
-/// is the largest body the policy will route anywhere but the long tier — so it
+/// is the largest body the policy will route anywhere but the long tier, so it
 /// is the worst case the router actually serves rather than an invented one.
 const SIZES: [(&str, usize, usize); 4] = [
     ("one short turn (~200 B)", 200, 20_000),
@@ -73,7 +73,7 @@ const SIZES: [(&str, usize, usize); 4] = [
 
 /// A request body of roughly `bytes`, shaped like a real turn.
 ///
-/// A system prompt, alternating history, and a final user message — because
+/// A system prompt, alternating history, and a final user message, because
 /// `classify` reads the last user message and estimates context from all of
 /// them, so a body that is one enormous string would exercise neither the tree
 /// walk nor the search backwards.
@@ -112,7 +112,7 @@ fn conversation(bytes: usize) -> Value {
 /// of an earlier draft disagreed by 2.3x on the loopback stage, because a round
 /// trip competes with the scheduler, with background load and with the thermal
 /// state of the machine. Every one of those can only make a round slower, never
-/// faster, so the minimum is the estimate closest to the work itself — and it is
+/// faster, so the minimum is the estimate closest to the work itself, and it is
 /// what makes a regression threshold mean anything.
 const ROUNDS: usize = 5;
 
@@ -233,7 +233,7 @@ async fn main() {
         let encoded = serde_json::to_vec(&body).expect("a body serializes");
         let chain = chain_for(&config, Tier::Mid);
 
-        println!("{label} — {} B encoded, {n} iterations", encoded.len());
+        println!("{label}: {} B encoded, {n} iterations", encoded.len());
 
         let extract = bench("extract (parse to Value)", n, || {
             black_box(serde_json::from_slice::<Value>(black_box(&encoded)).unwrap());
@@ -292,7 +292,7 @@ async fn main() {
     println!("Read the sweep, not one row: the question is which stages grow with the body.\n");
 
     // Gates, not thresholds. An absolute figure says as much about the machine
-    // as about the code — two runs of this on one idle laptop disagreed by 2.3x
+    // as about the code: two runs of this on one idle laptop disagreed by 2.3x
     // before the fastest-round change, and a shared CI runner is worse. A ratio
     // between two stages timed in the same run survives that: a slow runner
     // scales both, so only the code can move them apart.

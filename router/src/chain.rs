@@ -1,4 +1,4 @@
-//! chain.rs — the models a tier may use, in order.
+//! chain.rs: the models a tier may use, in order.
 //!
 //! History
 //!   2026-08-05  A. Sigdel  Created.
@@ -13,7 +13,7 @@
 //!
 //! The chain is derived rather than tabulated. A hand-written table let a tier
 //! fall back to a model with a smaller context window, which turns a degraded
-//! answer into a rejected request — and the invariant was stated in a comment
+//! answer into a rejected request, and the invariant was stated in a comment
 //! that nothing enforced. Deriving it makes the invariant hold by construction.
 
 use crate::backend::Backend;
@@ -32,7 +32,7 @@ pub const MAX_CHAIN: usize = 3;
 /// The two travel together because a model name alone does not say how to reach
 /// it. `bonsai-27b-mlx-1bit` is a file to load into this process and
 /// `kimi-k2.7-code` is an HTTP request, and a caller holding only the name has
-/// to guess which — or keep its own table, which is the thing this axis exists
+/// to guess which, or keep its own table, which is the thing this axis exists
 /// to remove.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Step<'a> {
@@ -71,8 +71,8 @@ impl<'a> Step<'a> {
 /// Candidates on the same backend come first, then the rest ordered by how close
 /// their capability is to the original, so a substitution is the smallest one
 /// available. Leaving the device is a different kind of substitution from picking
-/// another local model — it is the escape hatch for work no local window can hold
-/// — and capability distance alone would reach for it whenever it sorted well.
+/// another local model; it is the escape hatch for work no local window can
+/// hold, and capability distance alone would reach for it whenever it sorted well.
 ///
 /// # Returns
 /// A non-empty list of at most [`MAX_CHAIN`] steps, so
@@ -168,8 +168,8 @@ mod tests {
     #[test]
     fn no_tier_ever_falls_back_to_a_smaller_context() {
         // The invariant, checked for every tier rather than for one. The
-        // hand-written table this replaced violated it twice — heavy and cheap
-        // both fell back to the 131K middle model — and the test only looked at
+        // hand-written table this replaced violated it twice (heavy and cheap
+        // both fell back to the 131K middle model) and the test only looked at
         // the long tier, so it passed.
         let config = config();
         for tier in Tier::ALL {
@@ -191,8 +191,8 @@ mod tests {
 
     #[test]
     fn a_local_tier_does_not_leave_the_device_while_it_has_alternatives() {
-        // Capability distance alone puts the long tier first here — one step from
-        // code and more capable at that distance — so without the backend key a
+        // Capability distance alone puts the long tier first here, one step from
+        // code and more capable at that distance, so without the backend key a
         // coding request takes the escape hatch as its first fallback, sending
         // off the device work three local models could have served.
         let config = phone();

@@ -1,4 +1,4 @@
-//! tier.rs — the routing tiers.
+//! tier.rs: the routing tiers.
 //!
 //! History
 //!   2026-08-05  A. Sigdel  Created.
@@ -18,7 +18,7 @@ use crate::backend::Backend;
 
 /// A routing tier: a role, not a model name.
 ///
-/// Ordered by capability, and the order is load-bearing — a session may be
+/// Ordered by capability, and the order is load-bearing: a session may be
 /// escalated to a higher tier but never quietly dropped to a lower one, so that a
 /// conversation cannot get worse partway through.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -81,19 +81,19 @@ impl Tier {
     /// The context window this tier's model can hold, in tokens.
     ///
     /// Used to keep a fallback from substituting a model that cannot hold the
-    /// request the original could — which would turn a degraded answer into a
+    /// request the original could, which would turn a degraded answer into a
     /// rejected one. Nominal: an operator who overrides a tier's model to a
     /// smaller one takes that on.
     ///
     /// # Arguments
-    /// * `backend` — where the model runs. The same tier holds far less
+    /// * `backend`: where the model runs. The same tier holds far less
     ///   locally: what a build advertises is what its architecture allows, and
     ///   what a phone holds is decided by the KV cache, which at 27B outweighs
     ///   the weights.
     ///
     /// # Returns
     /// A token count. The remote figures are verified against the upstream
-    /// catalogue. The local ones are not measurements — they are the
+    /// catalogue. The local ones are not measurements: they are the
     /// conservative end of what the plan expects, and settling them needs a
     /// physical iPhone. Read them as open.
     #[must_use]

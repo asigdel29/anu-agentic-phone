@@ -22,7 +22,7 @@ default = ["onnx"]
 onnx = ["dep:fastembed"]
 # Off by default: the board shells out to git and does not need libgit2 linked
 # into a process that would never call it. The iOS build turns it on, because a
-# phone has no shell — see docs/decisions/git-without-a-subprocess.md. CI tests
+# phone has no shell; see docs/decisions/git-without-a-subprocess.md. CI tests
 # it through --all-features rather than through the default set.
 git = ["dep:git2"]
 # Off by default: only a phone needs the memory store bounded, and the board's
@@ -48,14 +48,14 @@ fastembed = { version = "5.17.4", optional = true, default-features = false, fea
 # convenience costs nothing.
 axum = "0.8"
 # default-features off drops https and ssh, which pull openssl and libssh2 and
-# are the half this does not do — see the decision record. What is left vendors
+# are the half this does not do; see the decision record. What is left vendors
 # libgit2's C and builds it with cc, which is the toolchain the cross-build
 # already uses.
 #
 # 0.20.4 rather than 0.19: below it, GHSA-j39j-6gw9-jw6h dereferences a Buf
 # whose pointer is null, which is undefined behaviour even for a zero-length
 # slice. Nothing here names Buf, so this was answering an advisory rather than
-# fixing a call — and an argument that nothing calls it goes stale the first
+# fixing a call, and an argument that nothing calls it goes stale the first
 # time somebody adds a diff.
 #
 # Not 0.21, which is published. The bump above is the smallest one that clears
@@ -65,7 +65,7 @@ git2 = { version = "0.20.4", optional = true, default-features = false }
 # Pinned to the version zeromem uses. Two versions means two libsqlite3-sys,
 # which is two copies of SQLite in one binary: it sometimes links, and when it
 # does the two hold separate page caches over one file. `bundled` for the same
-# reason the Android build needs it — the system SQLite is not there to link
+# reason the Android build needs it: the system SQLite is not there to link
 # against on an `aarch64-linux-android` slice.
 rusqlite = { version = "0.32", optional = true, features = ["bundled"] }
 # The JVM's side of the boundary. Header-only in effect: it binds against
@@ -76,7 +76,7 @@ jni = { version = "0.21", optional = true }
 # no signal. The same revision deploy/install-zeromem.sh puts on the board.
 #
 # default-features off drops fastembed and the ONNX runtime behind it, which is
-# the half that cannot come to a phone at all — see
+# the half that cannot come to a phone at all; see
 # docs/decisions/memory-on-a-phone-forgets.md.
 zeromem = { git = "https://github.com/ptaranat/zeromem.git", rev = "32ac538", optional = true, default-features = false }
 futures-util = { version = "0.3", default-features = false }
