@@ -1,4 +1,4 @@
-// Resolve.kt — finding again the node a handle describes.
+// Resolve.kt: finding again the node a handle describes.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -24,7 +24,7 @@
 //
 // Where more than one survives and the field that would separate them matches
 // none, that is a refusal. It was a skip, and the skip tapped the wrong row of a
-// recycled list — see the history line above and #405.
+// recycled list; see the history line above and #405.
 
 package com.getlora.wattrouter
 
@@ -57,15 +57,15 @@ private data class Placed(val node: Node, val siblingIndex: Int)
  * Find the node a handle describes, in a tree fetched now.
  *
  * @param root the tree as it is at this moment, never the one the handle came
- *   from — between reading a screen and acting on it the screen has had time to
+ *   from. Between reading a screen and acting on it the screen has had time to
  *   change, and noticing is the point.
  */
 fun resolve(root: Node, handle: Handle): Resolution {
     if (!handle.isFindable) return Resolution.Unusable
 
     // Invisible nodes are not candidates. A tree carries what is laid out
-    // rather than what is on screen — a collapsed drawer, the page behind a
-    // dialog — and acting on one silently does nothing, which is the failure
+    // rather than what is on screen (a collapsed drawer, the page behind a
+    // dialog) and acting on one silently does nothing, which is the failure
     // furthest from a refusal.
     val onScreen = descend(root).filter { it.node.isVisible }
 
@@ -87,7 +87,7 @@ fun resolve(root: Node, handle: Handle): Resolution {
 
         val fewer = candidates.filter(narrow)
         // But with several left, a field matching none of them is not a field
-        // to ignore — it is the evidence that would have told them apart,
+        // to ignore: it is the evidence that would have told them apart,
         // saying none of them is the one. A recycled list keeps its ids and
         // its shape and replaces its text, so ignoring this and falling
         // through to the sibling index taps whatever scrolled into that row.

@@ -1,4 +1,4 @@
-// Location.kt — where the phone is, and how much of that to claim.
+// Location.kt: where the phone is, and how much of that to claim.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -11,7 +11,7 @@
 // Two things here are not plumbing.
 //
 // Precision is not accuracy. A coarse fix is a circle a kilometre or two across,
-// and rendered to six decimal places it reads as a doorstep — so the coordinates
+// and rendered to six decimal places it reads as a doorstep, so the coordinates
 // are rounded to what the reported radius supports, and the radius is said
 // beside them. AndroidAsking asks for coarse deliberately, so the wide case is
 // the normal one rather than the exception.
@@ -43,7 +43,7 @@ interface Whereabouts {
      *
      * # Rely
      * Called from the turn loop with the capability already obtained. May wait
-     * on hardware, so it belongs off the main thread — the conformance moves it
+     * on hardware, so it belongs off the main thread, and the conformance moves it
      * there rather than the caller.
      *
      * @return null when the phone cannot get a fix, which is an ordinary
@@ -62,7 +62,7 @@ class LocationTool(
 
     override val purpose =
         "Find out roughly where the person is. Use it when the answer depends on " +
-            "that — what is nearby, what the weather is, which timezone they are " +
+            "that: what is nearby, what the weather is, which timezone they are " +
             "in. It is approximate on purpose, and the answer says how approximate."
 
     /** No arguments, and an object anyway: a provider handed a bare `{}` schema

@@ -1,4 +1,4 @@
-// Tool.kt — something the model can do, and what it answered.
+// Tool.kt: something the model can do, and what it answered.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
@@ -9,7 +9,7 @@
 //
 // The contract shaping every tool written after this: a tool throws only for
 // what the model cannot act on. A missing file, an argument out of range, a
-// permission refused — those are returned strings the model reads and acts on.
+// permission refused: those are returned strings the model reads and acts on.
 // Throwing turns an ordinary outcome into a dead turn.
 //
 // Cancellation is the exception and the only thing that propagates: reported
@@ -24,7 +24,7 @@ data class ToolResult(
     /** What the model reads. Prose, not a status code. */
     val content: String,
     /**
-     * Whether it went wrong. Advisory — the content says what happened either
+     * Whether it went wrong. Advisory, since the content says what happened either
      * way, and this is for a transcript rendering a failure differently.
      */
     val isError: Boolean = false,
@@ -48,8 +48,8 @@ interface Tool {
      * Do it.
      *
      * # Rely
-     * Called from the turn loop, one at a time and in the order the model asked
-     * — a write then a read of the same path is a correct sequence and a race
+     * Called from the turn loop, one at a time and in the order the model asked:
+     * a write then a read of the same path is a correct sequence and a race
      * if they overlap. May suspend as long as the work takes; the caller
      * cancels by cancelling the coroutine.
      *

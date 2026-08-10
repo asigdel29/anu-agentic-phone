@@ -1,4 +1,4 @@
-// Calendar.kt — what is on the calendar, and asking to see it.
+// Calendar.kt: what is on the calendar, and asking to see it.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -42,7 +42,7 @@ interface Calendars {
      *
      * # Rely
      * Called from the turn loop with the capability already obtained. Reads a
-     * content provider, so it blocks and belongs off the main thread — moving it
+     * content provider, so it blocks and belongs off the main thread, and moving it
      * there is the conformance's job, not the caller's.
      *
      * @param from seconds, inclusive.
@@ -62,7 +62,7 @@ class CalendarTool(
 
     override val purpose =
         "Read what is on the person's calendar. Use it before answering anything " +
-            "that turns on when they are free or what they have on — there is no " +
+            "that turns on when they are free or what they have on. There is no " +
             "other way to know. The window is whole days in their own timezone."
 
     override val schema = """

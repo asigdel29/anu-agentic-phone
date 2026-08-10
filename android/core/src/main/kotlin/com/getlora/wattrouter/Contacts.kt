@@ -1,4 +1,4 @@
-// Contacts.kt — looking somebody up, and how little to hand over.
+// Contacts.kt: looking somebody up, and how little to hand over.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -35,7 +35,7 @@ interface Directory {
      *
      * # Rely
      * Called from the turn loop with the capability already obtained. Reads a
-     * content provider, so it blocks and belongs off the main thread — the
+     * content provider, so it blocks and belongs off the main thread, and the
      * conformance moves it there rather than the caller.
      *
      * @param name what to match on, already known to be non-blank.
@@ -53,7 +53,7 @@ class ContactsTool(
 
     override val purpose =
         "Look somebody up in the person's contacts to get their number or email " +
-            "address. Give the name, or as much of it as you were told — a first " +
+            "address. Give the name, or as much of it as you were told; a first " +
             "name on its own is fine. There is no way to list everybody, so ask " +
             "about the person you actually need."
 

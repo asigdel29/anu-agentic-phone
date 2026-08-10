@@ -1,4 +1,4 @@
-// Mcp.kt — tools this build does not contain.
+// Mcp.kt: tools this build does not contain.
 //
 // History
 //   2026-08-09  A. Sigdel  Created with #529.
@@ -22,7 +22,7 @@
 // The names are the security decision. A server that could register `tap` would
 // shadow the compiled tool, and the model would call it believing it had
 // touched the phone. ToolBox keeps the first of a duplicate, so the built-ins
-// win today by being assembled first — an ordering accident rather than a rule.
+// win today by being assembled first, an ordering accident rather than a rule.
 // `prefixed` makes it structural, and McpTest asserts it.
 
 package com.getlora.wattrouter
@@ -134,7 +134,7 @@ class McpTool(
  * A connection to one server, and the tools it offers.
  *
  * @param label what the person called it. It becomes part of every tool name,
- *   so it is theirs rather than the server's — a server that named itself
+ *   so it is theirs rather than the server's: a server that named itself
  *   would be choosing how it appears in a list somebody uses to decide whether
  *   to trust it.
  */

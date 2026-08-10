@@ -1,4 +1,4 @@
-// Permission.kt — asking for a capability, and what the answer means.
+// Permission.kt: asking for a capability, and what the answer means.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -19,7 +19,7 @@
 //
 // That is wrong twice over here. Somebody who relents in Settings should be
 // noticed, so nothing is cached. And somebody who refuses twice is permanently
-// denied — the dialog stops appearing, silently — which has no iOS equivalent
+// denied, and the dialog stops appearing silently, which has no iOS equivalent
 // and needs a name, because the only useful answer is the Settings row.
 //
 // Worth keeping: coalescing, so two tools in one round produce one dialog; and
@@ -36,7 +36,7 @@ import kotlinx.coroutines.sync.withLock
  * Something a tool needs before it can work.
  *
  * @property subject how the model refers to it.
- * @property settings where a person turns it on, named exactly — "Settings" on
+ * @property settings where a person turns it on, named exactly. "Settings" on
  *   its own is advice nobody can act on.
  */
 enum class Capability(val subject: String, val settings: String) {
@@ -132,7 +132,7 @@ class Permission(private val asking: Asking) {
      * lock is held while joining or starting, not while the dialog is up.
      *
      * @throws PermissionError if it cannot be had, with prose the model can act
-     *   on — for a permanent denial, the Settings row.
+     *   on: for a permanent denial, the Settings row.
      */
     suspend fun obtain(capability: Capability) {
         when (val state = resolve(capability)) {
