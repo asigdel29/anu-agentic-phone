@@ -1,4 +1,4 @@
-// ResolveTest.kt — what is found, what is refused, and the difference.
+// ResolveTest.kt: what is found, what is refused, and the difference.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -71,7 +71,7 @@ class ResolveTest {
         // and cannot recover from a tap on the wrong row.
         //
         // Both first rows of their own section, so even the sibling index
-        // agrees — which is what it takes, and is why a flat list of lookalikes
+        // agrees, which is what it takes, and is why a flat list of lookalikes
         // is not this case: there the index separates them.
         val row = Seen(viewId = "app:id/row", role = "text", text = "Unread")
         val sections = List(2) { Seen(role = "list", children = listOf(row)) }

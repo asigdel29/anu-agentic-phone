@@ -1,4 +1,4 @@
-// PackagingTest.kt — the shared object survives the trip into the APK.
+// PackagingTest.kt: the shared object survives the trip into the APK.
 //
 // History
 //   2026-08-08  A. Sigdel  Created with the app module.

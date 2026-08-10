@@ -1,4 +1,4 @@
-// ViewingTest.kt — what stops an action, and what it is told instead.
+// ViewingTest.kt: what stops an action, and what it is told instead.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -51,7 +51,7 @@ class ViewingTest {
     @Test
     fun aScreenThatMovedIsRefusedAndSaysWhatIsThere() {
         // The refusal that costs one exchange rather than two. Told only "that
-        // is stale", the model reads again — and on a page with anything
+        // is stale", the model reads again, and on a page with anything
         // dynamic the structure can move again in between.
         val viewing = viewing()
         val before = viewing.read(page(clock, send))

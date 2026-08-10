@@ -1,4 +1,4 @@
-// PermissionTest.kt — the places Android differs from iOS.
+// PermissionTest.kt: the places Android differs from iOS.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.

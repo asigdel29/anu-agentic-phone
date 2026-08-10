@@ -1,4 +1,4 @@
-// SecureActivity.kt — a window that says it may not be captured.
+// SecureActivity.kt: a window that says it may not be captured.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.

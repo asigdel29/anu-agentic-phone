@@ -1,4 +1,4 @@
-// InstalledDeviceTest.kt — the package manager admits apps exist.
+// InstalledDeviceTest.kt: the package manager admits apps exist.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -8,7 +8,7 @@
 //
 // What this does NOT prove is the <queries> element, and that is worth writing
 // down rather than assuming. Removing it and running this suite leaves every
-// test here green — an app under instrumentation is not filtered the way the
+// test here green: an app under instrumentation is not filtered the way the
 // installed one is, and neither APK carries QUERY_ALL_PACKAGES, so the run was
 // genuinely without the element and still saw every app.
 //
@@ -57,7 +57,7 @@ class InstalledDeviceTest {
     @Test
     fun theLabelsAreTheOnesSomebodyWouldSay() {
         // What the launcher shows under an icon, not a package name. Checked
-        // against Settings because every image has one — and by label rather
+        // against Settings because every image has one, and by label rather
         // than through OpenAppTool, which would open it and leave the suite on
         // a different screen than it found.
         val apps = installed(context)

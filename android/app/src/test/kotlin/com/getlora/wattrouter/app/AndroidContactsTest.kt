@@ -1,4 +1,4 @@
-// AndroidContactsTest.kt — a name that is not a wildcard.
+// AndroidContactsTest.kt: a name that is not a wildcard.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.

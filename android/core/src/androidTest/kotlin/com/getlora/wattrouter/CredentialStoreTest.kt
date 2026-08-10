@@ -1,4 +1,4 @@
-// CredentialStoreTest.kt — the credential, sealed and read back for real.
+// CredentialStoreTest.kt: the credential, sealed and read back for real.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.

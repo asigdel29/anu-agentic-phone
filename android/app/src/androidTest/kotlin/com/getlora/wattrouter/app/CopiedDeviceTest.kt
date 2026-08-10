@@ -1,4 +1,4 @@
-// CopiedDeviceTest.kt — a real screen, through every rule in Phase 3.
+// CopiedDeviceTest.kt: a real screen, through every rule in Phase 3.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.

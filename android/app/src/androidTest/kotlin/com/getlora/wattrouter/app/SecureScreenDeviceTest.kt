@@ -1,4 +1,4 @@
-// SecureScreenDeviceTest.kt — what a secure window actually exposes.
+// SecureScreenDeviceTest.kt: what a secure window actually exposes.
 //
 // History
 //   2026-08-09  A. Sigdel  Created, to measure a claim two decision records
@@ -11,7 +11,7 @@
 //
 // So this is not a regression test for a bug. It is the measurement, kept, and
 // it is the only thing that would notice if a future Android made the claim
-// true — at which point the records go back to what they used to say and the
+// true, at which point the records go back to what they used to say and the
 // tools need the third answer #472 argued they did not.
 //
 // Reading the accessibility service directly rather than through a tool: the
@@ -86,7 +86,7 @@ class SecureScreenDeviceTest {
 
         // Polled rather than slept for. A fixed pause passed this test alone
         // and failed it inside the suite, where the device arrives in whatever
-        // state the previous test left — and `read` answers null while no
+        // state the previous test left, and `read` answers null while no
         // window is focused, which is indistinguishable here from the claim
         // being true. Waiting for the window is what makes the assertion mean
         // what it says.
@@ -106,7 +106,7 @@ class SecureScreenDeviceTest {
         }
 
         assertTrue(
-            "a secure window exposed no label in ${WAITS * PAUSE}ms — the records " +
+            "a secure window exposed no label in ${WAITS * PAUSE}ms, so the records " +
                 "may have become true, and #472 says what follows if so. " +
                 "Last read saw $seen node(s)",
             found >= 1,

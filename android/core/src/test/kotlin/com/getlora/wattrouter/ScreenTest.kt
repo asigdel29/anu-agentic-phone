@@ -1,4 +1,4 @@
-// ScreenTest.kt — what a handle records, and what it refuses to.
+// ScreenTest.kt: what a handle records, and what it refuses to.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -78,7 +78,7 @@ class ScreenTest {
     @Test
     fun aSiblingIndexIsRecordedWhetherOrNotItIsNeeded() {
         // It is the only field separating two identical rows in a list, which
-        // is what a list is — so this is the common case, not the corner one.
+        // is what a list is, so this is the common case, not the corner one.
         val rows = List(3) { Seen(role = "text", text = "Unread") }
 
         val handles = rows.mapIndexed { at, row -> handleFor(row, at) }

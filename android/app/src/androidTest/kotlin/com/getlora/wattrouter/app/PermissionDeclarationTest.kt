@@ -1,4 +1,4 @@
-// PermissionDeclarationTest.kt — a capability the manifest forgot.
+// PermissionDeclarationTest.kt: a capability the manifest forgot.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -7,7 +7,7 @@
 // into an installed package. This is the one disagreement in AndroidAsking that
 // fails silently and misleadingly: a permission the app does not declare is
 // refused by checkSelfPermission, shows no dialog when requested, and leaves
-// rationale false — which is the shape of a permanent denial. The app would then
+// rationale false, which is the shape of a permanent denial. The app would then
 // tell somebody to turn it on at a Settings row that does not exist.
 
 package com.getlora.wattrouter.app

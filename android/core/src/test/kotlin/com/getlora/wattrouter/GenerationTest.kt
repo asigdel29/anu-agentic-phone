@@ -1,4 +1,4 @@
-// GenerationTest.kt — what counts as a new screen, and what does not.
+// GenerationTest.kt: what counts as a new screen, and what does not.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -91,7 +91,7 @@ class GenerationTest {
     @Test
     fun anInvisibleSiblingStillCountsWhereItSits() {
         // It contributes nothing itself and it is still one of its parent's
-        // children, which is what sibling indexes are counted over — in prune
+        // children, which is what sibling indexes are counted over, in prune
         // and in resolve both. Adding one shifts every index after it, so the
         // shape has to move even though nothing appeared on screen.
         val shut = Seen(role = "layout", isVisible = false, children = listOf(send))

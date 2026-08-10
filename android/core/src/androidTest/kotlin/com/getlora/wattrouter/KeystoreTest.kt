@@ -1,4 +1,4 @@
-// KeystoreTest.kt — sealing and opening, against the real keystore.
+// KeystoreTest.kt: sealing and opening, against the real keystore.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
@@ -48,7 +48,7 @@ class KeystoreTest {
         // GCM needs a distinct nonce per encryption under one key, and the
         // provider supplies it. Equal ciphertexts would mean a fixed nonce,
         // which is the failure mode that makes GCM catastrophic rather than
-        // merely weak — and it would be invisible in a round-trip test.
+        // merely weak, and it would be invisible in a round-trip test.
         val a = alias("nonce")
         val once = Keystore.seal(a, "nw-same")
         val twice = Keystore.seal(a, "nw-same")
