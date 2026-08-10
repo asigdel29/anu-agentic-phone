@@ -89,16 +89,13 @@ about what it does at runtime — no node text to the system log at any level, n
 disk including the application's own cache, nothing in a crash breadcrumb. The failure that rule
 exists to prevent is somebody enabling verbose logging two years from now.
 
-`ios/App/PrivacyInfo.xcprivacy` argues the same point at more length for the App Store's
-definition of collection, and its reasoning applies to both phones.
-
 ### Credentials
 
 One: `NEURALWATT_API_KEY`.
 
 - On the board it comes from the environment or a systemd `EnvironmentFile`, never a tracked
   file. `.env` is gitignored; `.env.example` carries names and no values.
-- On iOS it is in the Keychain, on Android the Keystore. Nothing else is stored.
+- On the phone it is in the Android Keystore. Nothing else is stored.
 - `allowBackup="false"` on Android is deliberate: the store this application holds is somebody's
   conversations, and cloud backup would copy it somewhere none of the decisions about it apply.
 
@@ -117,7 +114,12 @@ which is the right way round for something with these capabilities.
 
 ## What has and has not been verified
 
-Nothing in this repository has run on a physical phone. Every claim above is a host suite, an
-emulator or a simulator, and
-[#188](https://github.com/asigdel29/anu-agentic-stack/issues/188) is the checklist for the first
-time a device is attached. Treat the mitigations as implemented and untested in the field.
+Nothing in this repository has run on a physical phone. Every claim above is a host suite or an
+emulator, and
+[#510](https://github.com/asigdel29/anu-agentic-stack/issues/510) is the checklist for the first
+time one is attached. Treat the mitigations as implemented and untested in the field.
+
+What the emulator has settled is narrower than it sounds and worth naming: the release build
+loads its native library under R8, a turn reaches the provider, the tool loop drives another
+application, and the overlay reaches the display. What it cannot settle is a real screen, a
+real calendar, and a person deciding whether they are comfortable.

@@ -56,20 +56,6 @@ down:
 status:
     scripts/run-router.sh status
 
-# Build the routing core as an xcframework Swift can link. Needs Xcode.
-ios-core:
-    scripts/build-ios-core.sh
-
-# Generate ios/WattRouter.xcodeproj from ios/project.yml. Safe to re-run; the
-# project is build output and gitignored, so this is how it comes into being on a
-# fresh clone as well as how it is refreshed after editing the spec.
-ios-project:
-    cd ios && xcodegen generate
-
-# Run the Swift tests on the shared simulator. Needs `just ios-core` first.
-ios-test:
-    scripts/test-ios.sh
-
 # Build the routing core as a library JNI can load. Needs the Android NDK; the
 # script says how to get one if there is none.
 android-core:
