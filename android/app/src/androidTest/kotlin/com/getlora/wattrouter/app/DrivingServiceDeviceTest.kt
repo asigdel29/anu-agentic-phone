@@ -1,4 +1,4 @@
-// DrivingServiceDeviceTest.kt — the service binds, connects, and reads.
+// DrivingServiceDeviceTest.kt: the service binds, connects, and reads.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -18,7 +18,7 @@
 //
 // FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES is the whole reason this file works.
 // UiAutomation is itself an accessibility service, and by default connecting one
-// turns every other off for the duration — so a test that enables a service and
+// turns every other off for the duration, so a test that enables a service and
 // waits for it waits forever, and the failure reads exactly like a manifest that
 // is wrong. Everything about the setting says it worked: `settings get` reads it
 // back, dumpsys lists it under Enabled services. It is simply not bound.
@@ -121,8 +121,8 @@ class DrivingServiceDeviceTest {
         val aim = service.aim(handle, reading.generation)
 
         assertNotNull(aim)
-        // Moved is a legitimate answer — a live screen may have changed between
-        // the two reads — so the assertion is that it is not Lost, which would
+        // Moved is a legitimate answer (a live screen may have changed between
+        // the two reads) so the assertion is that it is not Lost, which would
         // mean the handle did not describe the node it was made from.
         assertTrue("$aim", aim !is com.getlora.wattrouter.Aim.Lost)
     }
@@ -177,8 +177,8 @@ class DrivingServiceDeviceTest {
 
     @Test
     fun andTheControllerIsThereToAnswerIt() {
-        // Available is about the phone rather than the app — a device with no
-        // navigation bar and no floating button would answer false — so this
+        // Available is about the phone rather than the app: a device with no
+        // navigation bar and no floating button would answer false, so this
         // asserts the controller exists rather than what it says.
         val service = waitForConnection()
         assertNotNull(service)

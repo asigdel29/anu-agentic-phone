@@ -1,4 +1,4 @@
-// ScreenToolsTest.kt — what a model is shown, and what it is told instead.
+// ScreenToolsTest.kt: what a model is shown, and what it is told instead.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -128,7 +128,7 @@ class ScreenToolsTest {
     @Test
     fun aScreenThatIsMerelyStillArrivingSaysNothingAboutSettings() = runTest {
         // #517. The service is on and the window has not landed, which is the
-        // ordinary state of a phone for a moment after open_app — so this is
+        // ordinary state of a phone for a moment after open_app, so this is
         // the answer the one sequence this application exists for produces.
         //
         // Against the code before the fix this said "Turn the assistant on",
@@ -259,7 +259,7 @@ class TapToolTest {
 
     @Test
     fun aScreenThatMovedIsAnInstructionRatherThanAnError() = runTest {
-        // Not a failure of the tap. Told "failed", a model retries — which is
+        // Not a failure of the tap. Told "failed", a model retries, which is
         // right for one of the four outcomes and wrong for this one.
         val now = Reading(Generation("k3f9", 5), listOf(Sighting(send, "button", "Send", isClickable = true)))
 
@@ -526,7 +526,7 @@ class ScrollToolTest {
     @Test
     fun beingAtTheEndIsAnAnswerRatherThanAFailure() = runTest {
         // Told it failed, a model retries. Told the list is at its end, it
-        // stops — which is the answer to "is there any more".
+        // stops, which is the answer to "is there any more".
         val said = TapTool.say(Static(null), "tapped", Done.Refused("it is already at the end, so nothing moved"))
 
         assertTrue(said, said.contains("already at the end"))

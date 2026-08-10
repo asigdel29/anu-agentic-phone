@@ -1,4 +1,4 @@
-// ChatHeadDeviceTest.kt — the bubble reaches the display, and leaves when told.
+// ChatHeadDeviceTest.kt: the bubble reaches the display, and leaves when told.
 //
 // History
 //   2026-08-09  A. Sigdel  Created with #522.
@@ -20,7 +20,7 @@
 // bubble, which #522 raised as an open question and assumed the wrong way round:
 // the overlay cannot pollute a reading even if it is up while one is taken. The
 // panel in a later change will be focusable and *will* be in the tree, so the
-// rule about collapsing before a turn still holds — it just does not apply to
+// rule about collapsing before a turn still holds; it just does not apply to
 // the bubble.
 
 package com.getlora.wattrouter.app

@@ -1,4 +1,4 @@
-// AndroidContactsDeviceTest.kt — the provider answers, and the escape holds.
+// AndroidContactsDeviceTest.kt: the provider answers, and the escape holds.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.

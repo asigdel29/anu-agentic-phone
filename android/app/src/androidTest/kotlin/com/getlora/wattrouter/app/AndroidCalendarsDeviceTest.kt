@@ -1,11 +1,11 @@
-// AndroidCalendarsDeviceTest.kt — the provider answers, and the columns exist.
+// AndroidCalendarsDeviceTest.kt: the provider answers, and the columns exist.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
 //
 // The claim the JVM cannot make. A projection naming a column that is not there
 // throws at the first row rather than at build, and a URI assembled wrongly
-// answers null — which the conformance turns into an empty list, so the failure
+// answers null, which the conformance turns into an empty list, so the failure
 // arrives as a person having nothing on rather than as an error.
 
 package com.getlora.wattrouter.app

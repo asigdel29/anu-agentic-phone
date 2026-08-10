@@ -1,4 +1,4 @@
-// ReadinessTest.kt — the list, and the order it puts things in.
+// ReadinessTest.kt: the list, and the order it puts things in.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -28,7 +28,7 @@ class ReadinessTest {
     @Test
     fun restrictedSettingsComesBeforeTheSwitchItUnblocks() {
         // Sent to the accessibility screen first, somebody finds the toggle
-        // greyed and no explanation anywhere — a dead end handed out by the
+        // greyed and no explanation anywhere: a dead end handed out by the
         // screen that exists to prevent one.
         val first = state(driving = false).steps.first()
 

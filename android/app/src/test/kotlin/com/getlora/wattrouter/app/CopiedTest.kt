@@ -1,4 +1,4 @@
-// CopiedTest.kt — a class name as something a model can act on.
+// CopiedTest.kt: a class name as something a model can act on.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.

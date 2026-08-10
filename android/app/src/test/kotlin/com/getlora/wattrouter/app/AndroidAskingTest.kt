@@ -1,4 +1,4 @@
-// AndroidAskingTest.kt — the two answers that mean the same thing.
+// AndroidAskingTest.kt: the two answers that mean the same thing.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.

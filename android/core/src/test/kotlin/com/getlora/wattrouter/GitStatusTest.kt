@@ -1,4 +1,4 @@
-// GitStatusTest.kt — the envelope's two halves, and the lines they become.
+// GitStatusTest.kt: the envelope's two halves, and the lines they become.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.

@@ -1,4 +1,4 @@
-// AutonomyTest.kt — what is asked, what is not, and what the prompt says.
+// AutonomyTest.kt: what is asked, what is not, and what the prompt says.
 //
 // History
 //   2026-08-10  A. Sigdel  Created with #552.
@@ -8,7 +8,7 @@
 // is about a mode and a handle, and none of it needs a phone to be wrong.
 //
 // The test to read first is the shadowing one. A prompt that says Cancel over
-// an action that sends is worse than no prompt at all, and it is reachable —
+// an action that sends is worse than no prompt at all, and it is reachable:
 // the model writes the handle, and resolve keys on the durable field while the
 // friendly one is only decoration.
 
@@ -120,7 +120,7 @@ class AutonomyTest {
 
         val why = (done as Done.Refused).why
         assertTrue(why, why.contains("person using the phone did not allow"))
-        // "send", the id — not "Send", the label. The refusal is worded from
+        // "send", the id, not "Send", the label. The refusal is worded from
         // the same field the prompt was, so the two cannot drift apart.
         assertTrue(why, why.contains("tap send"))
         assertTrue(why, why.contains("Do not try it another way"))

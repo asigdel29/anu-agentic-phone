@@ -1,4 +1,4 @@
-// ServerSentEventTest.kt — what a line of the provider's body means.
+// ServerSentEventTest.kt: what a line of the provider's body means.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.

@@ -1,11 +1,11 @@
-// CalendarToolTest.kt — the order the prompt is asked in, and what is read back.
+// CalendarToolTest.kt: the order the prompt is asked in, and what is read back.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
 //
 // On the JVM against a scripted diary and a scripted Asking. The two things that
-// need a real calendar — that a provider answers, and that its columns mean what
-// they are read as — are the conformance's to prove on a device.
+// need a real calendar (that a provider answers, and that its columns mean what
+// they are read as) are the conformance's to prove on a device.
 
 package com.getlora.wattrouter
 
