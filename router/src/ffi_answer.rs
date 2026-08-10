@@ -3,12 +3,17 @@
 //! History
 //!   2026-08-08  A. Sigdel  Created, from ffi_git.rs, when memory became the
 //!                          second caller.
+//!   2026-08-10  A. Sigdel  Builds JSON rather than C strings with #565. The
+//!                          one place that still makes a `CString` is `guarded`,
+//!                          and it makes it on the way out.
 //!
 //! Contents
 //!   `Answer`                  Ok, or a refusal in words the model reads.
-//!   `rendered`, `refused`     Building one.
-//!   `guarded`, `borrowed`     The panic guard and a borrowed C string.
-//!   `wattrouter_string_free`  Release what any of them returned.
+//!   `rendered`, `refused`     Building one, as JSON.
+//!   `unusable`                No answer, for arguments that were not readable.
+//!   `guarded`                 The panic guard, and the last `CString` here.
+//!   `borrowed`                A borrowed C string.
+//!   `wattrouter_string_free`  Release what any entry point returned.
 //!
 //! This lived in `ffi_git.rs` because git was the first entry point that had to
 //! allocate and there was nothing to share it with. Memory is the second.
@@ -43,8 +48,8 @@ enum Answer<T: Serialize> {
     Error(String),
 }
 
-/// Serialise an outcome into an owned C string.
-pub(crate) fn rendered<T: Serialize, E: std::fmt::Display>(outcome: Result<T, E>) -> *mut c_char {
+/// Serialise an outcome into the JSON a caller reads.
+pub(crate) fn rendered<T: Serialize, E: std::fmt::Display>(outcome: Result<T, E>) -> String {
     emit(&match outcome {
         Ok(value) => Answer::Ok(value),
         Err(why) => Answer::Error(why.to_string()),
@@ -56,26 +61,53 @@ pub(crate) fn rendered<T: Serialize, E: std::fmt::Display>(outcome: Result<T, E>
 /// An argument that will not decode is not a failure of the thing being asked
 /// about, and dressing it as one sends the model looking in the wrong place. It
 /// is still something the model can fix, so it crosses in the same envelope.
-pub(crate) fn refused(why: &str) -> *mut c_char {
+pub(crate) fn refused(why: &str) -> String {
     emit(&Answer::<()>::Error(why.to_owned()))
 }
 
-/// Write an answer out as an owned C string.
+/// Write an answer out as JSON.
 ///
-/// Returns null IF it could not be rendered, which needs a serialisation failure
-/// or an interior NUL — neither reachable from what the callers return. Written
-/// as a value rather than an `expect`, which would abort the host application
-/// over an arm nothing reaches.
-fn emit<T: Serialize>(answer: &Answer<T>) -> *mut c_char {
-    serde_json::to_string(answer)
-        .ok()
-        .and_then(|json| CString::new(json).ok())
-        .map_or(std::ptr::null_mut(), CString::into_raw)
+/// A serialisation failure needs a type that cannot be represented, which none
+/// of the callers return. Written as a value rather than an `expect`, which
+/// would abort the host application over an arm nothing reaches: the empty
+/// string is not valid JSON, so a caller decoding it fails where it can say so.
+fn emit<T: Serialize>(answer: &Answer<T>) -> String {
+    serde_json::to_string(answer).unwrap_or_default()
 }
 
-/// Run `body`, turning a panic into null rather than into undefined behaviour.
-pub(crate) fn guarded(body: impl FnOnce() -> *mut c_char) -> *mut c_char {
-    catch_unwind(AssertUnwindSafe(body)).unwrap_or(std::ptr::null_mut())
+/// No answer at all: what a caller gets when what it passed was unusable.
+///
+/// Said as a string so it can leave the same closure as an answer, and turned
+/// back into null by [`guarded`].
+///
+/// **Not the same as [`refused`], and the difference is load-bearing.** A refusal
+/// is an envelope the model reads and can act on: the argument decoded and was
+/// wrong. This is a path that was null or not valid UTF-8, which is a fault in
+/// the caller rather than anything to tell a model about. `ffi_git`'s header
+/// makes the same distinction and a test holds it.
+pub(crate) fn unusable() -> String {
+    String::new()
+}
+
+/// Run `body`, and hand what it answered back as the C string the entry points
+/// still return. A panic becomes null rather than undefined behaviour.
+///
+/// The conversion is here rather than at each of the nine places that build an
+/// answer, because this already wraps every one of them: `ffi_git` and
+/// `ffi_memory` still return `*mut c_char`, so exactly one `CString` is made per
+/// call and it is made in one place while that lasts. It goes when those two
+/// stop returning pointers, which is #565's last envelope change.
+///
+/// Null for three things a caller cannot tell apart and need not: a panic, an
+/// answer that would not serialise, and one containing an interior NUL. JSON
+/// cannot contain a NUL and none of the callers return an unserialisable type,
+/// so the empty string [`emit`] yields on that unreachable arm is what marks it.
+pub(crate) fn guarded(body: impl FnOnce() -> String) -> *mut c_char {
+    catch_unwind(AssertUnwindSafe(body))
+        .ok()
+        .filter(|json| !json.is_empty())
+        .and_then(|json| CString::new(json).ok())
+        .map_or(std::ptr::null_mut(), CString::into_raw)
 }
 
 /// What a caller passed, or `None` IF it is null or not UTF-8.
