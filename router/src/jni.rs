@@ -36,9 +36,10 @@
 
 use crate::core::Router;
 use crate::tier::Tier;
-use jni::JNIEnv;
+use jni::errors::LogErrorAndDefault;
 use jni::objects::{JClass, JString};
 use jni::sys::{jboolean, jlong, jstring};
+use jni::{Env, EnvUnowned};
 use serde::Serialize;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
@@ -87,22 +88,23 @@ struct Attempt {
 /// here, and is the failure people spend an afternoon on.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_getlora_wattrouter_Core_nativeConfigure<'a>(
-    mut env: JNIEnv<'a>,
+    mut unowned: EnvUnowned<'a>,
     _class: JClass<'a>,
     credential: JString<'a>,
 ) -> jboolean {
-    catch_unwind(AssertUnwindSafe(|| {
-        let Some(credential) = read(&mut env, &credential) else {
-            return u8::from(false);
-        };
-        if credential.trim().is_empty() {
-            return u8::from(false);
-        }
-        // Safe under the rely above: one thread, before anything reads it.
-        unsafe { std::env::set_var("NEURALWATT_API_KEY", credential) };
-        u8::from(true)
-    }))
-    .unwrap_or(u8::from(false))
+    unowned
+        .with_env(|env| -> jni::errors::Result<jboolean> {
+            let Some(credential) = read(env, &credential) else {
+                return Ok(false);
+            };
+            if credential.trim().is_empty() {
+                return Ok(false);
+            }
+            // Safe under the rely above: one thread, before anything reads it.
+            unsafe { std::env::set_var("NEURALWATT_API_KEY", credential) };
+            Ok(true)
+        })
+        .resolve::<LogErrorAndDefault>()
 }
 
 /// Build a router.
@@ -120,16 +122,17 @@ pub extern "system" fn Java_com_getlora_wattrouter_Core_nativeConfigure<'a>(
 /// The returned handle must reach `nativeFree` exactly once.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_getlora_wattrouter_Core_nativeNew(
-    _env: JNIEnv,
-    _class: JClass,
+    mut unowned: EnvUnowned<'_>,
+    _class: JClass<'_>,
 ) -> jlong {
-    catch_unwind(|| {
-        // The configured default head. Kotlin has no path to hand in, because on
-        // a phone there is no head to load — the policy has an unscored path and
-        // that is what Android takes.
-        Router::new(None).map_or(0, |router| Box::into_raw(Box::new(router)) as jlong)
-    })
-    .unwrap_or(0)
+    unowned
+        .with_env(|_env| -> jni::errors::Result<jlong> {
+            // The configured default head. Kotlin has no path to hand in, because on
+            // a phone there is no head to load — the policy has an unscored path and
+            // that is what Android takes.
+            Ok(Router::new(None).map_or(0, |router| Box::into_raw(Box::new(router)) as jlong))
+        })
+        .resolve::<LogErrorAndDefault>()
 }
 
 /// Release a router.
@@ -143,16 +146,21 @@ pub extern "system" fn Java_com_getlora_wattrouter_Core_nativeNew(
 /// accepted and ignored, so a Kotlin field cleared twice is not a crash.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_getlora_wattrouter_Core_nativeFree(
-    _env: JNIEnv,
-    _class: JClass,
+    mut unowned: EnvUnowned<'_>,
+    _class: JClass<'_>,
     handle: jlong,
 ) {
     if handle == 0 {
         return;
     }
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        drop(unsafe { Box::from_raw(handle as *mut Router) });
-    }));
+    unowned
+        .with_env(|_env| -> jni::errors::Result<()> {
+            // The other half of `nativeNew`'s `Box`. `Router` has no `Drop` of
+            // its own, so this has to stay a drop and must not become a forget.
+            drop(unsafe { Box::from_raw(handle as *mut Router) });
+            Ok(())
+        })
+        .resolve::<LogErrorAndDefault>();
 }
 
 /// Decide which tier serves a request, and say what stands behind it.
@@ -166,41 +174,51 @@ pub extern "system" fn Java_com_getlora_wattrouter_Core_nativeFree(
 /// `handle` must come from `nativeNew`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_getlora_wattrouter_Core_nativeDecide<'a>(
-    mut env: JNIEnv<'a>,
+    mut unowned: EnvUnowned<'a>,
     _class: JClass<'a>,
     handle: jlong,
     body: JString<'a>,
     session: JString<'a>,
 ) -> jstring {
-    let answered = catch_unwind(AssertUnwindSafe(|| {
-        let Some(router) = (unsafe { (handle as *const Router).as_ref() }) else {
-            return Err("no router: it was never built, or it has been freed".to_owned());
-        };
-        // Nullable in Kotlin compiles to a null jstring without complaint, and
-        // `get_string` on one is an exception rather than an error value.
-        let body = read(&mut env, &body).ok_or("the request body was null or not UTF-8")?;
-        let session = read(&mut env, &session).unwrap_or_default();
+    unowned
+        .with_env(|env| -> jni::errors::Result<jstring> {
+            // A guard inside a guard, and it is not redundant. `with_env`
+            // catches a panic and answers null; this one catches it and answers
+            // the envelope, which is what Kotlin has always been given and the
+            // only shape it can report to somebody. The outer one is the
+            // backstop for a panic outside this block.
+            let answered = catch_unwind(AssertUnwindSafe(|| {
+                let Some(router) = (unsafe { (handle as *const Router).as_ref() }) else {
+                    return Err("no router: it was never built, or it has been freed".to_owned());
+                };
+                // Nullable in Kotlin compiles to a null jstring without
+                // complaint, and `get_string` on one raises rather than
+                // answering.
+                let body = read(env, &body).ok_or("the request body was null or not UTF-8")?;
+                let session = read(env, &session).unwrap_or_default();
 
-        decide(router, &body, &session).ok_or_else(|| {
-            "the request could not be decided: it is not an OpenAI-shaped chat completion"
-                .to_owned()
+                decide(router, &body, &session).ok_or_else(|| {
+                    "the request could not be decided: it is not an OpenAI-shaped chat completion"
+                        .to_owned()
+                })
+            }));
+
+            let envelope = match answered {
+                Ok(Ok(decided)) => serde_json::to_string(&Answer::Ok(decided)),
+                Ok(Err(why)) => serde_json::to_string(&Answer::<Decided>::Error(why)),
+                Err(_) => serde_json::to_string(&Answer::<Decided>::Error(
+                    "the routing core failed while deciding".to_owned(),
+                )),
+            };
+
+            // A JVM that will not allocate a string is out of memory, and there
+            // is nothing useful to say to it. Null, which Kotlin sees as null.
+            Ok(envelope
+                .ok()
+                .and_then(|json| env.new_string(json).ok())
+                .map_or(std::ptr::null_mut(), jni::objects::JString::into_raw))
         })
-    }));
-
-    let envelope = match answered {
-        Ok(Ok(decided)) => serde_json::to_string(&Answer::Ok(decided)),
-        Ok(Err(why)) => serde_json::to_string(&Answer::<Decided>::Error(why)),
-        Err(_) => serde_json::to_string(&Answer::<Decided>::Error(
-            "the routing core failed while deciding".to_owned(),
-        )),
-    };
-
-    // A JVM that will not allocate a string is out of memory, and there is
-    // nothing useful to say to it. Null, which Kotlin sees as null.
-    envelope
-        .ok()
-        .and_then(|json| env.new_string(json).ok())
-        .map_or(std::ptr::null_mut(), jni::objects::JString::into_raw)
+        .resolve::<LogErrorAndDefault>()
 }
 
 /// The same envelope the C half uses, so both phones decode one shape.
@@ -216,16 +234,25 @@ enum Answer<T: Serialize> {
 /// `None` for null and for anything the JVM will not give back as UTF-8. Clears
 /// the pending exception either way: leaving one set means the next JNI call
 /// from Kotlin fails for a reason that has nothing to do with it.
-pub(crate) fn read(env: &mut JNIEnv<'_>, text: &JString<'_>) -> Option<String> {
+///
+/// `try_to_string` rather than `Env::get_string`, which jni 0.22 deprecates. It
+/// reads through `mutf8_chars`, which is the route that matters: a JVM is
+/// permitted to write modified UTF-8, where a supplementary character is a
+/// surrogate pair that a standard decode replaces with U+FFFD. #482 measured
+/// that ART does not exercise the permission and an emoji survived intact, so
+/// this is not a corruption being fixed; it is one runtime's behaviour being
+/// kept from becoming load-bearing.
+pub(crate) fn read(env: &mut Env<'_>, text: &JString<'_>) -> Option<String> {
     if text.is_null() {
         return None;
     }
-    if let Ok(got) = env.get_string(text) {
-        return Some(got.into());
+    if let Ok(got) = text.try_to_string(env) {
+        return Some(got);
     }
-    // Discarded deliberately: there is nothing to do about a failed clear, and
-    // the caller is already returning the absence.
-    let _ = env.exception_clear();
+    // Answers nothing since jni 0.22, where it returned a `Result` that was
+    // discarded here on the grounds that a failed clear has nothing to be done
+    // about it. The discard went with the `Result`.
+    env.exception_clear();
     None
 }
 

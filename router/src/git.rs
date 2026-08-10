@@ -179,9 +179,13 @@ fn short_id(reference: &git2::Reference) -> Result<String, Error> {
 /// to "HEAD" rather than failing: the branch name is the least important thing
 /// about a repository with no commits in it.
 fn unborn_name(repo: &git2::Repository) -> String {
+    // `symbolic_target` answers `Result<Option<&str>>` since git2 0.21: absent
+    // where the reference is direct rather than symbolic, and an error where the
+    // target is not UTF-8. Both mean the same thing here, which is that there is
+    // no name to read, so both fall through to the default below.
     repo.find_reference("HEAD")
         .ok()
-        .and_then(|head| head.symbolic_target().map(str::to_owned))
+        .and_then(|head| head.symbolic_target().ok().flatten().map(str::to_owned))
         .map_or_else(
             || "HEAD".to_owned(),
             |target| target.trim_start_matches("refs/heads/").to_owned(),

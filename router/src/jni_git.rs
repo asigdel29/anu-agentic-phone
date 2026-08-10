@@ -27,8 +27,9 @@
 //! nothing here should be reimplementing.
 
 use crate::jni::read;
-use crate::jni_answer::{guarded, handed};
-use jni::JNIEnv;
+use crate::jni_answer::handed;
+use jni::EnvUnowned;
+use jni::errors::LogErrorAndDefault;
 use jni::objects::{JClass, JString};
 use jni::sys::jstring;
 use std::path::Path;
@@ -39,16 +40,18 @@ use std::path::Path;
 /// Called from Kotlin through `Repository.init`, which passes a path it owns.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeInit<'a>(
-    mut env: JNIEnv<'a>,
+    mut unowned: EnvUnowned<'a>,
     _class: JClass<'a>,
     path: JString<'a>,
 ) -> jstring {
-    guarded(std::ptr::null_mut(), || {
-        let Some(path) = read(&mut env, &path) else {
-            return std::ptr::null_mut();
-        };
-        handed(&mut env, crate::core_git::init(Path::new(&path)))
-    })
+    unowned
+        .with_env(|env| -> jni::errors::Result<jstring> {
+            let Some(path) = read(env, &path) else {
+                return Ok(std::ptr::null_mut());
+            };
+            Ok(handed(env, crate::core_git::init(Path::new(&path))))
+        })
+        .resolve::<LogErrorAndDefault>()
 }
 
 /// Where `HEAD` points.
@@ -57,16 +60,18 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeInit<'a>(
 /// Called from Kotlin through `Repository.head`, which passes a path it owns.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeHead<'a>(
-    mut env: JNIEnv<'a>,
+    mut unowned: EnvUnowned<'a>,
     _class: JClass<'a>,
     path: JString<'a>,
 ) -> jstring {
-    guarded(std::ptr::null_mut(), || {
-        let Some(path) = read(&mut env, &path) else {
-            return std::ptr::null_mut();
-        };
-        handed(&mut env, crate::core_git::head(Path::new(&path)))
-    })
+    unowned
+        .with_env(|env| -> jni::errors::Result<jstring> {
+            let Some(path) = read(env, &path) else {
+                return Ok(std::ptr::null_mut());
+            };
+            Ok(handed(env, crate::core_git::head(Path::new(&path))))
+        })
+        .resolve::<LogErrorAndDefault>()
 }
 
 /// The working tree, against the index and the head.
@@ -75,16 +80,18 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeHead<'a>(
 /// As [`Java_com_getlora_wattrouter_Repository_nativeHead`].
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeStatus<'a>(
-    mut env: JNIEnv<'a>,
+    mut unowned: EnvUnowned<'a>,
     _class: JClass<'a>,
     path: JString<'a>,
 ) -> jstring {
-    guarded(std::ptr::null_mut(), || {
-        let Some(path) = read(&mut env, &path) else {
-            return std::ptr::null_mut();
-        };
-        handed(&mut env, crate::core_git::status(Path::new(&path)))
-    })
+    unowned
+        .with_env(|env| -> jni::errors::Result<jstring> {
+            let Some(path) = read(env, &path) else {
+                return Ok(std::ptr::null_mut());
+            };
+            Ok(handed(env, crate::core_git::status(Path::new(&path))))
+        })
+        .resolve::<LogErrorAndDefault>()
 }
 
 /// Stage paths, and answer with the status that results.
@@ -93,24 +100,25 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeStatus<'a>(
 /// As [`Java_com_getlora_wattrouter_Repository_nativeHead`], for both arguments.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeAdd<'a>(
-    mut env: JNIEnv<'a>,
+    mut unowned: EnvUnowned<'a>,
     _class: JClass<'a>,
     path: JString<'a>,
     paths_json: JString<'a>,
 ) -> jstring {
-    guarded(std::ptr::null_mut(), || {
-        // JSON across this boundary too, and for the C ABI's reason: the model
-        // writes an array, the tool decodes one, and rebuilding it as a Kotlin
-        // Array<String> only to encode it again is three shapes for one value.
-        let (Some(path), Some(paths_json)) = (read(&mut env, &path), read(&mut env, &paths_json))
-        else {
-            return std::ptr::null_mut();
-        };
-        handed(
-            &mut env,
-            crate::core_git::add(Path::new(&path), &paths_json),
-        )
-    })
+    unowned
+        .with_env(|env| -> jni::errors::Result<jstring> {
+            // JSON across this boundary too, and for the C ABI's reason: the model
+            // writes an array, the tool decodes one, and rebuilding it as a Kotlin
+            // Array<String> only to encode it again is three shapes for one value.
+            let (Some(path), Some(paths_json)) = (read(env, &path), read(env, &paths_json)) else {
+                return Ok(std::ptr::null_mut());
+            };
+            Ok(handed(
+                env,
+                crate::core_git::add(Path::new(&path), &paths_json),
+            ))
+        })
+        .resolve::<LogErrorAndDefault>()
 }
 
 /// Commit what is staged.
@@ -119,18 +127,20 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeAdd<'a>(
 /// As [`Java_com_getlora_wattrouter_Repository_nativeHead`], for both arguments.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeCommit<'a>(
-    mut env: JNIEnv<'a>,
+    mut unowned: EnvUnowned<'a>,
     _class: JClass<'a>,
     path: JString<'a>,
     message: JString<'a>,
 ) -> jstring {
-    guarded(std::ptr::null_mut(), || {
-        let (Some(path), Some(message)) = (read(&mut env, &path), read(&mut env, &message)) else {
-            return std::ptr::null_mut();
-        };
-        handed(
-            &mut env,
-            crate::core_git::commit(Path::new(&path), &message),
-        )
-    })
+    unowned
+        .with_env(|env| -> jni::errors::Result<jstring> {
+            let (Some(path), Some(message)) = (read(env, &path), read(env, &message)) else {
+                return Ok(std::ptr::null_mut());
+            };
+            Ok(handed(
+                env,
+                crate::core_git::commit(Path::new(&path), &message),
+            ))
+        })
+        .resolve::<LogErrorAndDefault>()
 }
