@@ -98,6 +98,12 @@ thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+# SHA-256 for token hashing, and not a password KDF. A token is thirty-two
+# random bytes this server issued, so there is no dictionary to run against it
+# and nothing a work factor would buy -- it would cost every request the time it
+# is meant to cost an attacker.
+sha2 = "0.10"
+
 [[bench]]
 name = "decide"
 harness = false
