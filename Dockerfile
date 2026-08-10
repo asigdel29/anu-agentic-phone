@@ -19,7 +19,12 @@
 # deployment's route. A laptop running the agent against this server without
 # pinning still gets a routed request, served by the hash embedder.
 
-FROM rust:1.90-slim-bookworm AS builder
+# 1.95.0, matching .github/actions/rust-setup and router/Cargo.toml's
+# rust-version. Pinned rather than `rust:slim`, for the reason that action gives:
+# a toolchain that moves underneath turns an unrelated pull request red. The
+# image job caught this too -- 1.90 built nothing, because edition 2024 and the
+# declared rust-version are both newer than it.
+FROM rust:1.95.0-slim-bookworm AS builder
 
 # pkg-config and libssl-dev for the TLS the upstream client links. Nothing else:
 # git and memory are off, so libgit2 and SQLite are not built.
