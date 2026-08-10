@@ -1,4 +1,4 @@
-// AssistDeclarationTest.kt — the assist gesture can reach this app.
+// AssistDeclarationTest.kt: the assist gesture can reach this app.
 //
 // History
 //   2026-08-09  A. Sigdel  Created with #527.
@@ -6,7 +6,7 @@
 // On a device, for PermissionDeclarationTest's reason: a manifest is only a
 // manifest once it has been merged into an installed package, and an intent
 // filter that was dropped in a merge looks like nothing at all. Nobody notices
-// an app that is missing from a picker — they conclude the feature was never
+// an app that is missing from a picker; they conclude the feature was never
 // built, which is the failure with no error attached.
 //
 // Asked of the package manager rather than read out of the file. Reading the

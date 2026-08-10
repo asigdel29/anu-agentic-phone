@@ -1,10 +1,10 @@
-// PruneTest.kt — what survives a real tree, and what a model never sees.
+// PruneTest.kt: what survives a real tree, and what a model never sees.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
 //
 // On the JVM against Seen. The shapes below are the ones a toolkit actually
-// produces — a page inside four containers, a button wrapping its own label —
+// produces (a page inside four containers, a button wrapping its own label)
 // rather than trees invented to suit the rules.
 
 package com.getlora.wattrouter
@@ -159,7 +159,7 @@ class ScrollablePruneTest {
     fun aListThatSaysNothingIsStillWorthNaming() {
         // A RecyclerView holding a hundred rows has no text, no description
         // and no click. Dropped as a container, its rows survive and there is
-        // no handle for the list itself — so nothing can be scrolled.
+        // no handle for the list itself, so nothing can be scrolled.
         val list = Seen(
             viewId = "app:id/messages",
             role = "list",

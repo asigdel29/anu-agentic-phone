@@ -1,4 +1,4 @@
-// McpTest.kt — what a server can and cannot make this stack do.
+// McpTest.kt: what a server can and cannot make this stack do.
 //
 // History
 //   2026-08-09  A. Sigdel  Created with #529.

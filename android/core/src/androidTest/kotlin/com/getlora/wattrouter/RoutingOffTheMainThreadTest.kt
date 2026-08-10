@@ -1,4 +1,4 @@
-// RoutingOffTheMainThreadTest.kt — deciding does not hold the UI thread.
+// RoutingOffTheMainThreadTest.kt: deciding does not hold the UI thread.
 //
 // History
 //   2026-08-09  A. Sigdel  Created with the fix for #474.
@@ -15,7 +15,7 @@
 //
 // Before #474 it could not. Routing.decide was an ordinary function, the turn
 // loop collected on the main thread, and a blocking native call held the looper
-// until it returned — so the posted message ran after the decision rather than
+// until it returned, so the posted message ran after the decision rather than
 // during it, and this test recorded them in the other order.
 
 package com.getlora.wattrouter

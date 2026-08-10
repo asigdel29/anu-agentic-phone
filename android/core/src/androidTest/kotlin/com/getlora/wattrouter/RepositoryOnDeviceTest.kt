@@ -1,11 +1,11 @@
-// RepositoryOnDeviceTest.kt — the four entry points resolve and answer.
+// RepositoryOnDeviceTest.kt: the four entry points resolve and answer.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
 //
 // On a device, because this is the only place the library loads. The parity test
 // in router/src/jni.rs holds the symbol names in step; this is the other half of
-// that claim — that the names it compared actually link, and that an envelope
+// that claim: that the names it compared actually link, and that an envelope
 // survives the trip back into a Kotlin String.
 //
 // A directory that is not a repository is the subject on purpose. Every call

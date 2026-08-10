@@ -1,4 +1,4 @@
-// BarredTest.kt — the screens the agent is not allowed to touch.
+// BarredTest.kt: the screens the agent is not allowed to touch.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -45,7 +45,7 @@ class BarredTest {
     @Test
     fun thePermissionScreenIsBarredHoweverItIsSpelled() {
         // An agent that can tap Allow can grant itself the calendar, contacts
-        // and location it was refused — and Permission's refusal already puts
+        // and location it was refused, and Permission's refusal already puts
         // the words for it into the transcript.
         assertEquals(Barred.PERMISSIONS, on(packageName = "com.android.permissioncontroller"))
         assertEquals(
@@ -76,7 +76,7 @@ class BarredTest {
     @Test
     fun theMatchIsLooseBecauseTheSettingsAppRenamesThings() {
         // A list of exact class names is a list that silently stops matching
-        // after a platform release — which here means silently stops refusing.
+        // after a platform release, which here means silently stops refusing.
         listOf(
             "com.android.settings.accessibility.ToggleAccessibilityServicePreferenceFragment",
             "com.android.settings.Settings\$AccessibilityDetailsSettingsActivity",
@@ -87,7 +87,7 @@ class BarredTest {
     @Test
     fun anUnknownActivityIsNotTreatedAsSafe() {
         // Null is the state after a restart, before the first window change.
-        // It bars nothing on its own — the package rules still apply — and the
+        // It bars nothing on its own (the package rules still apply) and the
         // service is where that gap is closed.
         assertNull(on(activity = null))
         assertEquals(Barred.ITSELF, on(packageName = own, activity = null))

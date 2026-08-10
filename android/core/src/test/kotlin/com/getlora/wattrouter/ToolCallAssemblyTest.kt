@@ -1,4 +1,4 @@
-// ToolCallAssemblyTest.kt — fragments in, whole calls out.
+// ToolCallAssemblyTest.kt: fragments in, whole calls out.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
@@ -47,7 +47,7 @@ class ToolCallAssemblyTest {
     fun callsComeBackInTheProvidersOrderNotTheOrderTheyArrived() {
         // The Agent runs tools in the order it is handed them, so that order has
         // to be the provider's numbering rather than whichever fragment landed
-        // first — parallel calls interleave.
+        // first, because parallel calls interleave.
         val assembly = ToolCallAssembly()
         assembly.add(piece(1, id = "b", name = "second"))
         assembly.add(piece(0, id = "a", name = "first"))

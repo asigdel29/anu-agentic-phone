@@ -1,4 +1,4 @@
-// ConversationTest.kt — what the core and the provider actually receive.
+// ConversationTest.kt: what the core and the provider actually receive.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
@@ -6,7 +6,7 @@
 // JVM tests rather than instrumented ones: none of this touches Android, and a
 // test needing an emulator to check JSON is a test nobody runs.
 //
-// The cases are the two failures hand-written JSON produces — a quote that
+// The cases are the two failures hand-written JSON produces: a quote that
 // escapes into a malformed request, and a key present and empty where the
 // provider wanted it absent. Both fail at the provider rather than here, with a
 // message about the whole request.

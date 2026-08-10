@@ -1,4 +1,4 @@
-// CoreTest.kt — the library, actually loaded.
+// CoreTest.kt: the library, actually loaded.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
@@ -12,8 +12,8 @@
 // aarch64-linux-android and a JVM test runs on the host, where it will not load
 // at all. That is why #310 and #312 could not make this claim.
 //
-// The credential is a placeholder. Deciding is local — classify, score, apply
-// policy — and nothing here reaches the provider, so what the key has to be is
+// The credential is a placeholder. Deciding is local (classify, score, apply
+// policy) and nothing here reaches the provider, so what the key has to be is
 // present rather than valid.
 
 package com.getlora.wattrouter

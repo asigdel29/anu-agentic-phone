@@ -1,4 +1,4 @@
-// AndroidCalendarsTest.kt — the day an all-day event is actually on.
+// AndroidCalendarsTest.kt: the day an all-day event is actually on.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.

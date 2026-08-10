@@ -1,4 +1,4 @@
-// MemoryTest.kt — the store, opened and asked for real.
+// MemoryTest.kt: the store, opened and asked for real.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -78,7 +78,7 @@ class MemoryTest {
 
     @Test
     fun theStoreSurvivesBeingClosedAndOpenedAgain() {
-        // Which is every launch, and the horizon runs on the way in — so a
+        // Which is every launch, and the horizon runs on the way in, so a
         // store the horizon broke would fail here rather than on a phone.
         requireNotNull(Memory.open(path())).use {
             it.remember("the bins go out on Tuesday", "user", "s", NOW)
@@ -106,7 +106,7 @@ class MemoryTest {
     fun textOutsideTheBasicPlaneSurvivesTheCrossing() {
         // A JVM is permitted to hand a string over as modified UTF-8, where
         // anything above U+FFFF arrives as a surrogate pair rather than as one
-        // four-byte sequence — and read as the standard encoding, every
+        // four-byte sequence, and read as the standard encoding, every
         // character below would become U+FFFD.
         //
         // This passed before `owned` was changed to decode the documented way,

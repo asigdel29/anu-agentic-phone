@@ -1,4 +1,4 @@
-// TranscriptTest.kt — the fold, and what each rule stops looking wrong.
+// TranscriptTest.kt: the fold, and what each rule stops looking wrong.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
