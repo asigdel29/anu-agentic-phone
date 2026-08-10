@@ -21,7 +21,7 @@ than a default, and the compiler plugin would be a version to keep in step with 
 nothing.
 
 `core/src/main/jniLibs/` holds `arm64-v8a/libwattrouter.so`, which `just android-core` builds
-from the same crate the iOS xcframework comes from. It is build output, it is gitignored, and an
+from the crate in `router/`. It is build output, it is gitignored, and an
 AAR assembled without it installs and fails to load. It sits in AGP's default location rather
 than a declared one: the `sourceSets` accessor that used to point at `core/jniLibs` broke on the
 AGP 9.3 bump, and the default needs no accessor at all.
@@ -95,7 +95,7 @@ Splitting this subtree in two was exactly that move, and #326 changed both toget
 
 There is no `gradlew` and no `gradle/wrapper/`: a wrapper is a jar, and this repository does
 not track binaries it cannot review. `just android` says how to install Gradle when it is
-absent, the way `scripts/test-ios.sh` does for xcodegen.
+absent, the way `scripts/test-android.sh` does for a system image.
 
 Two consequences. Continuous integration installs Gradle and invokes the one on `PATH` — it
 names the full release, `9.7.0`, because `9.7` is not a version `setup-gradle` resolves. That

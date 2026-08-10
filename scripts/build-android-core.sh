@@ -101,7 +101,7 @@ export AR_aarch64_linux_android="$BIN/llvm-ar"
 export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$CC_aarch64_linux_android"
 
 printf 'building %s\n' "$TARGET"
-# git and memory for the reason build-ios-core.sh has them: a phone has no shell
+# git and memory because a phone has no shell
 # and cannot afford the ONNX embedder, whichever phone it is. android for the JNI
 # entry points, which is the half iOS does not want — it links the archive
 # directly and has no JVM to be reached from.

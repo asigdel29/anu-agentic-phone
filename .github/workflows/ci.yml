@@ -220,50 +220,26 @@ jobs:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
         run: cargo build --manifest-path router/Cargo.toml --target aarch64-unknown-linux-gnu --release
 
-  # The iOS app links the router as a static library, and no other job compiles
-  # for that target. A break specific to it — a dependency reaching for a Unix
-  # the phone does not provide — would otherwise surface in Xcode, off CI and
-  # days later. The Apple SDK means a macOS runner, which is the scarcest thing
-  # this workflow asks for — fewer of them run at once than Linux ones, and they
-  # take longer to come up — so this job builds and checks the header and does
-  # nothing else: the tests are target-independent and already run on Linux.
+  # A test in ffi.rs proves the header names what the library exports. It cannot
+  # prove the header is valid C, because nothing in a Rust build ever compiles
+  # it. This does.
   #
-  # --lib --no-default-features is the build an app takes. It calls the decision
-  # core, never the server, and the default features drag ONNX Runtime in behind
-  # them for an embedder the app does not use — 156 MB of archive against 42.
-  #
-  # --features git matches scripts/build-ios-core.sh, and the point is that it
-  # matches: a phone has no shell, so the app is the one build that turns git on.
-  # Without it here this job compiles a library the app does not ship, and a
-  # break in the git half reaches a developer running `just ios-core` rather than
-  # the push that caused it.
-  ios-build:
-    name: Build (aarch64-apple-ios)
+  # On Linux, and that is the change #544 made: this used to ride along with the
+  # iOS build on a macOS runner, targeting arm64-apple-ios. The app is gone and
+  # the ABI is not -- ffi.rs, ffi_git.rs and ffi_memory.rs are a stable C
+  # interface with tests -- so the check moves to the cheapest runner that can
+  # make it. Valid C is valid C; the target was never what this was asking about.
+  header:
+    name: Header
     needs: detect
     if: ${{ needs.detect.outputs.rust == 'true' }}
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/rust-setup
-        with:
-          target: aarch64-apple-ios
-          cache-key: ios
-      - name: Build
-        run: |
-          set -euo pipefail
-          cargo build --manifest-path router/Cargo.toml \
-            --target aarch64-apple-ios --release --lib \
-            --no-default-features --features git
-
-      # A test in ffi.rs proves the header names what the library exports. It
-      # cannot prove the header is valid C, because nothing in a Rust build ever
-      # compiles it. This does, with the compiler and SDK the app will use.
       - name: Check the header compiles as C
         run: |
           set -euo pipefail
-          clang -fsyntax-only -Wall -Wextra -pedantic -std=c11 \
-            -target arm64-apple-ios17 \
-            -isysroot "$(xcrun --sdk iphoneos --show-sdk-path)" \
+          gcc -fsyntax-only -Wall -Wextra -pedantic -std=c11 \
             router/include/wattrouter.h
 
   # The benches carry gates, and a gate nothing runs is a comment. These are
@@ -397,7 +373,7 @@ jobs:
 
   required:
     name: Required
-    needs: [detect, format, lint, test, cross-build, ios-build, perf, android, image]
+    needs: [detect, format, lint, test, cross-build, header, perf, android, image]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -409,7 +385,7 @@ jobs:
             lint:${{ needs.lint.result }}
             test:${{ needs.test.result }}
             cross-build:${{ needs.cross-build.result }}
-            ios-build:${{ needs.ios-build.result }}
+            header:${{ needs.header.result }}
             perf:${{ needs.perf.result }}
             android:${{ needs.android.result }}
             image:${{ needs.image.result }}
