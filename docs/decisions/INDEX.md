@@ -25,6 +25,7 @@ nothing in a diff records it, so no pull request body can either.
 | [what-computer-use-means.md](what-computer-use-means.md) | Which of three products is "the agent takes control of a computer", and what are the other two for? |
 | [how-the-agent-drives.md](how-the-agent-drives.md) | How does the agent read and act on another app's screen, and why does the model never see a coordinate? |
 | [what-guards-main.md](what-guards-main.md) | What can reach the default branch, and which two obvious settings are absent on purpose? |
+| [an-agentic-android.md](an-agentic-android.md) | What would a phone this agent was privileged on change, and which constraints would survive it anyway? |
 
 ## Decisions argued in a pull request
 
