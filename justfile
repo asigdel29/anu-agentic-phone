@@ -133,6 +133,21 @@ android-test:
 android-device-test:
     scripts/test-android.sh
 
+# Answer the app's turns from a script instead of a provider, and record what it
+# asked. This is what makes the tool loop testable at all: every tool runs only
+# because a model decided to call it, so without this the whole point of the
+# application can only be exercised by paying somebody.
+#
+# Build the app to match, or it will keep talking to the provider — the endpoint
+# is fixed when the app is built and cannot be moved at runtime:
+#
+#   WATTROUTER_UPSTREAM=http://10.0.2.2:8099/v1 just android
+#
+# 10.0.2.2 is the emulator's alias for this host. Only a debug build may reach it
+# in the clear; a release build has no cleartext exemption at all.
+stub script="scripts/stub-scripts/open-and-read.json":
+    python3 scripts/stub-model.py {{ script }}
+
 # Check the stack end to end. Needs a router; `just up` first.
 verify:
     scripts/verify-stack.sh {{ "http://" + router_addr }}
