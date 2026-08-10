@@ -181,6 +181,7 @@ The standard is CI's business, not review's, wherever a machine can decide.
 | Types | `mypy --strict` |
 | One thing per function | Complexity gate |
 | Tests | `cargo test`, `pytest`, behind a coverage ratchet |
+| No em-dash or en-dash | `scripts/guards/slopgate.patterns`, advisory |
 
 Not mechanically checkable, and therefore review's job: whether a comment earns its place,
 whether a function is cohesive rather than merely short, and whether a name says what the
