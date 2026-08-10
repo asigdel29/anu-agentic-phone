@@ -1,4 +1,4 @@
-// AndroidCalendars.kt — the calendar as the provider holds it.
+// AndroidCalendars.kt: the calendar as the provider holds it.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -9,7 +9,7 @@
 // returns a plausible answer that is wrong every week but the first.
 //
 // The one trap here is all-day. The provider stores a date with no time as
-// midnight UTC, because a date has no zone to be midnight in — so read where the
+// midnight UTC, because a date has no zone to be midnight in, so read where the
 // phone is, an all-day event west of Greenwich lands on the day before and the
 // model reports a holiday ending the evening it began. Event.start is documented
 // as local midnight for that case, and moving it there is this file's job.

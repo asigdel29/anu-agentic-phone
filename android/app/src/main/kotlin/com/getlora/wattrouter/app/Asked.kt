@@ -1,4 +1,4 @@
-// Asked.kt — the question, over whatever the agent is about to touch.
+// Asked.kt: the question, over whatever the agent is about to touch.
 //
 // History
 //   2026-08-10  A. Sigdel  Created with #556.
@@ -9,7 +9,7 @@
 // A sibling of Banner and deliberately not a part of it. The banner reports and
 // this asks, and the difference shows in one flag: the banner sets
 // NOT_TOUCH_MODAL so a tap falls through to the app the agent is aiming at, and
-// a question must not — a tap meant for Allow that lands in the app underneath
+// a question must not: a tap meant for Allow that lands in the app underneath
 // is the failure the whole feature exists to prevent.
 //
 // Modality is safe here for a reason worth writing down, because it stops being
@@ -20,8 +20,8 @@
 // gestures moves this decision with it.
 //
 // It is also unanswerable by the model, and that is not an accident of the view
-// hierarchy. An accessibility overlay is absent from the node tree — #526 found
-// it the hard way, three tests failing against a feature that worked — so
+// hierarchy. An accessibility overlay is absent from the node tree (#526 found
+// it the hard way, three tests failing against a feature that worked) so
 // read_screen cannot see this and tap cannot reach it. The thing being asked
 // about cannot answer.
 

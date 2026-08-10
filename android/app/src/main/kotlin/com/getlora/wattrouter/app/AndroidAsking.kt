@@ -1,4 +1,4 @@
-// AndroidAsking.kt — the permission dialog, and the ambiguity in its silence.
+// AndroidAsking.kt: the permission dialog, and the ambiguity in its silence.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -8,7 +8,7 @@
 // than the three system calls it makes for one reason: Android says whether a
 // permission is held, and whether asking would show a dialog, and never whether
 // it was ever asked. That last is the difference between somebody who has not
-// been asked yet and somebody the system has stopped asking on behalf of —
+// been asked yet and somebody the system has stopped asking on behalf of;
 // shouldShowRequestPermissionRationale answers false in both.
 //
 // So one thing is kept here, and deliberately not the answer: that the dialog
@@ -40,7 +40,7 @@ import kotlinx.coroutines.withContext
  * @param present whether the phone has the thing at all.
  * @param granted what `checkSelfPermission` answered.
  * @param everAsked whether this app has ever put the dialog on screen.
- * @param rationale what `shouldShowRequestPermissionRationale` answered — true
+ * @param rationale what `shouldShowRequestPermissionRationale` answered. True
  *   only while the system would still show a dialog if asked.
  */
 internal fun stateFrom(
@@ -97,7 +97,7 @@ class AndroidAsking(private val activity: ComponentActivity) : Asking {
         activity.registerForActivityResult(ActivityResultContracts.RequestPermission()) {
             // The result is dropped and the state read again instead. A dialog
             // dismissed rather than answered arrives here as false, which is
-            // indistinguishable from a refusal until rationale is consulted —
+            // indistinguishable from a refusal until rationale is consulted,
             // and consulting it is all state() does.
             answering?.complete(Unit)
         }
@@ -110,7 +110,7 @@ class AndroidAsking(private val activity: ComponentActivity) : Asking {
         // Cleared on grant rather than merely ignored. Revoking in Settings
         // resets Android's own counter, as does the automatic revocation of an
         // unused app's permissions, and a record left set would read the fresh
-        // askable permission that follows as permanently denied — sending
+        // askable permission that follows as permanently denied, sending
         // somebody to a Settings row that already says what they want.
         if (granted) asked.edit().remove(permission).apply()
 
@@ -150,7 +150,7 @@ class AndroidAsking(private val activity: ComponentActivity) : Asking {
      * Location is the one of the three a phone can genuinely lack; the calendar
      * and contacts providers are platform, and one holding no event is empty
      * rather than absent. Resolving their authorities to guess would be worse
-     * than not guessing — package visibility filters that lookup from targetSdk
+     * than not guessing: package visibility filters that lookup from targetSdk
      * 30 upwards, so its "no" means two things and one of them is wrong.
      */
     private fun isPresent(capability: Capability): Boolean = when (capability) {

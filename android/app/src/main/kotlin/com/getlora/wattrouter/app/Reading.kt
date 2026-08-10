@@ -1,4 +1,4 @@
-// Reading.kt — filling in the checklist from what the phone says.
+// Reading.kt: filling in the checklist from what the phone says.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -25,12 +25,12 @@ import com.getlora.wattrouter.Readiness
  *
  * Split rather than searched. The list is colon-separated `package/class`
  * entries, and a plain `contains` would also match an app whose own component
- * name happens to contain ours — contrived, and removing the question costs a
+ * name happens to contain ours: contrived, and removing the question costs a
  * `split`.
  *
  * Both spellings are accepted. The platform writes either the fully qualified
  * `package/com.package.Class` or the abbreviated `package/.Class`, and a phone
- * that wrote the short form would read as off — sending somebody to switch on
+ * that wrote the short form would read as off, sending somebody to switch on
  * what they had already switched on.
  *
  * @param enabled the raw setting, which is null before anything has ever been
@@ -63,7 +63,7 @@ internal fun readiness(context: Context): Readiness {
     return Readiness.of(
         // The setting rather than DrivingService.connected: the service binds a
         // moment after the switch, and a screen re-read on resume is read at
-        // exactly that moment — somebody coming back from Settings.
+        // exactly that moment, when somebody comes back from Settings.
         driving = isEnabled(
             Settings.Secure.getString(
                 context.contentResolver,

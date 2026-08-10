@@ -1,4 +1,4 @@
-// SignInScreen.kt — where the one credential the stack needs is typed.
+// SignInScreen.kt: where the one credential the stack needs is typed.
 //
 // History
 //   2026-08-08  A. Sigdel  Created.
@@ -34,7 +34,7 @@ import androidx.compose.ui.unit.dp
  * Ask for the provider key.
  *
  * @param refused true when a key is already stored and the core would not start
- *   with it — a different thing from never having signed in, and worth saying,
+ *   with it: a different thing from never having signed in, and worth saying,
  *   because retyping the same key will not help.
  * @param onEntered what to do with what was typed. It has not been trimmed or
  *   checked; `Credential.store` does both and answers whether it took.
