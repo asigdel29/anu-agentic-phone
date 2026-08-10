@@ -4,12 +4,14 @@
 //!   2026-08-09  A. Sigdel  Created.
 //!   2026-08-09  A. Sigdel  Moved the two helpers to `jni_answer.rs`.
 //!   2026-08-09  A. Sigdel  Guarded the four entry points.
+//!   2026-08-10  A. Sigdel  Reads a `String` and answers one with #565. There is
+//!                          no Rust allocation crossing to free.
 //!
-//! `jni_memory.rs`'s shape and its reasoning: these go through
-//! `wattrouter_git_*` rather than `crate::git` directly, so both phones reach a
-//! repository by one path and a change to one is a change to both. Every call
-//! frees the Rust string before returning, as that file does — a Kotlin `String`
-//! is a copy by the time `new_string` returns.
+//! These go through `ffi_git` rather than `crate::git` directly, so the envelope
+//! a model reads is built in one place. That used to be phrased as both phones
+//! reaching a repository by one path; there is one phone since #545, and the
+//! reason survives it — the envelope is the thing being kept single, not the
+//! number of callers.
 //!
 //! One structural difference decides what the Kotlin looks like. A repository is
 //! a path rather than a handle: `git::open` runs inside every call and there is
@@ -17,15 +19,19 @@
 //! handle, no `AutoCloseable`, no close. That ceremony would invent a lifetime
 //! which does not exist, and hand somebody a `close` to forget.
 //!
-//! What is left here is four translations and nothing else. `owned`, `answered`
-//! and `guarded` are `jni_answer.rs`'s, because the copy that used to be at the
-//! bottom of this file was identical to the one at the bottom of `jni_memory.rs`
-//! and neither applied the rules `jni.rs` states — see #468 and #482.
+//! What is left here is five translations and nothing else. `guarded` is
+//! `jni_answer.rs`'s, because the copy that used to be at the bottom of this file
+//! was identical to the one at the bottom of `jni_memory.rs` and neither applied
+//! the rules `jni.rs` states — see #468 and #482. `read` is `jni.rs`'s, for the
+//! same reason: it clears a pending exception, which `owned` also did and which
+//! nothing here should be reimplementing.
 
-use crate::jni_answer::{answered, guarded, owned};
+use crate::jni::read;
+use crate::jni_answer::guarded;
 use jni::JNIEnv;
 use jni::objects::{JClass, JString};
 use jni::sys::jstring;
+use std::path::Path;
 
 /// Make a directory into a repository, or say it already was one.
 ///
@@ -38,12 +44,10 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeInit<'a>(
     path: JString<'a>,
 ) -> jstring {
     guarded(std::ptr::null_mut(), || {
-        let Some(path) = owned(&mut env, &path) else {
+        let Some(path) = read(&mut env, &path) else {
             return std::ptr::null_mut();
         };
-        answered(&mut env, unsafe {
-            crate::ffi_git::wattrouter_git_init(path.as_ptr())
-        })
+        handed(&mut env, crate::ffi_git::init(Path::new(&path)))
     })
 }
 
@@ -58,12 +62,10 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeHead<'a>(
     path: JString<'a>,
 ) -> jstring {
     guarded(std::ptr::null_mut(), || {
-        let Some(path) = owned(&mut env, &path) else {
+        let Some(path) = read(&mut env, &path) else {
             return std::ptr::null_mut();
         };
-        answered(&mut env, unsafe {
-            crate::ffi_git::wattrouter_git_head(path.as_ptr())
-        })
+        handed(&mut env, crate::ffi_git::head(Path::new(&path)))
     })
 }
 
@@ -78,12 +80,10 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeStatus<'a>(
     path: JString<'a>,
 ) -> jstring {
     guarded(std::ptr::null_mut(), || {
-        let Some(path) = owned(&mut env, &path) else {
+        let Some(path) = read(&mut env, &path) else {
             return std::ptr::null_mut();
         };
-        answered(&mut env, unsafe {
-            crate::ffi_git::wattrouter_git_status(path.as_ptr())
-        })
+        handed(&mut env, crate::ffi_git::status(Path::new(&path)))
     })
 }
 
@@ -102,13 +102,11 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeAdd<'a>(
         // JSON across this boundary too, and for the C ABI's reason: the model
         // writes an array, the tool decodes one, and rebuilding it as a Kotlin
         // Array<String> only to encode it again is three shapes for one value.
-        let (Some(path), Some(paths_json)) = (owned(&mut env, &path), owned(&mut env, &paths_json))
+        let (Some(path), Some(paths_json)) = (read(&mut env, &path), read(&mut env, &paths_json))
         else {
             return std::ptr::null_mut();
         };
-        answered(&mut env, unsafe {
-            crate::ffi_git::wattrouter_git_add(path.as_ptr(), paths_json.as_ptr())
-        })
+        handed(&mut env, crate::ffi_git::add(Path::new(&path), &paths_json))
     })
 }
 
@@ -124,12 +122,24 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeCommit<'a>(
     message: JString<'a>,
 ) -> jstring {
     guarded(std::ptr::null_mut(), || {
-        let (Some(path), Some(message)) = (owned(&mut env, &path), owned(&mut env, &message))
-        else {
+        let (Some(path), Some(message)) = (read(&mut env, &path), read(&mut env, &message)) else {
             return std::ptr::null_mut();
         };
-        answered(&mut env, unsafe {
-            crate::ffi_git::wattrouter_git_commit(path.as_ptr(), message.as_ptr())
-        })
+        handed(&mut env, crate::ffi_git::commit(Path::new(&path), &message))
     })
+}
+
+/// Hand JSON to Kotlin.
+///
+/// `jni_answer::answered` is the same idea over a `*mut c_char` that it also
+/// frees. There is no Rust allocation to free here any more, so this is that
+/// helper minus the free. The two converge when `jni_memory` stops needing the
+/// pointer form, which is #565's last envelope change.
+///
+/// # Returns
+/// Null IF the JVM would not allocate, which is an out-of-memory condition with
+/// nothing useful to say to it.
+fn handed(env: &mut JNIEnv<'_>, json: String) -> jstring {
+    env.new_string(json)
+        .map_or(std::ptr::null_mut(), jni::objects::JString::into_raw)
 }

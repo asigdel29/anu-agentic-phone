@@ -1,36 +1,39 @@
-//! `ffi_git.rs` — the git operations, across the C ABI.
+//! `ffi_git.rs` — the git operations, as an envelope a model can read.
 //!
 //! History
 //!   2026-08-08  A. Sigdel  Created.
 //!   2026-08-09  A. Sigdel  Took in init, so a phone can make a repository.
+//!   2026-08-10  A. Sigdel  Answers JSON rather than C strings with #565. The
+//!                          name is the last of the ABI here and goes with the
+//!                          others.
 //!
 //! Contents
-//!   `wattrouter_git_init`     Make a directory into a repository.
-//!   `wattrouter_git_head`     Where `HEAD` points.
-//!   `wattrouter_git_status`   The working tree, against the index and the head.
-//!   `wattrouter_git_add`      Staging paths.
-//!   `wattrouter_git_commit`   Writing what is staged.
+//!   `init`     Make a directory into a repository.
+//!   `head`     Where `HEAD` points.
+//!   `status`   The working tree, against the index and the head.
+//!   `add`      Staging paths.
+//!   `commit`   Writing what is staged.
 //!
-//! The envelope, the panic guard and `wattrouter_string_free` moved to
-//! `ffi_answer.rs` when memory became the second caller of them.
-//!
-//! Separate from `ffi.rs` because what crosses is a different shape, not because
-//! that file was full. A decision is three fixed-width fields and crosses by
-//! value, so the caller frees nothing; a status is a list of paths and cannot, so
-//! these allocate and the caller hands the allocation back.
+//! Separate from `ffi.rs` because what these answer is a different shape, not
+//! because that file was full. A decision is three fields; a status is a list of
+//! paths, and lists are what the envelope is for.
 //!
 //! One envelope for every call here, `{"ok": …}` or `{"error": "…"}`, so a caller
 //! writes the unwrapping once. The refusals in [`crate::git`] are written for the
-//! model to act on, and a boolean return would discard them at the one boundary
-//! where they cannot be recovered. Null is kept for the case with no answer at
-//! all: a path that is null or not UTF-8, or the panic guard firing.
+//! model to act on, and a boolean return would discard them at the one place they
+//! cannot be recovered.
 //!
-//! No panic may cross this boundary — that is undefined behaviour, so every entry
-//! point catches and reports failure as a value, as `ffi.rs` does.
+//! **The no-answer case is gone, and that is a real change.** Null used to mean a
+//! path that was null or not UTF-8. These take a `&Path` and a `&str`, so neither
+//! is representable; `jni_git` rejected both before calling anyway, which is what
+//! made the arm safe to remove rather than merely tidy. Every remaining outcome
+//! is an envelope the model reads.
+//!
+//! Nothing here guards a panic. There is no boundary in this file to guard, and
+//! `jni_git` catches its own.
 
-use crate::ffi_answer::{borrowed, guarded, refused, rendered, unusable};
+use crate::ffi_answer::{refused, rendered};
 use crate::git;
-use std::ffi::c_char;
 use std::path::Path;
 
 /// Make a directory into a repository, or say it already was one.
@@ -49,12 +52,8 @@ use std::path::Path;
 /// `path` must be null or a valid NUL-terminated string outliving the call. The
 /// returned pointer must be released with [`wattrouter_string_free`] and not
 /// with `free`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn wattrouter_git_init(path: *const c_char) -> *mut c_char {
-    guarded(|| match unsafe { borrowed(path) } {
-        None => unusable(),
-        Some(path) => rendered(git::init(Path::new(path))),
-    })
+pub(crate) fn init(path: &Path) -> String {
+    rendered(git::init(path))
 }
 
 /// Where `HEAD` points: a branch, a commit, or a branch with no commits yet.
@@ -68,12 +67,8 @@ pub unsafe extern "C" fn wattrouter_git_init(path: *const c_char) -> *mut c_char
 /// `path` must be null or a valid NUL-terminated string outliving the call. The
 /// returned pointer must be released with [`wattrouter_string_free`] and not with
 /// `free`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn wattrouter_git_head(path: *const c_char) -> *mut c_char {
-    guarded(|| match unsafe { borrowed(path) } {
-        None => unusable(),
-        Some(path) => rendered(git::open(Path::new(path)).and_then(|repo| git::head(&repo))),
-    })
+pub(crate) fn head(path: &Path) -> String {
+    rendered(git::open(path).and_then(|repo| git::head(&repo)))
 }
 
 /// The working tree, against the index and the head.
@@ -86,12 +81,8 @@ pub unsafe extern "C" fn wattrouter_git_head(path: *const c_char) -> *mut c_char
 ///
 /// # Safety
 /// As [`wattrouter_git_head`].
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn wattrouter_git_status(path: *const c_char) -> *mut c_char {
-    guarded(|| match unsafe { borrowed(path) } {
-        None => unusable(),
-        Some(path) => rendered(git::status(Path::new(path))),
-    })
+pub(crate) fn status(path: &Path) -> String {
+    rendered(git::status(path))
 }
 
 /// Stage paths, and answer with the status that results.
@@ -111,24 +102,13 @@ pub unsafe extern "C" fn wattrouter_git_status(path: *const c_char) -> *mut c_ch
 ///
 /// # Safety
 /// As [`wattrouter_git_head`], for both arguments.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn wattrouter_git_add(
-    path: *const c_char,
-    paths_json: *const c_char,
-) -> *mut c_char {
-    guarded(|| {
-        let (Some(path), Some(paths_json)) =
-            (unsafe { borrowed(path) }, unsafe { borrowed(paths_json) })
-        else {
-            return unusable();
-        };
-        match serde_json::from_str::<Vec<String>>(paths_json) {
-            Ok(paths) => rendered(git::add(Path::new(path), &paths)),
-            Err(_) => refused(
-                "paths must be a JSON array of strings, such as [\"src/main.rs\", \"docs\"]",
-            ),
+pub(crate) fn add(path: &Path, paths_json: &str) -> String {
+    match serde_json::from_str::<Vec<String>>(paths_json) {
+        Ok(paths) => rendered(git::add(path, &paths)),
+        Err(_) => {
+            refused("paths must be a JSON array of strings, such as [\"src/main.rs\", \"docs\"]")
         }
-    })
+    }
 }
 
 /// Commit what is staged.
@@ -143,61 +123,28 @@ pub unsafe extern "C" fn wattrouter_git_add(
 ///
 /// # Safety
 /// As [`wattrouter_git_head`], for both arguments.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn wattrouter_git_commit(
-    path: *const c_char,
-    message: *const c_char,
-) -> *mut c_char {
-    guarded(|| {
-        let (Some(path), Some(message)) = (unsafe { borrowed(path) }, unsafe { borrowed(message) })
-        else {
-            return unusable();
-        };
-        rendered(git::commit(Path::new(path), message))
-    })
+pub(crate) fn commit(path: &Path, message: &str) -> String {
+    rendered(git::commit(path, message))
 }
 
 #[cfg(test)]
 mod tests {
     use crate::testenv::Scratch;
     use serde_json::Value;
-    use std::ffi::{CStr, CString, c_char};
     use std::path::Path;
 
-    /// Call an entry point the way C does, freeing the answer here so that a case
-    /// failing its assertion still gives the allocation back.
-    fn answer(entry: unsafe extern "C" fn(*const c_char) -> *mut c_char, path: &Path) -> Value {
-        let argument = CString::new(path.to_str().expect("a UTF-8 scratch path")).unwrap();
-        let returned = unsafe { entry(argument.as_ptr()) };
-        assert!(!returned.is_null(), "the call produced no answer at all");
-
-        let json = unsafe { CStr::from_ptr(returned) }
-            .to_str()
-            .expect("the envelope is UTF-8")
-            .to_owned();
-        unsafe { crate::ffi_answer::wattrouter_string_free(returned) };
-
-        serde_json::from_str(&json).expect("the envelope is JSON")
+    /// Decode what an entry point answered.
+    ///
+    /// This used to build a `CString`, call through a function pointer, read the
+    /// result back and free it. All four steps existed because the answer was a
+    /// C string; none of them tested anything about git.
+    fn answer(entry: fn(&Path) -> String, path: &Path) -> Value {
+        serde_json::from_str(&entry(path)).expect("the envelope is JSON")
     }
 
-    /// The same, for an entry point taking a second string.
-    fn answer2(
-        entry: unsafe extern "C" fn(*const c_char, *const c_char) -> *mut c_char,
-        path: &Path,
-        second: &str,
-    ) -> Value {
-        let first = CString::new(path.to_str().expect("a UTF-8 scratch path")).unwrap();
-        let second = CString::new(second).unwrap();
-        let returned = unsafe { entry(first.as_ptr(), second.as_ptr()) };
-        assert!(!returned.is_null(), "the call produced no answer at all");
-
-        let json = unsafe { CStr::from_ptr(returned) }
-            .to_str()
-            .expect("the envelope is UTF-8")
-            .to_owned();
-        unsafe { crate::ffi_answer::wattrouter_string_free(returned) };
-
-        serde_json::from_str(&json).expect("the envelope is JSON")
+    /// The same, for an entry point taking a second argument.
+    fn answer2(entry: fn(&Path, &str) -> String, path: &Path, second: &str) -> Value {
+        serde_json::from_str(&entry(path, second)).expect("the envelope is JSON")
     }
 
     /// A repository with an identity to sign with, as a phone would have to have.
@@ -216,7 +163,7 @@ mod tests {
         let scratch = Scratch::new("ffi-git-unborn");
         git2::Repository::init(scratch.path()).unwrap();
 
-        let head = answer(super::wattrouter_git_head, scratch.path());
+        let head = answer(super::head, scratch.path());
         assert_eq!(head["ok"]["kind"], "unborn", "crossed as {head}");
         assert!(head["ok"]["name"].is_string());
     }
@@ -234,7 +181,7 @@ mod tests {
 
         // Whole lists rather than lengths: a crossing that dropped the path or the
         // kind would still count one entry and pass.
-        let status = answer(super::wattrouter_git_status, scratch.path());
+        let status = answer(super::status, scratch.path());
         assert_eq!(
             status["ok"]["staged"],
             serde_json::json!([{"path": "staged.txt", "kind": "added"}]),
@@ -249,19 +196,19 @@ mod tests {
         let (scratch, _repo) = repository("ffi-git-commit");
         std::fs::write(scratch.path().join("a.txt"), "one").unwrap();
 
-        let staged = answer2(super::wattrouter_git_add, scratch.path(), r#"["a.txt"]"#);
+        let staged = answer2(super::add, scratch.path(), r#"["a.txt"]"#);
         assert_eq!(
             staged["ok"]["staged"],
             serde_json::json!([{"path": "a.txt", "kind": "added"}]),
             "crossed as {staged}"
         );
 
-        let written = answer2(super::wattrouter_git_commit, scratch.path(), "a commit");
+        let written = answer2(super::commit, scratch.path(), "a commit");
         let id = written["ok"].as_str().unwrap_or_default();
         assert!(!id.is_empty(), "no commit id came back: {written}");
 
         // The repository agrees, so the id is a commit and not a rendered string.
-        let head = answer(super::wattrouter_git_head, scratch.path());
+        let head = answer(super::head, scratch.path());
         assert_eq!(head["ok"]["kind"], "branch", "crossed as {head}");
     }
 
@@ -272,11 +219,7 @@ mod tests {
         let (scratch, _repo) = repository("ffi-git-add-missing");
         std::fs::write(scratch.path().join("here.txt"), "one").unwrap();
 
-        let refusal = answer2(
-            super::wattrouter_git_add,
-            scratch.path(),
-            r#"["here.txt", "gone.txt"]"#,
-        );
+        let refusal = answer2(super::add, scratch.path(), r#"["here.txt", "gone.txt"]"#);
         let text = refusal["error"].as_str().unwrap_or_default();
         assert!(text.contains("gone.txt"), "did not name it: {refusal}");
         assert!(!text.contains("here.txt"), "named the wrong one: {refusal}");
@@ -288,7 +231,7 @@ mod tests {
         // and a model doing that in a loop believes it is making progress.
         let (scratch, _repo) = repository("ffi-git-commit-nothing");
 
-        let refusal = answer2(super::wattrouter_git_commit, scratch.path(), "nothing");
+        let refusal = answer2(super::commit, scratch.path(), "nothing");
         let text = refusal["error"].as_str().unwrap_or_default();
         assert!(text.contains("staged"), "refused unhelpfully: {refusal}");
     }
@@ -299,7 +242,7 @@ mod tests {
         // goes looking at the repository rather than at what it wrote.
         let (scratch, _repo) = repository("ffi-git-add-bad-json");
 
-        let refusal = answer2(super::wattrouter_git_add, scratch.path(), "a.txt");
+        let refusal = answer2(super::add, scratch.path(), "a.txt");
         let text = refusal["error"].as_str().unwrap_or_default();
         assert!(text.contains("JSON array"), "unhelpful: {refusal}");
     }
@@ -310,7 +253,7 @@ mod tests {
         // to invent one, and the invented one would not name the path.
         let scratch = Scratch::new("ffi-git-not-a-repo");
 
-        for entry in [super::wattrouter_git_head, super::wattrouter_git_status] {
+        for entry in [super::head, super::status] {
             let refusal = answer(entry, scratch.path());
             let text = refusal["error"].as_str().unwrap_or_default();
             assert!(
@@ -318,19 +261,5 @@ mod tests {
                 "the refusal did not say where it looked: {refusal}"
             );
         }
-    }
-
-    #[test]
-    fn hostile_input_returns_a_value_rather_than_unwinding() {
-        // A panic across the boundary is undefined behaviour, and so is a bad free.
-        for entry in [super::wattrouter_git_head, super::wattrouter_git_status] {
-            assert!(unsafe { entry(std::ptr::null()) }.is_null());
-        }
-        for entry in [super::wattrouter_git_add, super::wattrouter_git_commit] {
-            let path = CString::new("/nowhere").unwrap();
-            assert!(unsafe { entry(std::ptr::null(), path.as_ptr()) }.is_null());
-            assert!(unsafe { entry(path.as_ptr(), std::ptr::null()) }.is_null());
-        }
-        unsafe { crate::ffi_answer::wattrouter_string_free(std::ptr::null_mut()) };
     }
 }
