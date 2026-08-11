@@ -6,6 +6,8 @@
 //!                          repository has to be told to go.
 //!   2026-08-11  A. Sigdel  Took a fetch, which is the one network operation
 //!                          that cannot lose anything.
+//!   2026-08-11  A. Sigdel  Took a push, and the refusal that is the reason it
+//!                          was worth writing carefully.
 //!
 //! Contents
 //!   `Error`       Why an operation could not be done.
@@ -19,6 +21,7 @@
 //!   `Pointed`     What pointing a remote turned out to be.
 //!   `remote_set`  Where a repository sends and receives.
 //!   `fetch`       Bringing back what a remote has, merging nothing.
+//!   `push`        Sending a branch, and refusing to overwrite anybody.
 //!
 //! Everything on the board shells out to `git`. A phone has no shell, so these
 //! come from libgit2, reached as a Rust dependency of this crate, which already
@@ -92,6 +95,27 @@ pub enum Error {
     /// match one that is there.
     #[error("no remote called {0} is configured, so there is nowhere to reach")]
     NoSuchRemote(String),
+    /// No branch by that name in this repository.
+    #[error("no branch called {0} in this repository, so there is nothing to send")]
+    NoSuchBranch(String),
+    /// The remote refused the reference, which means somebody else is on it.
+    ///
+    /// Deliberately terminal. `docs/decisions/pushing-from-a-phone.md` argues
+    /// that a non-fast-forward is not a transient failure and not something to
+    /// retry: it is somebody else's work on the branch, and the only ways past
+    /// it destroy one side or the other. Whoever is holding the phone decides
+    /// that, so the message says what happened and offers nothing to try.
+    #[error(
+        "{reference} was refused by the remote: {detail}. That means the remote \
+         has work this repository does not, so sending would overwrite it. \
+         Fetch and look at what is there before deciding whose work survives"
+    )]
+    NotFastForward {
+        /// The reference the remote refused.
+        reference: String,
+        /// What the remote said, which is the only account of its reasoning.
+        detail: String,
+    },
 }
 
 /// Where `HEAD` points.
@@ -556,6 +580,88 @@ pub fn fetch(path: &Path, name: &str) -> Result<Vec<String>, Error> {
         remote.fetch::<&str>(&[], Some(&mut options), None)?;
     }
     Ok(moved)
+}
+
+/// Send a branch to a remote, and refuse rather than overwrite.
+///
+/// There is no `force` parameter, and its absence is the decision rather than
+/// an omission. `docs/decisions/pushing-from-a-phone.md`: an argument a model
+/// can set is one it will set, eventually, on the turn where setting it makes
+/// the error go away, and the cost of setting it wrongly here is the only one
+/// on the list that nobody can undo.
+///
+/// A refusal arrives by **two different routes**, and catching only one was the
+/// first thing this got wrong. Against a real forge the remote rejects the
+/// reference and libgit2 reports it through a `push_update_reference` callback
+/// while `push` itself answers `Ok`, because the transport succeeded. Against a
+/// path remote libgit2 works out that the reference is not fast-forwardable
+/// before sending anything and returns the error from `push` directly. Both are
+/// the same event and both must read as [`Error::NotFastForward`].
+///
+/// That second route is matched on the library's message, which is the sort of
+/// thing that goes stale silently. What stops it is that
+/// `a_push_that_is_not_a_fast_forward_is_refused` exercises exactly that path:
+/// if the wording changes, the test fails rather than the refusal disappearing.
+///
+/// The callback route has to be caught rather than inferred from the return,
+/// and that is the whole reason this function is more than three lines. libgit2
+/// answers `Ok` when the *transport* succeeded, so a remote that rejected the
+/// reference reads as a successful push that changed nothing, which is the
+/// worst failure available here. A `push_update_reference` callback fires once
+/// per reference with an optional status message, and a message means refused.
+///
+/// # Errors
+/// [`Error::NotFastForward`] IF the remote refused the reference, which means
+/// it has work this repository does not. [`Error::NoSuchBranch`] IF there is no
+/// such branch here, [`Error::NoSuchRemote`] IF no such remote is configured,
+/// [`Error::NotARepository`] IF nothing at `path` opens as one, and
+/// [`Error::Refused`] IF the push fails for any other reason.
+pub fn push(path: &Path, remote: &str, branch: &str) -> Result<(), Error> {
+    let repo = open(path)?;
+    // Asked here so a typed branch name is answered as one, rather than as
+    // whatever the refspec parser makes of it further down.
+    repo.find_branch(branch, git2::BranchType::Local)
+        .map_err(|_| Error::NoSuchBranch(branch.to_owned()))?;
+    let mut remote = repo
+        .find_remote(remote)
+        .map_err(|_| Error::NoSuchRemote(remote.to_owned()))?;
+
+    let reference = format!("refs/heads/{branch}");
+    let mut refused = None;
+    let sent = {
+        let mut callbacks = git2::RemoteCallbacks::new();
+        callbacks.push_update_reference(|reference, status| {
+            if let Some(detail) = status {
+                refused = Some(Error::NotFastForward {
+                    reference: reference.to_owned(),
+                    detail: detail.to_owned(),
+                });
+            }
+            Ok(())
+        });
+
+        let mut options = git2::PushOptions::new();
+        options.remote_callbacks(callbacks);
+        // No leading `+`, which is what a forced refspec would be. There is no
+        // argument that could put one here.
+        let refspec = format!("{reference}:{reference}");
+        remote.push(&[refspec.as_str()], Some(&mut options))
+    };
+
+    if let Some(why) = refused {
+        return Err(why);
+    }
+    match sent {
+        Ok(()) => Ok(()),
+        // The path-remote route described above. `fastforward` rather than
+        // `fast-forward`: libgit2 spells it as one word here and hyphenates it
+        // elsewhere, and matching the hyphenated form silently catches nothing.
+        Err(why) if why.message().contains("fastforward") => Err(Error::NotFastForward {
+            reference,
+            detail: why.message().to_owned(),
+        }),
+        Err(why) => Err(why.into()),
+    }
 }
 
 /// The committer name, or a refusal naming what is missing.
@@ -1240,5 +1346,138 @@ mod tests {
             "a fetch wrote a file into the working tree"
         );
         assert!(matches!(head(&repo).unwrap(), Head::Unborn { .. }));
+    }
+
+    /// A bare repository, which is a complete remote over a path.
+    fn somewhere_to_push_to(scratch: &Scratch) -> git2::Repository {
+        git2::Repository::init_bare(scratch.path()).unwrap()
+    }
+
+    /// Commit a file, so there is something to send.
+    fn commit_a_file(repo: &git2::Repository, name: &str, body: &str) -> git2::Oid {
+        let root = repo.workdir().unwrap().to_owned();
+        std::fs::write(root.join(name), body).unwrap();
+        {
+            let mut index = repo.index().unwrap();
+            index.add_path(Path::new(name)).unwrap();
+            index.write().unwrap();
+        }
+        commit_directly(repo)
+    }
+
+    /// A repository with one commit, pointed at `remote`.
+    fn ready_to_push(scratch: &Scratch, remote: &Scratch) -> (git2::Repository, String) {
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        commit_a_file(&repo, "a.txt", "first");
+        remote_set(
+            scratch.path(),
+            "origin",
+            &remote.path().display().to_string(),
+        )
+        .unwrap();
+
+        let Head::Branch { name, .. } = head(&repo).unwrap() else {
+            panic!("no branch to push")
+        };
+        (repo, name)
+    }
+
+    #[test]
+    fn a_push_puts_the_branch_on_the_remote() {
+        let bare = Scratch::new("push-bare");
+        let origin = somewhere_to_push_to(&bare);
+        let scratch = Scratch::new("push-from");
+        let (repo, branch) = ready_to_push(&scratch, &bare);
+        let sent = repo.head().unwrap().peel_to_commit().unwrap().id();
+
+        push(scratch.path(), "origin", &branch).unwrap();
+
+        let there = origin
+            .find_reference(&format!("refs/heads/{branch}"))
+            .unwrap();
+        assert_eq!(sent, there.peel_to_commit().unwrap().id());
+    }
+
+    #[test]
+    fn a_push_that_is_not_a_fast_forward_is_refused() {
+        // The decision this whole function exists for. libgit2 answers Ok when
+        // the transport succeeded, so without the callback this reads as a
+        // push that worked and changed nothing.
+        let bare = Scratch::new("push-diverge-bare");
+        let origin = somewhere_to_push_to(&bare);
+        let scratch = Scratch::new("push-diverge");
+        let (repo, branch) = ready_to_push(&scratch, &bare);
+        let shared = repo.head().unwrap().peel_to_commit().unwrap().id();
+
+        // The commit somebody else made. It reaches the remote, and then this
+        // repository goes back before it and off in another direction, which is
+        // what having missed a push looks like from here.
+        commit_a_file(&repo, "b.txt", "second");
+        push(scratch.path(), "origin", &branch).unwrap();
+        let theirs = repo.head().unwrap().peel_to_commit().unwrap().id();
+
+        let before = repo.find_commit(shared).unwrap();
+        repo.reset(before.as_object(), git2::ResetType::Hard, None)
+            .unwrap();
+        commit_a_file(&repo, "c.txt", "third");
+
+        let Err(why) = push(scratch.path(), "origin", &branch) else {
+            panic!("a non-fast-forward push was accepted")
+        };
+        assert!(matches!(why, Error::NotFastForward { .. }), "{why}");
+
+        // The half that matters more than the refusal: nothing moved.
+        let there = origin
+            .find_reference(&format!("refs/heads/{branch}"))
+            .unwrap();
+        assert_eq!(
+            theirs,
+            there.peel_to_commit().unwrap().id(),
+            "a refused push moved the remote anyway"
+        );
+    }
+
+    #[test]
+    fn a_refused_push_says_what_to_do_and_offers_no_way_round_it() {
+        // The message is the whole interface here: there is no force argument
+        // to reach for, so the words have to carry what happens next.
+        let why = Error::NotFastForward {
+            reference: "refs/heads/main".to_owned(),
+            detail: "non-fast-forward".to_owned(),
+        };
+
+        let said = why.to_string();
+        assert!(said.contains("refs/heads/main"), "{said}");
+        assert!(said.contains("Fetch"), "{said}");
+        assert!(!said.to_lowercase().contains("force"), "{said}");
+    }
+
+    #[test]
+    fn pushing_a_branch_that_is_not_here_names_it() {
+        let bare = Scratch::new("push-nobranch-bare");
+        somewhere_to_push_to(&bare);
+        let scratch = Scratch::new("push-nobranch");
+        ready_to_push(&scratch, &bare);
+
+        let Err(why) = push(scratch.path(), "origin", "not-a-branch") else {
+            panic!("pushed a branch that is not here")
+        };
+        assert!(matches!(why, Error::NoSuchBranch(_)), "{why}");
+        assert!(why.to_string().contains("not-a-branch"), "{why}");
+    }
+
+    #[test]
+    fn pushing_to_a_remote_that_is_not_configured_names_it() {
+        let scratch = Scratch::new("push-noremote");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        commit_a_file(&repo, "a.txt", "first");
+        let Head::Branch { name, .. } = head(&repo).unwrap() else {
+            panic!("no branch")
+        };
+
+        let Err(why) = push(scratch.path(), "upstream", &name) else {
+            panic!("pushed to a remote that is not there")
+        };
+        assert!(matches!(why, Error::NoSuchRemote(_)), "{why}");
     }
 }
