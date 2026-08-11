@@ -58,6 +58,7 @@ import com.getlora.wattrouter.Credential
 import com.getlora.wattrouter.FindOnScreenTool
 import com.getlora.wattrouter.GitAddTool
 import com.getlora.wattrouter.GitCommitTool
+import com.getlora.wattrouter.GitInitTool
 import com.getlora.wattrouter.GitStatusTool
 import com.getlora.wattrouter.LocationTool
 import com.getlora.wattrouter.LookTool
@@ -287,16 +288,19 @@ class MainActivity : ComponentActivity() {
     /**
      * The repository the agent works in.
      *
-     * `filesDir/work`, made if it is not there. A directory is not a repository
-     * and the core has no `init` (#393), so until one arrives here these three
-     * answer that it is not one, which is true and actionable, and the whole
-     * of what is missing is a single entry point rather than anything above it.
+     * `filesDir/work`, made if it is not there. A directory is still not a
+     * repository, and on a fresh install the other three answer that it is not
+     * one until [GitInitTool] has been called. That is the model's call to make
+     * rather than this function's: the two answers `init` distinguishes are
+     * "made you one" and "there already was one", and a repository created here
+     * at startup would spend that distinction before anybody could read it.
      */
     private fun working(): List<Tool> {
         val root = java.io.File(filesDir, "work").apply { mkdirs() }
         val repository = Repository(root.absolutePath)
         return listOf(
             GitStatusTool(repository),
+            GitInitTool(repository),
             GitAddTool(repository),
             GitCommitTool(repository),
         )
