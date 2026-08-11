@@ -80,13 +80,16 @@ internal fun meaningOf(mode: Autonomy): Int = when (mode) {
 }
 
 /**
- * The modes a person can actually pick today.
+ * The modes a person can actually pick.
  *
- * Plan is missing until it does something. A picker offering a mode that
- * behaves exactly like the one beside it teaches somebody the setting does not
- * work, and that is a lesson they keep after it starts working.
+ * All three, since #595. Plan was missing while it behaved exactly like Auto,
+ * because a picker offering a setting that does nothing teaches somebody the
+ * picker does not work, and that is a lesson they keep after it starts working.
+ *
+ * Ordered by how involved somebody is, least first, which is the order the
+ * sentence under the row reads in.
  */
-internal val shown = listOf(Autonomy.AUTO, Autonomy.ASK)
+internal val shown = listOf(Autonomy.AUTO, Autonomy.PLAN, Autonomy.ASK)
 
 /**
  * The modes, and a sentence for whichever is chosen.
