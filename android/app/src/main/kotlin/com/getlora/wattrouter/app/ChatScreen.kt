@@ -41,6 +41,7 @@ import com.getlora.wattrouter.Acted
 import com.getlora.wattrouter.Autonomy
 import com.getlora.wattrouter.Decision
 import com.getlora.wattrouter.Row
+import com.getlora.wattrouter.Who
 
 /**
  * The conversation.
@@ -66,9 +67,19 @@ fun ChatScreen(
     isRunning: Boolean,
     routing: Decision?,
     mode: Autonomy,
+    /**
+     * Who a commit from this phone would say made it, or null while nobody has
+     * said.
+     *
+     * Here rather than behind a settings screen for [ModeRow]'s reason, and for
+     * a second one #641 records: the only other settings screen this
+     * application has can be reached exactly once.
+     */
+    who: Who?,
     onSend: (String) -> Unit,
     onInterrupt: () -> Unit,
     onMode: (Autonomy) -> Unit,
+    onWho: (Who?) -> Unit,
 ) {
     var typed by remember { mutableStateOf("") }
     val scroll = rememberLazyListState()
@@ -102,6 +113,10 @@ fun ChatScreen(
         if (!isRunning) ReplayCard(replay)
 
         ModeRow(mode, onMode)
+
+        // Under the modes rather than over them. What a send does is the more
+        // often read of the two, and this is a line most people never act on.
+        IdentityRow(who, onWho)
 
         LayoutRow(
             modifier = Modifier.fillMaxWidth(),

@@ -80,6 +80,7 @@ import com.getlora.wattrouter.Replay
 import com.getlora.wattrouter.RecallTool
 import com.getlora.wattrouter.RememberTool
 import com.getlora.wattrouter.Repository
+import com.getlora.wattrouter.Signed
 import com.getlora.wattrouter.NeuralWattInference
 import com.getlora.wattrouter.Row
 import com.getlora.wattrouter.ScrollTool
@@ -115,6 +116,7 @@ class MainActivity : ComponentActivity() {
      * read from a turn rather than from the composition anyway.
      */
     private val modes by lazy { Modes(applicationContext) }
+    private val signing by lazy { Signing(applicationContext) }
     private val connections by lazy { Connections(applicationContext) }
 
     /**
@@ -184,6 +186,7 @@ class MainActivity : ComponentActivity() {
                                     driverFor(now, credential, connected!!),
                                     handed,
                                     modes,
+                                    signing,
                                     replay,
                                 )
                             }
@@ -297,7 +300,10 @@ class MainActivity : ComponentActivity() {
      */
     private fun working(): List<Tool> {
         val root = java.io.File(filesDir, "work").apply { mkdirs() }
-        val repository = Repository(root.absolutePath)
+        // Signed outermost, and reading the setting rather than holding one:
+        // this function runs once, where driverFor remembers the driver, so an
+        // identity captured here would be whichever was set at launch.
+        val repository = Signed(Repository(root.absolutePath)) { signing.who }
         return listOf(
             GitStatusTool(repository),
             GitInitTool(repository),
@@ -445,12 +451,14 @@ private fun Conversation(
     driver: TurnDriver,
     handed: MutableState<String?>,
     modes: Modes,
+    signing: Signing,
     replay: Replay,
 ) {
     // Held in composition as well as in the store, because a chip has to
     // repaint when it is tapped and the store is not observable. The store
     // stays the truth: it is what the turn loop reads.
     var mode by remember { mutableStateOf(modes.now) }
+    var who by remember { mutableStateOf(signing.who) }
     val rows by driver.rows.collectAsState()
     val isRunning by driver.isRunning.collectAsState()
     val routing by driver.routing.collectAsState()
@@ -501,16 +509,21 @@ private fun Conversation(
         // Read at composition rather than collected. It changes only while a
         // turn is running, and the card is drawn only while one is not, so a
         // flow here would be a subscription that never fires when it is read.
-        // Read at composition rather than collected. It changes only while a
-        // turn is running and the card is drawn only while one is not, so a
-        // flow here would be a subscription that never fires when it is read.
         replay = if (isRunning) emptyList() else replay.steps,
         isRunning = isRunning,
         routing = routing,
         mode = mode,
+        who = who,
         onMode = {
             mode = it
             modes.now = it
+        },
+        // Held in composition as well as in the store, for the reason the mode
+        // is: the line has to repaint when it is saved and the store is not
+        // observable. The store stays the truth, and Signed is what reads it.
+        onWho = {
+            who = it
+            signing.who = it
         },
         onSend = { text ->
             // Asked at the first send rather than at launch: a permission
