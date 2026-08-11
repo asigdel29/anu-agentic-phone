@@ -6,13 +6,17 @@
 //!   2026-08-10  A. Sigdel  Answers JSON rather than C strings with #565. The
 //!                          name is the last of the ABI here and goes with the
 //!                          others.
+//!   2026-08-11  A. Sigdel  Corrected the five doc comments still describing a
+//!                          returned pointer, a null and a safety contract.
+//!                          #565 removed all three and left the prose claiming
+//!                          them, which the paragraph below already denies.
 //!
 //! Contents
-//!   `init`     Make a directory into a repository.
-//!   `head`     Where `HEAD` points.
-//!   `status`   The working tree, against the index and the head.
-//!   `add`      Staging paths.
-//!   `commit`   Writing what is staged.
+//!   `init`    Make a directory into a repository.
+//!   `head`    Where `HEAD` points.
+//!   `status`  The working tree, against the index and the head.
+//!   `add`     Staging paths.
+//!   `commit`  Writing what is staged.
 //!
 //! Separate from `core.rs` because what these answer is a different shape, not
 //! because that file was full. A decision is three fields; a status is a list of
@@ -39,19 +43,13 @@ use std::path::Path;
 /// Make a directory into a repository, or say it already was one.
 ///
 /// # Returns
-/// An owned JSON string to pass to [`wattrouter_string_free`], carrying `ok`
-/// with a `kind` of `created` or `already_there`, or `error` with the reason.
-/// Null IF `path` was null or not UTF-8, or the call panicked.
+/// `ok` with a `kind` of `created` or `already_there`, or `error` with the
+/// reason.
 ///
 /// The two successes are named separately on purpose. `git init` is idempotent
 /// and this could have answered one success for both; a model that cannot tell
 /// "made you one" from "there already was one" reports having started work it
 /// is in the middle of.
-///
-/// # Safety
-/// `path` must be null or a valid NUL-terminated string outliving the call. The
-/// returned pointer must be released with [`wattrouter_string_free`] and not
-/// with `free`.
 pub(crate) fn init(path: &Path) -> String {
     rendered(git::init(path))
 }
@@ -59,14 +57,8 @@ pub(crate) fn init(path: &Path) -> String {
 /// Where `HEAD` points: a branch, a commit, or a branch with no commits yet.
 ///
 /// # Returns
-/// An owned JSON string to pass to [`wattrouter_string_free`], carrying `ok` with
-/// a `kind` of `branch`, `detached` or `unborn`, or `error` with the reason.
-/// Null IF `path` was null or not UTF-8, or the call panicked.
-///
-/// # Safety
-/// `path` must be null or a valid NUL-terminated string outliving the call. The
-/// returned pointer must be released with [`wattrouter_string_free`] and not with
-/// `free`.
+/// `ok` with a `kind` of `branch`, `detached` or `unborn`, or `error` with the
+/// reason.
 pub(crate) fn head(path: &Path) -> String {
     rendered(git::open(path).and_then(|repo| git::head(&repo)))
 }
@@ -74,13 +66,8 @@ pub(crate) fn head(path: &Path) -> String {
 /// The working tree, against the index and the head.
 ///
 /// # Returns
-/// An owned JSON string to pass to [`wattrouter_string_free`], carrying `ok` with
-/// the head, `staged` and `unstaged` as `{path, kind}`, and `untracked` and
-/// `conflicted` as paths, or `error` with the reason. Null on the terms
-/// [`wattrouter_git_head`] states.
-///
-/// # Safety
-/// As [`wattrouter_git_head`].
+/// `ok` with the head, `staged` and `unstaged` as `{path, kind}`, and
+/// `untracked` and `conflicted` as paths, or `error` with the reason.
 pub(crate) fn status(path: &Path) -> String {
     rendered(git::status(path))
 }
@@ -95,13 +82,8 @@ pub(crate) fn status(path: &Path) -> String {
 ///   value.
 ///
 /// # Returns
-/// An owned JSON string to pass to [`wattrouter_string_free`], carrying `ok` with
-/// the status after staging, or `error`, which names the missing path IF one is
-/// missing, so a model that misspelt one of four is told which. Null on the terms
-/// [`wattrouter_git_head`] states.
-///
-/// # Safety
-/// As [`wattrouter_git_head`], for both arguments.
+/// `ok` with the status after staging, or `error`, which names the missing path
+/// IF one is missing, so a model that misspelt one of four is told which.
 pub(crate) fn add(path: &Path, paths_json: &str) -> String {
     match serde_json::from_str::<Vec<String>>(paths_json) {
         Ok(paths) => rendered(git::add(path, &paths)),
@@ -114,15 +96,10 @@ pub(crate) fn add(path: &Path, paths_json: &str) -> String {
 /// Commit what is staged.
 ///
 /// # Returns
-/// An owned JSON string to pass to [`wattrouter_string_free`], carrying `ok` with
-/// the short id of the commit written, or `error`. Committing nothing is an
-/// error: libgit2 writes a commit whose tree matches its parent without
+/// `ok` with the short id of the commit written, or `error`. Committing nothing
+/// is an error: libgit2 writes a commit whose tree matches its parent without
 /// complaint, and a model doing that in a loop believes it is making progress
-/// while producing a history of identical trees. Null on the terms
-/// [`wattrouter_git_head`] states.
-///
-/// # Safety
-/// As [`wattrouter_git_head`], for both arguments.
+/// while producing a history of identical trees.
 pub(crate) fn commit(path: &Path, message: &str) -> String {
     rendered(git::commit(path, message))
 }
