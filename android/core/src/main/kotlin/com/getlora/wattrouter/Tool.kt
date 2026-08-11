@@ -17,12 +17,30 @@
 
 package com.getlora.wattrouter
 
+/**
+ * What a tool answered, before it becomes a message.
+ *
+ * Separate from [ToolResult] because a tool does not know its own call id and
+ * should not have to be handed one to say what it produced. [ToolBox] joins the
+ * two.
+ *
+ * @property text what the model reads. Prose, not a status code.
+ * @property images anything to be looked at rather than read. Empty for every
+ *   tool but the one that captures a screen, which is why [Tool.answer] has a
+ *   default and seventeen tools did not have to be edited to gain a field none
+ *   of them fills.
+ */
+data class Answer(val text: String, val images: List<Image> = emptyList())
+
 /** What a tool answered. */
 data class ToolResult(
     /** The call this answers. A turn may have several in flight. */
     val id: String,
     /** What the model reads. Prose, not a status code. */
     val content: String,
+    /** Anything to be looked at. Where it lands in a message is #439's third
+     *  layer; nothing reads this yet. */
+    val images: List<Image> = emptyList(),
     /**
      * Whether it went wrong. Advisory, since the content says what happened either
      * way, and this is for a transcript rendering a failure differently.
@@ -59,4 +77,22 @@ interface Tool {
      *   act on.
      */
     suspend fun run(arguments: String): String
+
+    /**
+     * Do it, and answer with anything to be looked at as well as read.
+     *
+     * This is what [ToolBox] calls. It defaults to [run], so a tool whose
+     * answer is prose implements nothing: seventeen of them do that today and
+     * none had to be edited to gain a field none of them fills.
+     *
+     * A tool that captures something overrides this instead, and narrows [run]
+     * to the prose half rather than leaving it unimplemented. Both members stay
+     * true of it, which is what keeps a caller that only wants text from having
+     * to know which kind of tool it holds.
+     *
+     * # Rely
+     * As [run], and called instead of it rather than beside it: a tool that did
+     * its work in both would do it twice.
+     */
+    suspend fun answer(arguments: String): Answer = Answer(run(arguments))
 }
