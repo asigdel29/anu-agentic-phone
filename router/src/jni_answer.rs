@@ -5,9 +5,7 @@
 //!                          which held identical copies of the first two.
 //!
 //! Contents
-//!   `owned`     A Java string as a C string.
-//!   `answered`  Hand an envelope to Kotlin and free the Rust copy.
-//!   `guarded`   Turn a panic into a refusal rather than undefined behaviour.
+//!   `handed`  Hand an envelope to Kotlin.
 //!
 //! `answer.rs` beside this is the same module for the C ABI, and it exists
 //! for the reason recorded in its header: two envelopes that agree today, and a
@@ -26,13 +24,14 @@
 //! `Decided` it serialises itself rather than with a C string somebody else
 //! allocated, and its `read` already does what `owned` does.
 //!
-//! `guarded` arrived after the other two, in #482. It was the third rule those
-//! files did not follow and it was left out of #469 because wrapping eight
-//! bodies in a closure re-indents both, which put that change over the limit.
+//! `guarded` was here from #482 until jni 0.22, which made it redundant.
+//! `EnvUnowned::with_env` wraps the closure in a `catch_unwind` of its own and
+//! `LogErrorAndDefault` answers a panic with the return type's default, which
+//! is the same null, zero or unit `guarded` was handed explicitly. The library
+//! also logs, which the local one never did.
 
-use jni::JNIEnv;
+use jni::Env;
 use jni::sys::jstring;
-use std::panic::{AssertUnwindSafe, catch_unwind};
 
 /// Hand JSON to Kotlin.
 ///
@@ -44,26 +43,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 /// # Returns
 /// Null IF the JVM would not allocate, which is an out-of-memory condition with
 /// nothing useful to say to it.
-pub(crate) fn handed(env: &mut JNIEnv<'_>, json: String) -> jstring {
+pub(crate) fn handed(env: &mut Env<'_>, json: String) -> jstring {
     env.new_string(json)
         .map_or(std::ptr::null_mut(), jni::objects::JString::into_raw)
-}
-
-/// Run `body`, answering `refusal` rather than unwinding into the JVM.
-///
-/// # Arguments
-/// * `refusal`: what the entry point answers on a panic, WHERE it is the value
-///   that entry point already uses to mean it could not do the thing: a null
-///   `jstring`, a zero handle, or nothing at all.
-///
-/// # Rely
-/// A panic crossing into the JVM is undefined behaviour, exactly as into C.
-/// `jni.rs` states that and guards all four of its own entry points; the C ABI
-/// states it and satisfies it through `ffi_answer::guarded`. The eight here
-/// were the only foreign entry points in the crate with no guard at all.
-///
-/// Takes the refusal rather than using `Default`, because the three return
-/// types are `jstring`, `jlong` and `()`, and a raw pointer has no `Default`.
-pub(crate) fn guarded<T>(refusal: T, body: impl FnOnce() -> T) -> T {
-    catch_unwind(AssertUnwindSafe(body)).unwrap_or(refusal)
 }
