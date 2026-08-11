@@ -11,6 +11,9 @@
 //   2026-08-09  A. Sigdel  Shows the checklist when the phone half is not on.
 //   2026-08-09  A. Sigdel  Can look at the screen and tap it, when the service
 //                          behind that has been switched on.
+//   2026-08-11  A. Sigdel  Holds the workspace, rather than the git tools
+//                          computing it, now that it is about to have a second
+//                          reader.
 //
 // The core and the driver are built once and held for the process. The core
 // owns a native pointer and a decision cache, and a second one is a second
@@ -118,6 +121,17 @@ class MainActivity : ComponentActivity() {
     private val modes by lazy { Modes(applicationContext) }
     private val signing by lazy { Signing(applicationContext) }
     private val connections by lazy { Connections(applicationContext) }
+
+    /**
+     * Where the tools work, made if it is not there.
+     *
+     * Here rather than inside the one function that reads it today, because it
+     * is about to have more than one reader: #602 requires a terminal to run in
+     * the workspace the tools already have rather than invent a second. Two
+     * places computing one path is two places that have to agree, and nothing
+     * would check that they did.
+     */
+    private val workspace by lazy { java.io.File(filesDir, "work").apply { mkdirs() } }
 
     /**
      * What another app shared, until a turn takes it.
@@ -291,19 +305,18 @@ class MainActivity : ComponentActivity() {
     /**
      * The repository the agent works in.
      *
-     * `filesDir/work`, made if it is not there. A directory is still not a
-     * repository, and on a fresh install the other three answer that it is not
-     * one until [GitInitTool] has been called. That is the model's call to make
-     * rather than this function's: the two answers `init` distinguishes are
-     * "made you one" and "there already was one", and a repository created here
-     * at startup would spend that distinction before anybody could read it.
+     * The [workspace]. A directory is still not a repository, so on a fresh
+     * install the other three answer that it is not one until [GitInitTool] has
+     * been called. That is the model's call to make rather than this function's:
+     * the two answers `init` distinguishes are "made you one" and "there already
+     * was one", and a repository created here at startup would spend that
+     * distinction before anybody could read it.
      */
     private fun working(): List<Tool> {
-        val root = java.io.File(filesDir, "work").apply { mkdirs() }
         // Signed outermost, and reading the setting rather than holding one:
         // this function runs once, where driverFor remembers the driver, so an
         // identity captured here would be whichever was set at launch.
-        val repository = Signed(Repository(root.absolutePath)) { signing.who }
+        val repository = Signed(Repository(workspace.absolutePath)) { signing.who }
         return listOf(
             GitStatusTool(repository),
             GitInitTool(repository),
