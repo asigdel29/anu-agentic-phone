@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import com.getlora.wattrouter.Acted
 import com.getlora.wattrouter.Autonomy
 import com.getlora.wattrouter.Decision
 import com.getlora.wattrouter.Row
@@ -54,6 +55,14 @@ import com.getlora.wattrouter.Row
 @Composable
 fun ChatScreen(
     rows: List<Row>,
+    /**
+     * What the last turn did to the phone, oldest first.
+     *
+     * Drawn under the conversation and only while nothing is running. A card
+     * that grew mid-turn would move under the eye of somebody reading the
+     * answer, and #598 is about review after the fact.
+     */
+    replay: List<Acted>,
     isRunning: Boolean,
     routing: Decision?,
     mode: Autonomy,
@@ -89,6 +98,8 @@ fun ChatScreen(
         ) {
             items(rows, key = { it.id }) { Line(it) }
         }
+
+        if (!isRunning) ReplayCard(replay)
 
         ModeRow(mode, onMode)
 

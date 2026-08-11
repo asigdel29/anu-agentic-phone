@@ -13,7 +13,7 @@ diff to live in, and this is a statement about work that has not been done.
  3  Plan mode        done, and it was what gated 6 and 11
  9  MCP wired in     done, and it was written and tested long before
  4  Vision           done, and it was what changed the shape of a message
- 5  Driving visuals  the same capture path as 4
+ 5  Driving visuals  done, on the capture path 4 built
  6  Write tools      dangerous before 3, which is why it is after it
 11  Terminal         the largest new surface, and it needs nothing from the server
 10  Voice            on-device capture; server transcription waits
@@ -44,7 +44,7 @@ touches all three, so unit 4 goes before unit 5 rather than beside it.
 | 2 | The phone talks to the server, not the provider | [#597](https://github.com/asigdel29/anu-agentic-phone/issues/597) | Half. `UPSTREAM_BASE_URL` is fixed at build time; sign-in is still a provider key. Blocked with 1. |
 | 3 | Three autonomy modes | [#595](https://github.com/asigdel29/anu-agentic-phone/issues/595) | Done. All three are offered; Plan puts the first round to somebody once and then runs unattended. |
 | 4 | Vision: capture, and an image crossing the wire | [#439](https://github.com/asigdel29/anu-agentic-phone/issues/439) | Done. A message carries parts, a tool may answer one, and `look` captures a screen. |
-| 5 | Driving visuals: a border, and a replay card | [#598](https://github.com/asigdel29/anu-agentic-phone/issues/598) | Not started. Shares a capture path with 4. |
+| 5 | Driving visuals: a border, and a replay card | [#598](https://github.com/asigdel29/anu-agentic-phone/issues/598) | Done. A frame while it drives, and the last six screens afterwards. |
 | 6 | Write-capable tools | [#393](https://github.com/asigdel29/anu-agentic-phone/issues/393), [#467](https://github.com/asigdel29/anu-agentic-phone/issues/467) | Not started. Needs 3. |
 | 7 | Conversations and memory on Postgres | [#599](https://github.com/asigdel29/anu-agentic-phone/issues/599) | Not started, zero code. Blocked with 1. |
 | 8 | Scheduler and background tasks | [#600](https://github.com/asigdel29/anu-agentic-phone/issues/600) | Not started, zero code. The server half is blocked with 1; the phone half is not. |

@@ -179,7 +179,12 @@ class MainActivity : ComponentActivity() {
                                     onDone = { connecting = false },
                                 )
                             } else if (connected != null) {
-                                Conversation(driverFor(now, credential, connected!!), handed, modes)
+                                Conversation(
+                                    driverFor(now, credential, connected!!),
+                                    handed,
+                                    modes,
+                                    replay,
+                                )
                             }
                         Startup.NoCredential, Startup.CoreRefused ->
                             SignInScreen(refused = now == Startup.CoreRefused) { typed ->
@@ -436,6 +441,7 @@ private fun Conversation(
     driver: TurnDriver,
     handed: MutableState<String?>,
     modes: Modes,
+    replay: Replay,
 ) {
     // Held in composition as well as in the store, because a chip has to
     // repaint when it is tapped and the store is not observable. The store
@@ -488,6 +494,13 @@ private fun Conversation(
 
     ChatScreen(
         rows = rows,
+        // Read at composition rather than collected. It changes only while a
+        // turn is running, and the card is drawn only while one is not, so a
+        // flow here would be a subscription that never fires when it is read.
+        // Read at composition rather than collected. It changes only while a
+        // turn is running and the card is drawn only while one is not, so a
+        // flow here would be a subscription that never fires when it is read.
+        replay = if (isRunning) emptyList() else replay.steps,
         isRunning = isRunning,
         routing = routing,
         mode = mode,
