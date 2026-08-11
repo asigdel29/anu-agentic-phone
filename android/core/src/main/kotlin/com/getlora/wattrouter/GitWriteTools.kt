@@ -1,32 +1,72 @@
-// GitWriteTools.kt: staging something, and committing it.
+// GitWriteTools.kt: making a repository, staging something, and committing it.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
 //   2026-08-09  A. Sigdel  Moved the writes off the caller's thread.
+//   2026-08-11  A. Sigdel  Took in the one that makes a repository, #393.
 //
 // Contents
+//   GitInitTool    Make the working directory a repository.
 //   GitAddTool     Stage paths.
 //   GitCommitTool  Commit what is staged.
 //
-// One file because the pair is one move: nothing is worth staging that is not
-// about to be committed, and a model shown them apart stages and forgets.
+// One file because these three are everything that writes, against GitStatus.kt
+// which is the half that only reads. Staging and committing were one file before
+// init joined them, on the narrower reason that nothing is worth staging that is
+// not about to be committed; that is still true and no longer the reason.
 //
-// Neither obtains a capability, and that is worth saying because every tool
-// written since the calendar has opened by obtaining one. A repository is the
-// app's own directory, so there is no dialog to spend and no ordering to keep.
+// None obtains a capability, and that is worth saying because every tool written
+// since the calendar has opened by obtaining one. A repository is the app's own
+// directory, so there is no dialog to spend and no ordering to keep.
 //
-// Both answer with the status afterwards rather than with "done". A model that
-// cannot see what landed does it again, which is the same reasoning
-// RememberTool gives for saying back what it stored.
+// All three answer with what the repository says afterwards rather than with
+// "done". A model that cannot see what landed does it again, which is the same
+// reasoning RememberTool gives for saying back what it stored.
 
 package com.getlora.wattrouter
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+
+/** Shared by the readers below, which all take an envelope the core wrote. */
+private val json = Json { ignoreUnknownKeys = true }
+
+/**
+ * Which of `init`'s two answers arrived, in words.
+ *
+ * Its own read rather than [Tools.field]'s, which answers a primitive where this
+ * payload is an object carrying a `kind`. Telling the two kinds apart is the
+ * whole reason the entry point has them: a model that cannot tell "made you one"
+ * from "there already was one" reports having started work it is in the middle
+ * of, which is what #393 asked for and what would be thrown away by reading this
+ * as a bare success.
+ */
+internal fun made(envelope: String?): String {
+    if (envelope == null) return "the repository could not be created at all"
+
+    val body = runCatching { json.parseToJsonElement(envelope).jsonObject }.getOrNull()
+        ?: return "the repository answered nothing readable"
+    body["error"]?.jsonPrimitive?.contentOrNull?.let { return it }
+
+    val kind = runCatching { body["ok"]?.jsonObject }.getOrNull()
+        ?.get("kind")?.jsonPrimitive?.contentOrNull
+    return when (kind) {
+        "created" ->
+            "made this directory into a repository. It has no commits yet, so " +
+                "the first commit is what creates the branch."
+        "already_there" ->
+            "there was already a repository here, and nothing was changed"
+        // A third kind a later core learned reads as unreadable rather than as
+        // either of these. Guessing "created" would have the model report
+        // having started something it did not.
+        else -> "the repository answered nothing readable"
+    }
+}
 
 /**
  * The short id a commit answers with, or the words explaining why there is
@@ -59,6 +99,24 @@ internal fun stagedPaths(arguments: String): List<String>? = runCatching {
     Json.parseToJsonElement(arguments).jsonObject["paths"]?.jsonArray
         ?.map { it.jsonPrimitive.content }
 }.getOrNull()
+
+/** Make the working directory into a repository. */
+class GitInitTool(private val repository: Worktree) : Tool {
+    override val name = "init_repository"
+
+    override val purpose =
+        "Turn the working directory into a git repository, which is what has to " +
+            "happen before anything can be staged or committed. Answers whether " +
+            "it made one or found one already there. Safe when unsure: a " +
+            "directory that is already a repository is left exactly as it was."
+
+    override val schema = """{"type":"object","properties":{}}"""
+
+    /** # Rely
+     *  Nothing, as [GitAddTool]. */
+    override suspend fun run(arguments: String): String =
+        made(withContext(Dispatchers.IO) { repository.init() })
+}
 
 /** Stage paths. */
 class GitAddTool(private val repository: Worktree) : Tool {
