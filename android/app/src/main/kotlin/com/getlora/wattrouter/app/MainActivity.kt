@@ -74,6 +74,8 @@ import com.getlora.wattrouter.connect
 import com.getlora.wattrouter.tools
 import com.getlora.wattrouter.Tool
 import com.getlora.wattrouter.ReadScreenTool
+import com.getlora.wattrouter.Recorded
+import com.getlora.wattrouter.Replay
 import com.getlora.wattrouter.RecallTool
 import com.getlora.wattrouter.RememberTool
 import com.getlora.wattrouter.Repository
@@ -100,6 +102,9 @@ class MainActivity : ComponentActivity() {
      * same one. A second would be a second allowance.
      */
     private val budget = Budget()
+
+    /** What the last turn did, for the card the transcript will show. */
+    private val replay = Replay()
 
     /**
      * How involved this person wants to be, read per action by [Confirmed].
@@ -235,6 +240,7 @@ class MainActivity : ComponentActivity() {
                     // same way, one action at a time, and the two never both
                     // fire: Planned is silent in every mode but Plan.
                     planned = Planned({ modes.now }, AndroidApproval()),
+                    replay = replay,
                 ),
                 scope,
             )
@@ -334,8 +340,11 @@ class MainActivity : ComponentActivity() {
         // spends a budgeted action on a prompt somebody then declines, so a
         // turn refused twenty times has nothing left for the one they would
         // have allowed.
+        // Recorded innermost, so a step the budget refused or a person
+        // declined is not in the replay: those did not happen, and a card
+        // showing one would show a picture of a screen nothing changed.
         val screen = Confirmed(
-            Budgeted(AndroidPhone(applicationContext), budget),
+            Budgeted(Recorded(AndroidPhone(applicationContext), replay), budget),
             { modes.now },
             AndroidConsent(),
         )

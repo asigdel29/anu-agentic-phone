@@ -97,6 +97,14 @@ class Agent(
      * does rather than blocking on an answer that cannot arrive.
      */
     private val planned: Planned? = null,
+    /**
+     * What this turn did to the phone, cleared at the top of each one.
+     *
+     * Null when nobody will show it, which is every caller but the
+     * application. Recording into one nothing reads would pay for a capture
+     * per action and throw each one away.
+     */
+    private val replay: Replay? = null,
     private val session: String = java.util.UUID.randomUUID().toString(),
 ) {
     /**
@@ -127,6 +135,10 @@ class Agent(
         // rather than inheriting a spent one, which is the case an interrupt
         // produces, and the one where somebody has just said carry on.
         budget?.beginTurn()
+
+        // With the budget, and for its reason: a resumed turn showing the
+        // previous turn's screens is a replay of the wrong thing.
+        replay?.beginTurn()
 
         repeat(maxRounds) { round ->
             val asked = ask()
