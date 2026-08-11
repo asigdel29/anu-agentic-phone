@@ -4,6 +4,8 @@
 //!   2026-08-08  A. Sigdel  Created.
 //!   2026-08-11  A. Sigdel  Took a remote, which is where anything leaving this
 //!                          repository has to be told to go.
+//!   2026-08-11  A. Sigdel  Took a fetch, which is the one network operation
+//!                          that cannot lose anything.
 //!
 //! Contents
 //!   `Error`       Why an operation could not be done.
@@ -16,6 +18,7 @@
 //!   `commit`      Writing what is staged, and refusing to write nothing.
 //!   `Pointed`     What pointing a remote turned out to be.
 //!   `remote_set`  Where a repository sends and receives.
+//!   `fetch`       Bringing back what a remote has, merging nothing.
 //!
 //! Everything on the board shells out to `git`. A phone has no shell, so these
 //! come from libgit2, reached as a Rust dependency of this crate, which already
@@ -82,6 +85,13 @@ pub enum Error {
          git@host:owner/repository.git"
     )]
     HttpsRemote(String),
+    /// No remote by that name.
+    ///
+    /// The library reports this as a message about a URL, which reads as a
+    /// network failure for what is almost always a typed name that does not
+    /// match one that is there.
+    #[error("no remote called {0} is configured, so there is nowhere to reach")]
+    NoSuchRemote(String),
 }
 
 /// Where `HEAD` points.
@@ -500,6 +510,52 @@ pub fn remote_set(path: &Path, name: &str, url: &str) -> Result<Pointed, Error> 
             Ok(Pointed::Added)
         }
     }
+}
+
+/// Fetch a remote, and answer with the references that moved.
+///
+/// The remote's own refspecs, which for one created by [`remote_set`] means
+/// every branch into `refs/remotes/<name>/`. Nothing is merged, the index is
+/// not touched and no file is written into the working tree: this is the one
+/// network operation that cannot lose anything, which is why it comes before
+/// push and pull rather than with them.
+///
+/// The names rather than the transfer statistics. "Received 3 objects" is a
+/// number nobody can act on, where `refs/remotes/origin/main` is the thing the
+/// next question is about. An empty answer means the remote had nothing this
+/// repository did not already have, which is a state rather than a failure and
+/// reads as one.
+///
+/// No credential callback yet, so this reaches a path remote and any ssh remote
+/// that needs no key. The callback and the host-key pin are their own change.
+///
+/// # Errors
+/// [`Error::NoSuchRemote`] IF nothing by that name is configured.
+/// [`Error::NotARepository`] IF nothing at `path` opens as one, and
+/// [`Error::Refused`] IF the fetch itself is refused.
+pub fn fetch(path: &Path, name: &str) -> Result<Vec<String>, Error> {
+    let repo = open(path)?;
+    let mut remote = repo
+        .find_remote(name)
+        .map_err(|_| Error::NoSuchRemote(name.to_owned()))?;
+
+    let mut moved = Vec::new();
+    {
+        let mut callbacks = git2::RemoteCallbacks::new();
+        // update_tips rather than the transfer statistics: it fires once per
+        // reference that actually changed, which is the question being asked.
+        callbacks.update_tips(|reference, _from, _to| {
+            moved.push(reference.to_owned());
+            true
+        });
+
+        let mut options = git2::FetchOptions::new();
+        options.remote_callbacks(callbacks);
+        // An empty refspec list means the remote's configured ones, which is
+        // what `git fetch <remote>` with no further argument does.
+        remote.fetch::<&str>(&[], Some(&mut options), None)?;
+    }
+    Ok(moved)
 }
 
 /// The committer name, or a refusal naming what is missing.
@@ -993,6 +1049,29 @@ mod tests {
         );
     }
 
+    /// A repository with one commit on it, to be fetched from over a path.
+    ///
+    /// A path remote needs no transport, no key and no network, which is what
+    /// lets the tests below run everywhere CI does.
+    fn somewhere_to_fetch_from(scratch: &Scratch) -> (git2::Repository, String) {
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        std::fs::write(scratch.path().join("a.txt"), "first").unwrap();
+        {
+            let mut index = repo.index().unwrap();
+            index.add_path(Path::new("a.txt")).unwrap();
+            index.write().unwrap();
+        }
+        commit_directly(&repo);
+
+        // Read rather than assumed: init.defaultBranch is a global setting, so
+        // the branch this lands on is whatever the machine running the tests
+        // says, and asserting "master" passes here and fails on somebody else.
+        let Head::Branch { name, .. } = head(&repo).unwrap() else {
+            panic!("the source repository has no branch")
+        };
+        (repo, name)
+    }
+
     #[test]
     fn a_remote_that_was_not_there_is_added() {
         let scratch = Scratch::new("remote-add");
@@ -1078,5 +1157,88 @@ mod tests {
             )
             .unwrap()
         );
+    }
+
+    #[test]
+    fn fetching_a_remote_that_is_not_configured_names_it() {
+        let scratch = Scratch::new("fetch-missing");
+        git2::Repository::init(scratch.path()).unwrap();
+
+        let Err(why) = fetch(scratch.path(), "upstream") else {
+            panic!("fetched a remote that is not there")
+        };
+        assert!(matches!(why, Error::NoSuchRemote(_)), "{why}");
+        assert!(why.to_string().contains("upstream"), "{why}");
+    }
+
+    #[test]
+    fn a_fetch_brings_back_what_the_other_repository_has() {
+        let source = Scratch::new("fetch-source");
+        let (origin, branch) = somewhere_to_fetch_from(&source);
+        let wanted = origin.head().unwrap().peel_to_commit().unwrap().id();
+
+        let scratch = Scratch::new("fetch-into");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        remote_set(
+            scratch.path(),
+            "origin",
+            &source.path().display().to_string(),
+        )
+        .unwrap();
+
+        let moved = fetch(scratch.path(), "origin").unwrap();
+
+        assert!(
+            moved.contains(&format!("refs/remotes/origin/{branch}")),
+            "{moved:?}"
+        );
+        assert!(
+            repo.find_commit(wanted).is_ok(),
+            "the commit was named as fetched and is not here"
+        );
+    }
+
+    #[test]
+    fn a_fetch_with_nothing_new_says_nothing_moved() {
+        // A state rather than a failure, and the one a model meets most: it
+        // fetches, is told nothing changed, and stops asking.
+        let source = Scratch::new("fetch-twice-source");
+        somewhere_to_fetch_from(&source);
+
+        let scratch = Scratch::new("fetch-twice");
+        git2::Repository::init(scratch.path()).unwrap();
+        remote_set(
+            scratch.path(),
+            "origin",
+            &source.path().display().to_string(),
+        )
+        .unwrap();
+        assert!(!fetch(scratch.path(), "origin").unwrap().is_empty());
+
+        assert!(fetch(scratch.path(), "origin").unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_fetch_merges_nothing_into_the_working_tree() {
+        // The property that makes this the half of a pull that cannot lose
+        // anything, and the reason pull is not in the same change.
+        let source = Scratch::new("fetch-nomerge-source");
+        somewhere_to_fetch_from(&source);
+
+        let scratch = Scratch::new("fetch-nomerge");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        remote_set(
+            scratch.path(),
+            "origin",
+            &source.path().display().to_string(),
+        )
+        .unwrap();
+        fetch(scratch.path(), "origin").unwrap();
+
+        assert!(
+            !scratch.path().join("a.txt").exists(),
+            "a fetch wrote a file into the working tree"
+        );
+        assert!(matches!(head(&repo).unwrap(), Head::Unborn { .. }));
     }
 }
