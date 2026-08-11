@@ -14,6 +14,7 @@
 //   2026-08-11  A. Sigdel  Holds the workspace, rather than the git tools
 //                          computing it, now that it is about to have a second
 //                          reader.
+//   2026-08-11  A. Sigdel  Listens when the person asks it to, #659.
 //
 // The core and the driver are built once and held for the process. The core
 // owns a native pointer and a decision cache, and a second one is a second
@@ -55,6 +56,7 @@ import com.getlora.wattrouter.Budget
 import com.getlora.wattrouter.Budgeted
 import com.getlora.wattrouter.Confirmed
 import com.getlora.wattrouter.CalendarTool
+import com.getlora.wattrouter.Capability
 import com.getlora.wattrouter.ChainWalk
 import com.getlora.wattrouter.ContactsTool
 import com.getlora.wattrouter.Credential
@@ -63,6 +65,7 @@ import com.getlora.wattrouter.GitAddTool
 import com.getlora.wattrouter.GitCommitTool
 import com.getlora.wattrouter.GitInitTool
 import com.getlora.wattrouter.GitStatusTool
+import com.getlora.wattrouter.Heard
 import com.getlora.wattrouter.LocationTool
 import com.getlora.wattrouter.LookTool
 import com.getlora.wattrouter.Memory
@@ -72,6 +75,7 @@ import com.getlora.wattrouter.OpenAppTool
 import com.getlora.wattrouter.Connections
 import com.getlora.wattrouter.HttpRpc
 import com.getlora.wattrouter.Permission
+import com.getlora.wattrouter.PermissionError
 import com.getlora.wattrouter.Planned
 import com.getlora.wattrouter.Reached
 import com.getlora.wattrouter.connect
@@ -121,6 +125,15 @@ class MainActivity : ComponentActivity() {
     private val modes by lazy { Modes(applicationContext) }
     private val signing by lazy { Signing(applicationContext) }
     private val connections by lazy { Connections(applicationContext) }
+
+    /**
+     * The microphone, built once for the process like the three above it.
+     *
+     * The application context rather than this Activity: it outlives a rotation
+     * and the recognizer is torn down at the end of every press anyway, so a
+     * reference to the Activity here would be one nothing needs.
+     */
+    private val listening by lazy { AndroidListening(applicationContext) }
 
     /**
      * Where the tools work, made if it is not there.
@@ -202,6 +215,7 @@ class MainActivity : ComponentActivity() {
                                     modes,
                                     signing,
                                     replay,
+                                    ::heard,
                                 )
                             }
                         Startup.NoCredential, Startup.CoreRefused ->
@@ -301,6 +315,32 @@ class MainActivity : ComponentActivity() {
         ContactsTool(AndroidContacts(this), permission),
         LocationTool(AndroidWhereabouts(this), permission),
     )
+
+    /**
+     * One press of the microphone.
+     *
+     * Deliberately not in the list above. It is a person's button rather than
+     * a tool, and the difference is the point: a model that could call this
+     * could open the microphone in a turn nobody was watching.
+     *
+     * The same [Permission] as those three, in [CalendarTool]'s order, and the
+     * refusal is returned rather than thrown for its reason too. A refusal here
+     * has somewhere to be read, because [Heard.Silence] is already what the
+     * button shows when a press produces nothing.
+     *
+     * # Rely
+     * Called from the composition's scope, which cancels with the screen. It may
+     * put a dialog on screen, and then holds the microphone until whoever
+     * pressed it stops speaking.
+     */
+    private suspend fun heard(): Heard {
+        try {
+            permission.obtain(Capability.MICROPHONE)
+        } catch (e: PermissionError) {
+            return Heard.Silence(e.message.orEmpty())
+        }
+        return listening.listen()
+    }
 
     /**
      * The repository the agent works in.
@@ -466,6 +506,8 @@ private fun Conversation(
     modes: Modes,
     signing: Signing,
     replay: Replay,
+    /** One press of the microphone, permission and all. */
+    listen: suspend () -> Heard,
 ) {
     // Held in composition as well as in the store, because a chip has to
     // repaint when it is tapped and the store is not observable. The store
@@ -553,6 +595,7 @@ private fun Conversation(
             driver.send(text)
         },
         onInterrupt = driver::interrupt,
+        onListen = listen,
     )
 }
 
