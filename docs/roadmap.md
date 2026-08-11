@@ -10,7 +10,7 @@ diff to live in, and this is a statement about work that has not been done.
 ## The order
 
 ```
- 3  Plan mode        the smallest real piece, and it gates 6 and 11
+ 3  Plan mode        done, and it was what gated 6 and 11
  9  MCP wired in     written and tested already, reached by nothing
  4  Vision           the shape of a message changes, so it goes before what needs it
  5  Driving visuals  the same capture path as 4
@@ -27,10 +27,10 @@ Three things decide that sequence.
 which needs Railway provisioned, which has not happened. They are grouped rather than
 interleaved because none of them can start.
 
-**Plan mode gates the two dangerous units.** Write-capable tools and a shell are both cases
-where per-action confirmation is either meaningless or unusable, and where acting unattended
-without having said what you intend is worse. Unit 3 is also the smallest piece on the list,
-so it is cheap to put first.
+**Plan mode gated the two dangerous units, and it has landed.** Write-capable tools and a shell
+are both cases where per-action confirmation is either meaningless or unusable, and where acting
+unattended without having said what you intend is worse. Unit 3 was also the smallest piece on
+the list, which is why it went first. Units 6 and 11 are unblocked by it.
 
 **Vision changes the shape of a message.** `Tool.run` answers a `String`, `Conversation` builds
 string content, and `Inference` has no notion of an attachment. Anything that carries an image
@@ -42,7 +42,7 @@ touches all three, so unit 4 goes before unit 5 rather than beside it.
 |---|---|---|---|
 | 1 | Server: accounts, key custody | [#539](https://github.com/asigdel29/anu-agentic-phone/issues/539) | Half. Token auth, container and cache merged; no database dependency yet. Blocked on Railway. |
 | 2 | The phone talks to the server, not the provider | [#597](https://github.com/asigdel29/anu-agentic-phone/issues/597) | Half. `UPSTREAM_BASE_URL` is fixed at build time; sign-in is still a provider key. Blocked with 1. |
-| 3 | Three autonomy modes | [#595](https://github.com/asigdel29/anu-agentic-phone/issues/595) | Auto and Ask ship. `Autonomy.PLAN` exists and does nothing, and `Modes.kt` omits it from the picker on purpose. |
+| 3 | Three autonomy modes | [#595](https://github.com/asigdel29/anu-agentic-phone/issues/595) | Done. All three are offered; Plan puts the first round to somebody once and then runs unattended. |
 | 4 | Vision: capture, and an image crossing the wire | [#439](https://github.com/asigdel29/anu-agentic-phone/issues/439) | Not started. Three blockers in the message shape, and a fourth in `driving.xml` that #439 did not know about. |
 | 5 | Driving visuals: a border, and a replay card | [#598](https://github.com/asigdel29/anu-agentic-phone/issues/598) | Not started. Shares a capture path with 4. |
 | 6 | Write-capable tools | [#393](https://github.com/asigdel29/anu-agentic-phone/issues/393), [#467](https://github.com/asigdel29/anu-agentic-phone/issues/467) | Not started. Needs 3. |

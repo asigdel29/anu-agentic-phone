@@ -89,11 +89,11 @@ What it cannot settle is a real screen, a real calendar, a real contact, and a p
 whether they are comfortable with any of it. [#510](../../issues/510) is the checklist for the
 first time a phone is attached.
 
-**Two of the three autonomy modes ship.** Auto is what governs a turn above: the banner, the
-stop button, and a budget of twenty-five actions. Ask confirms every action before it happens,
-over the app being driven, and cannot be answered by the model
-([#452](../../issues/452)). Plan is the one that does not exist: it is a name in an enum, and
-the picker leaves it out on purpose until it does something ([#595](../../issues/595)).
+**All three autonomy modes ship**, and you pick between them above the message field. Auto
+acts on its own, governed by the banner, the stop button and a budget of twenty-five actions.
+Plan says what it is about to do, waits for that to be approved once, and then runs unattended
+([#595](../../issues/595)). Ask confirms every action before it happens, over the app being
+driven, and the question is one the model cannot answer ([#452](../../issues/452)).
 
 **Planned and unbuilt:** a model running on the device itself, vision
 ([#439](../../issues/439)), voice, scheduled background tasks, and a terminal. None of those
