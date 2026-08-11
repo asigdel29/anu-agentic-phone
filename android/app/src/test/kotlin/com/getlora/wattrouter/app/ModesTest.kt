@@ -42,18 +42,22 @@ class ModesTest {
     }
 
     @Test
-    fun planIsNotOfferedWhileItDoesNothing() {
-        // It would behave exactly like Auto, and a picker with a setting that
-        // does nothing teaches somebody the picker does not work, which is a
-        // lesson they keep after it starts working.
-        assertTrue("$shown", Autonomy.PLAN !in shown)
-        assertEquals(listOf(Autonomy.AUTO, Autonomy.ASK), shown)
+    fun everyModeIsOfferedNowThatPlanDoesSomething() {
+        // The inverse of what this asserted until #595. Plan was absent while
+        // it behaved exactly like Auto, because a picker with a setting that
+        // does nothing teaches somebody the picker does not work, and that is
+        // a lesson they keep after it starts working.
+        //
+        // Ordered least involved first, which is the order somebody reads the
+        // sentence under the row in.
+        assertEquals(listOf(Autonomy.AUTO, Autonomy.PLAN, Autonomy.ASK), shown)
+        assertEquals("every mode is pickable", Autonomy.entries.size, shown.size)
     }
 
     @Test
-    fun everyModeHasWordsWhetherOrNotItIsOffered() {
-        // Including Plan. The day it is added to `shown` is not the day to
-        // discover it has no label, and the resource ids are all distinct.
+    fun everyModeHasWordsOfItsOwn() {
+        // Written before Plan was offered, for the day it would be. The
+        // resource ids are all distinct, so no two chips read alike.
         val words = Autonomy.entries.flatMap { listOf(labelOf(it), meaningOf(it)) }
         assertEquals(words.size, words.toSet().size)
     }

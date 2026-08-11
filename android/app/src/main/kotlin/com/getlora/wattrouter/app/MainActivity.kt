@@ -65,6 +65,7 @@ import com.getlora.wattrouter.Needed
 import com.getlora.wattrouter.NavigateTool
 import com.getlora.wattrouter.OpenAppTool
 import com.getlora.wattrouter.Permission
+import com.getlora.wattrouter.Planned
 import com.getlora.wattrouter.Tool
 import com.getlora.wattrouter.ReadScreenTool
 import com.getlora.wattrouter.RecallTool
@@ -184,6 +185,12 @@ class MainActivity : ComponentActivity() {
                     ),
                     tools = ToolBox(remembering() + phone() + working() + driving()),
                     budget = budget,
+                    // The mode is read here rather than captured, so somebody
+                    // who changed it between typing and the model answering
+                    // means this turn. Confirmed reads the same setting the
+                    // same way, one action at a time, and the two never both
+                    // fire: Planned is silent in every mode but Plan.
+                    planned = Planned({ modes.now }, AndroidApproval()),
                 ),
                 scope,
             )
