@@ -4,13 +4,14 @@
 //!   2026-08-08  A. Sigdel  Created.
 //!
 //! Contents
-//!   `Error`   Why an operation could not be done.
-//!   `Head`    Which branch, or which commit, or neither.
-//!   `head`    Opening a repository, and reading where it is.
-//!   `Change`  One path, and what happened to it.
-//!   `Status`  The working tree, against the index and the head.
-//!   `add`     Staging paths.
-//!   `commit`  Writing what is staged, and refusing to write nothing.
+//!   `Error`     Why an operation could not be done.
+//!   `Head`      Which branch, or which commit, or neither.
+//!   `identify`  Saying who commits from here.
+//!   `head`      Opening a repository, and reading where it is.
+//!   `Change`    One path, and what happened to it.
+//!   `Status`    The working tree, against the index and the head.
+//!   `add`       Staging paths.
+//!   `commit`    Writing what is staged, and refusing to write nothing.
 //!
 //! Everything on the board shells out to `git`. A phone has no shell, so these
 //! come from libgit2, reached as a Rust dependency of this crate, which already
@@ -53,9 +54,17 @@ pub enum Error {
     #[error("nothing is staged, so there is nothing to commit. Stage what should go in first")]
     NothingStaged,
     /// No identity to sign a commit with.
+    ///
+    /// It still names the two keys, which is what a person reading a transcript
+    /// needs. What it stops doing is telling the reader to set them: "Set
+    /// user.name and user.email" is an instruction for a shell, and the caller
+    /// that meets this most often is a model on a phone which has none and
+    /// should not be looking for one. Whose job it is, is the part that is true
+    /// everywhere.
     #[error(
-        "no name and email are configured for git, so a commit cannot be signed. \
-         Set user.name and user.email"
+        "no user.name and user.email are set for this repository, so a commit \
+         cannot be signed. They are a claim about who somebody is, so whoever \
+         is using this has to set them, and there is nothing here to do about it"
     )]
     NoIdentity,
 }
@@ -121,6 +130,43 @@ pub fn init(path: &Path) -> Result<Made, Error> {
     std::fs::create_dir_all(path).map_err(|why| Error::Refused(why.to_string()))?;
     git2::Repository::init(path).map_err(|why| Error::Refused(why.message().to_owned()))?;
     Ok(Made::Created)
+}
+
+/// Say who commits from here.
+///
+/// Written into the repository's own configuration, which is where git keeps
+/// this, so a commit made afterwards looks like one anything else wrote. The
+/// alternative was carrying a name and an email down to [`commit`] on every
+/// call; that ignores an identity a repository already has, which is the
+/// surprising way for the ambiguity to fall.
+///
+/// A phone has no `~/.gitconfig` and no shell to write one with, so without
+/// this every [`commit`] on one fails. That is not a hypothetical: nothing
+/// outside this file's tests has ever set either value.
+///
+/// Deliberately not reachable as a tool. An identity is a claim about who
+/// somebody is, and a model choosing one is a model deciding whose name goes
+/// on the work.
+///
+/// # Errors
+/// [`Error::NoIdentity`] IF either value is blank once trimmed, which would
+/// otherwise be written and then read back as configured, giving commits an
+/// author of nobody. [`Error::NotARepository`] IF nothing at `path` opens as
+/// one, and [`Error::Refused`] IF the configuration cannot be written.
+pub fn identify(path: &Path, name: &str, email: &str) -> Result<(), Error> {
+    let (name, email) = (name.trim(), email.trim());
+    if name.is_empty() || email.is_empty() {
+        return Err(Error::NoIdentity);
+    }
+
+    let repo = open(path)?;
+    let mut config = repo.config()?;
+    // Both, or neither. A repository with a name and no email reads as
+    // configured to everything except the signature, which fails at the commit
+    // rather than here.
+    config.set_str("user.name", name)?;
+    config.set_str("user.email", email)?;
+    Ok(())
 }
 
 /// Open a repository.
@@ -407,11 +453,23 @@ mod tests {
     use super::*;
     use crate::testenv::Scratch;
 
-    /// Give the repository an identity to sign with, as a phone would have to.
+    /// Give the repository an identity to sign with, as a phone has to.
+    ///
+    /// Through the entry point rather than beside it, now that there is one.
+    /// The helper wrote the same two keys by hand, which meant every commit
+    /// test proved a phone could commit only if the phone did it this way, and
+    /// nothing made it. Shadows [`super::identify`] by name on purpose: the
+    /// tests below read better calling it with a repository they already hold.
     fn identify(repo: &git2::Repository) {
-        let mut config = repo.config().unwrap();
-        config.set_str("user.name", "Test").unwrap();
-        config.set_str("user.email", "test@example.com").unwrap();
+        super::identify(repo.workdir().unwrap(), "Test", "test@example.com").unwrap();
+    }
+
+    /// What this repository alone says, with no global gitconfig behind it.
+    fn local(repo: &git2::Repository) -> git2::Config {
+        repo.config()
+            .unwrap()
+            .open_level(git2::ConfigLevel::Local)
+            .unwrap()
     }
 
     /// Commit whatever is in the index, with no parent unless there is one.
@@ -751,5 +809,79 @@ mod tests {
         };
         assert!(matches!(why, Error::NoIdentity), "{why}");
         assert!(why.to_string().contains("user.email"), "{why}");
+    }
+
+    #[test]
+    fn an_identity_is_written_where_git_keeps_it() {
+        let scratch = Scratch::new("identify");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+
+        identify(&repo);
+
+        // Read back through `configured`, which is what `commit` reads through.
+        // Asserting on the config object directly would prove the write and not
+        // that the thing that signs can find it.
+        assert_eq!(configured(&repo, "user.name").unwrap(), "Test");
+        assert_eq!(configured(&repo, "user.email").unwrap(), "test@example.com");
+        // And at the repository's own level, which is the claim in the name.
+        // `configured` reads every level, so on a machine with a gitconfig it
+        // answers whether or not anything was written here.
+        assert_eq!(local(&repo).get_string("user.name").unwrap(), "Test");
+    }
+
+    #[test]
+    fn a_commit_carries_the_identity_that_was_set() {
+        // The round trip, and the whole point: nothing on a phone had ever put
+        // a name on a commit before this.
+        let scratch = Scratch::new("signed");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        super::identify(scratch.path(), "  Ada  ", " ada@example.com ").unwrap();
+
+        write(&repo, "notes.txt", "hello");
+        add(scratch.path(), &["notes.txt".to_owned()]).unwrap();
+        commit(scratch.path(), "the first").unwrap();
+
+        let who = repo.head().unwrap().peel_to_commit().unwrap();
+        // Trimmed on the way in. A name pasted with a trailing space is in
+        // every commit forever otherwise, and it is not a distinction anybody
+        // meant to draw.
+        assert_eq!(who.author().name().unwrap(), "Ada");
+        assert_eq!(who.author().email().unwrap(), "ada@example.com");
+    }
+
+    #[test]
+    fn half_an_identity_is_refused_rather_than_written() {
+        // Written, a blank reads back as configured and the failure moves to
+        // the signature, where the message is the library's and says nothing
+        // about which half is missing.
+        let scratch = Scratch::new("half-identity");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+
+        for (name, email) in [("", "ada@example.com"), ("Ada", "   "), ("", "")] {
+            let Err(why) = super::identify(scratch.path(), name, email) else {
+                panic!("accepted {name:?} and {email:?}")
+            };
+            assert!(matches!(why, Error::NoIdentity), "{why}");
+        }
+        // The repository's own level, not `configured`. The machine running
+        // these tests very likely has a gitconfig with a name in it, and
+        // `configured` would answer with that and pass over a bug here. It is
+        // the same trap a_missing_setting_says_which_settings_are_missing
+        // documents, met from the other side.
+        assert!(local(&repo).get_string("user.name").is_err());
+    }
+
+    #[test]
+    fn identifying_something_that_is_not_a_repository_names_the_path() {
+        let scratch = Scratch::new("identify-nothing");
+
+        let Err(why) = super::identify(scratch.path(), "Ada", "ada@example.com") else {
+            panic!("identified a directory that is not a repository")
+        };
+        assert!(
+            why.to_string()
+                .contains(&scratch.path().display().to_string()),
+            "{why}"
+        );
     }
 }

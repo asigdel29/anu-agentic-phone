@@ -1,8 +1,10 @@
-// RepositoryOnDeviceTest.kt: the five entry points resolve and answer.
+// RepositoryOnDeviceTest.kt: the six entry points resolve and answer.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
 //   2026-08-11  A. Sigdel  Took in init, which the first test cannot use, #393.
+//   2026-08-11  A. Sigdel  Took in identify, and the first commit to land on a
+//                          device, #636.
 //
 // On a device, because this is the only place the library loads. The parity test
 // in router/src/jni.rs holds the symbol names in step; this is the other half of
@@ -78,6 +80,25 @@ class RepositoryOnDeviceTest {
         val status = repository.status()
         assertNotNull(status)
         assertTrue("status after init: $status", status!!.contains("\"ok\""))
+    }
+
+    @Test
+    fun anIdentifiedRepositoryCanBeCommittedTo() {
+        // The first commit this repository has ever written on a device.
+        // Nothing set user.name or user.email before #636, and a phone has no
+        // gitconfig for libgit2 to fall back to, so every commit here failed.
+        val repository = Repository(directory.absolutePath)
+        runBlocking { GitInitTool(repository).run("{}") }
+        File(directory, "notes.txt").writeText("hello")
+
+        val identified = repository.identify("Ada", "ada@example.com")
+        repository.add(listOf("notes.txt"))
+        val committed = repository.commit("Add a note")
+
+        assertNotNull(identified)
+        assertTrue("identify answered $identified", identified!!.contains("\"ok\""))
+        assertNotNull(committed)
+        assertTrue("commit answered $committed", committed!!.contains("\"ok\""))
     }
 
     @Test
