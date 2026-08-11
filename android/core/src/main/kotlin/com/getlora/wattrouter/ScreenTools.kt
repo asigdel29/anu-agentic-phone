@@ -760,3 +760,64 @@ class FindOnScreenTool(private val phone: Phone) : Tool {
         return ReadScreenTool.describe(Reading(reading.generation, found))
     }
 }
+
+/**
+ * A picture of the screen, for the layout the tree describes badly.
+ *
+ * The tool #439 was opened for, and it is deliberately not a replacement for
+ * [ReadScreenTool]. A picture has no handles in it, so nothing in it can be
+ * acted on: the model still reads the screen to get a handle and still acts
+ * through one. What this buys is the thing a node tree cannot give at all, and
+ * the purpose below says so rather than leaving a model to find out by trying:
+ * a chart, a photo, a control drawn on a canvas that was never in the tree.
+ *
+ * Barred first, as [ReadScreenTool] is barred first and for the stronger
+ * reason. A picture of the permissions page is a picture of exactly the button
+ * this application must not press, and unlike a reading it carries every pixel
+ * of it whether or not the tree had a node.
+ */
+class LookTool(private val phone: Phone) : Tool {
+    override val name = "look"
+
+    override val purpose =
+        "Take a picture of the screen, for when reading it is not enough: a " +
+            "chart, a photo, a map, or a control drawn in a way that leaves " +
+            "nothing to read. It has no handles in it, so use read_screen to " +
+            "act on anything. Prefer read_screen: it is faster, cheaper, and " +
+            "most screens are text."
+
+    override val schema = """{"type":"object","properties":{}}"""
+
+    /** # Rely
+     *  As [ReadScreenTool]: obtains no capability, because the service is
+     *  granted once from Settings. Dearer than a reading by a frame grab, a
+     *  PNG compress and a base64 of the result. */
+    override suspend fun answer(arguments: String): Answer {
+        phone.barredNow()?.let { return Answer(it) }
+
+        // ReadScreenTool's words, because the two failures are the same two:
+        // a service that is off, and a window that has not arrived. A second
+        // set of sentences for a second tool is a second thing to keep true.
+        val image = phone.capture()
+            ?: return Answer(ReadScreenTool.unreadable(phone.attached()))
+
+        return Answer(SAID, listOf(image))
+    }
+
+    // Narrowed rather than left unimplemented, so a caller wanting text does
+    // not have to know which kind of tool this is. What it loses is the whole
+    // point of the tool, which is why nothing calls it.
+    override suspend fun run(arguments: String): String = answer(arguments).text
+
+    private companion object {
+        /**
+         * What goes in the tool message, which cannot carry the picture.
+         *
+         * Message.looked puts the image in a user message after this one, so
+         * this says a picture follows rather than describing one. A tool result
+         * claiming to be a screenshot, in a message that provably is not one,
+         * is the kind of thing a model reconciles by inventing what it saw.
+         */
+        const val SAID = "a picture of the screen follows this message"
+    }
+}

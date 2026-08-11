@@ -28,11 +28,11 @@ need removing at all.
 
 ## What it can do today
 
-Sixteen tools, all of them registered in the app and none of them aspirational.
+Seventeen tools, all of them registered in the app and none of them aspirational.
 
 | | |
 |---|---|
-| **The screen** | `read_screen`, `tap`, `type_text`, `scroll`, `navigate`, `open_app`, `wait_for_change`, `find_on_screen` |
+| **The screen** | `read_screen`, `look`, `tap`, `type_text`, `scroll`, `navigate`, `open_app`, `wait_for_change`, `find_on_screen` |
 | **Your things** | `read_calendar`, `find_contact`, `where_am_i` |
 | **Code** | `read_repository`, `stage_paths`, `commit` |
 | **Memory** | `remember`, `recall` |
@@ -95,10 +95,9 @@ Plan says what it is about to do, waits for that to be approved once, and then r
 ([#595](../../issues/595)). Ask confirms every action before it happens, over the app being
 driven, and the question is one the model cannot answer ([#452](../../issues/452)).
 
-**Planned and unbuilt:** a model running on the device itself, vision
-([#439](../../issues/439)), voice, scheduled background tasks, and a terminal. None of those
-exist; they are named here so the list above can be read as complete, and
-[the roadmap](docs/roadmap.md) says what order they are in.
+**Planned and unbuilt:** a model running on the device itself, voice, scheduled background
+tasks, and a terminal. None of those exist; they are named here so the list above can be read as
+complete, and [the roadmap](docs/roadmap.md) says what order they are in.
 
 ## Routing
 

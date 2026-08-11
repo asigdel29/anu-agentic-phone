@@ -60,6 +60,7 @@ import com.getlora.wattrouter.GitAddTool
 import com.getlora.wattrouter.GitCommitTool
 import com.getlora.wattrouter.GitStatusTool
 import com.getlora.wattrouter.LocationTool
+import com.getlora.wattrouter.LookTool
 import com.getlora.wattrouter.Memory
 import com.getlora.wattrouter.Needed
 import com.getlora.wattrouter.NavigateTool
@@ -340,6 +341,10 @@ class MainActivity : ComponentActivity() {
         )
         return listOf(
             ReadScreenTool(screen),
+            // Beside read_screen rather than instead of it. A picture has no
+            // handles in it, so every action still goes through a reading;
+            // look is for the layout a tree describes badly.
+            LookTool(screen),
             TapTool(screen),
             TypeTextTool(screen),
             NavigateTool(screen),
