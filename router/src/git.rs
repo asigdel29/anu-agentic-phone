@@ -10,6 +10,8 @@
 //!                          was worth writing carefully.
 //!   2026-08-11  A. Sigdel  Took a pull that fast-forwards or says why it
 //!                          cannot, which is the last of these needing no key.
+//!   2026-08-11  A. Sigdel  Remembers a host's key the first time and refuses a
+//!                          changed one, before anything can reach a host.
 //!
 //! Contents
 //!   `Error`       Why an operation could not be done.
@@ -26,6 +28,8 @@
 //!   `push`        Sending a branch, and refusing to overwrite anybody.
 //!   `Pulled`      What taking the remote's work turned out to be.
 //!   `pull`        Fast-forwarding, or saying it cannot.
+//!   `Trusted`     Whether a host's key was known already.
+//!   `trust`       Pinning a host on first sight, and refusing a changed one.
 //!
 //! Everything on the board shells out to `git`. A phone has no shell, so these
 //! come from libgit2, reached as a Rust dependency of this crate, which already
@@ -136,6 +140,22 @@ pub enum Error {
         /// The branch that has diverged.
         branch: String,
     },
+    /// A host answered with a different key than the one pinned for it.
+    ///
+    /// Refused in words and never as a prompt.
+    /// `docs/decisions/pushing-from-a-phone.md`: a dialog at that moment is a
+    /// dialog somebody dismisses on a train, and the one time it matters is the
+    /// one time it is indistinguishable from every other time.
+    #[error(
+        "{host} answered with a different key than the one remembered for it. \
+         That is what a machine in the middle looks like, and it is also what a \
+         rebuilt server looks like, so nothing was sent and nothing was \
+         changed. Somebody who knows which it is has to say so"
+    )]
+    HostKeyChanged {
+        /// The host whose key no longer matches.
+        host: String,
+    },
 }
 
 /// Where `HEAD` points.
@@ -220,6 +240,84 @@ pub enum Pulled {
         /// Where the new branch points.
         commit: String,
     },
+}
+
+/// Whether a host's key was already known.
+///
+/// Two answers rather than one success, and the difference is the whole
+/// security posture: [`Trusted::Pinned`] is a connection nobody has checked and
+/// [`Trusted::Known`] is one that matches what was checked before.
+#[derive(Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum Trusted {
+    /// Nothing was known about this host, so its key is now what is expected.
+    ///
+    /// The weakness stated rather than buried: this connection is trusted
+    /// blind. On a phone with no shell there is nothing else to trust, and
+    /// moving the decision to first use is what makes every later connection
+    /// checkable at all.
+    Pinned,
+    /// The host answered with the key already remembered for it.
+    Known,
+}
+
+/// Remember a host's key the first time, and refuse a changed one.
+///
+/// The file is one host per line, the host and a hash of its key. It is not a
+/// `known_hosts` file and does not pretend to be one: that format carries
+/// hashed hostnames, markers, revocation and certificate authorities, and
+/// something that looks like it while implementing a tenth of it is a trap for
+/// whoever reads it next.
+///
+/// A line that cannot be read is treated as a line that is not there. A
+/// preferences file somebody edited by hand should leave the phone working,
+/// which is the reasoning `modeFrom` already carries on the Kotlin side.
+///
+/// # Errors
+/// [`Error::HostKeyChanged`] IF a key is remembered for this host and is not
+/// this one, in which case **nothing is written**. [`Error::Refused`] IF the
+/// file cannot be read or written.
+pub fn trust(pins: &Path, host: &str, key: &[u8]) -> Result<Trusted, Error> {
+    use sha2::{Digest, Sha256};
+
+    let seen = format!("{:x}", Sha256::digest(key));
+    let existing = match std::fs::read_to_string(pins) {
+        Ok(text) => text,
+        // Absent is empty. The first host pinned on a phone is the first time
+        // this file exists at all.
+        Err(why) if why.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(why) => return Err(Error::Refused(why.to_string())),
+    };
+
+    for line in existing.lines() {
+        let mut fields = line.split_whitespace();
+        let (Some(known_host), Some(known_key), None) =
+            (fields.next(), fields.next(), fields.next())
+        else {
+            continue;
+        };
+        if known_host != host {
+            continue;
+        }
+        return if known_key == seen {
+            Ok(Trusted::Known)
+        } else {
+            Err(Error::HostKeyChanged {
+                host: host.to_owned(),
+            })
+        };
+    }
+
+    let mut text = existing;
+    if !text.is_empty() && !text.ends_with('\n') {
+        text.push('\n');
+    }
+    text.push_str(host);
+    text.push(' ');
+    text.push_str(&seen);
+    text.push('\n');
+    std::fs::write(pins, text).map_err(|why| Error::Refused(why.to_string()))?;
+    Ok(Trusted::Pinned)
 }
 
 /// Make a directory into a repository, or say it already was one.
@@ -1686,5 +1784,99 @@ mod tests {
             !mine.path().join("theirs.txt").exists(),
             "a refused pull wrote their file into the tree"
         );
+    }
+
+    #[test]
+    fn a_host_nobody_knew_is_pinned() {
+        let scratch = Scratch::new("pin-first");
+        let pins = scratch.path().join("hosts");
+
+        assert_eq!(
+            Trusted::Pinned,
+            trust(&pins, "github.com", b"a key").unwrap()
+        );
+        assert!(
+            std::fs::read_to_string(&pins)
+                .unwrap()
+                .contains("github.com"),
+            "the host was reported pinned and is not in the file"
+        );
+    }
+
+    #[test]
+    fn the_same_host_answering_the_same_key_is_known() {
+        let scratch = Scratch::new("pin-same");
+        let pins = scratch.path().join("hosts");
+        trust(&pins, "github.com", b"a key").unwrap();
+
+        assert_eq!(
+            Trusted::Known,
+            trust(&pins, "github.com", b"a key").unwrap()
+        );
+    }
+
+    #[test]
+    fn a_changed_key_is_refused_and_nothing_is_written() {
+        // The case the whole file exists for, and the assertion that matters
+        // more than the refusal: a refused check must not quietly re-pin.
+        let scratch = Scratch::new("pin-changed");
+        let pins = scratch.path().join("hosts");
+        trust(&pins, "github.com", b"a key").unwrap();
+        let before = std::fs::read_to_string(&pins).unwrap();
+
+        let Err(why) = trust(&pins, "github.com", b"another key") else {
+            panic!("a changed host key was accepted")
+        };
+        assert!(matches!(why, Error::HostKeyChanged { .. }), "{why}");
+        assert!(why.to_string().contains("github.com"), "{why}");
+        assert_eq!(before, std::fs::read_to_string(&pins).unwrap());
+    }
+
+    #[test]
+    fn one_host_does_not_disturb_another() {
+        let scratch = Scratch::new("pin-two");
+        let pins = scratch.path().join("hosts");
+        trust(&pins, "github.com", b"one").unwrap();
+
+        assert_eq!(Trusted::Pinned, trust(&pins, "gitlab.com", b"two").unwrap());
+        assert_eq!(Trusted::Known, trust(&pins, "github.com", b"one").unwrap());
+        assert_eq!(Trusted::Known, trust(&pins, "gitlab.com", b"two").unwrap());
+    }
+
+    #[test]
+    fn a_line_that_cannot_be_read_is_a_line_that_is_not_there() {
+        // A file somebody edited by hand should leave the phone working, which
+        // is the reasoning modeFrom carries on the Kotlin side. The absent
+        // trailing newline is the likeliest way an edit leaves it.
+        let scratch = Scratch::new("pin-garbage");
+        let pins = scratch.path().join("hosts");
+        std::fs::write(
+            &pins,
+            "nonsense\n\ntoo many fields here now\ngithub.com abc",
+        )
+        .unwrap();
+
+        assert_eq!(Trusted::Pinned, trust(&pins, "gitlab.com", b"two").unwrap());
+
+        let after = std::fs::read_to_string(&pins).unwrap();
+        assert!(after.contains("gitlab.com"), "{after}");
+        assert!(
+            after.contains("github.com abc"),
+            "a line it could not use was thrown away: {after}"
+        );
+    }
+
+    #[test]
+    fn a_refusal_says_both_things_it_could_be() {
+        // There is no prompt to offer, so the words are the whole interface.
+        // Naming only the attack teaches somebody to ignore it the first time
+        // a server is rebuilt, which is the commoner of the two by far.
+        let said = Error::HostKeyChanged {
+            host: "github.com".to_owned(),
+        }
+        .to_string();
+
+        assert!(said.contains("in the middle"), "{said}");
+        assert!(said.contains("rebuilt"), "{said}");
     }
 }
