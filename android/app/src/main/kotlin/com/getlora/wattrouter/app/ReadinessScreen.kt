@@ -49,6 +49,7 @@ internal fun ReadinessScreen(
     seeing: String?,
     onOpen: (Needed) -> Unit,
     onCarryOn: () -> Unit,
+    onConnections: () -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
@@ -64,6 +65,13 @@ internal fun ReadinessScreen(
         TextButton(onClick = onCarryOn) {
             Text(if (readiness.canDrive) "Start talking" else "Carry on without it")
         }
+
+        // A connected server is a capability like the rest of this screen: its
+        // tools are tools the agent can run, and what they claim to do is
+        // written by whoever runs it. It is not a checklist row because nothing
+        // here requires one, and a row that is always optional reads as a step
+        // somebody skipped.
+        TextButton(onClick = onConnections) { Text("Connected servers") }
 
         if (seeing != null) {
             Text("This is what it can see right now", style = MaterialTheme.typography.titleMedium)
