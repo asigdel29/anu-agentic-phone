@@ -38,7 +38,10 @@ import android.accessibilityservice.AccessibilityButtonController
 import android.accessibilityservice.AccessibilityService
 import android.app.KeyguardManager
 import android.content.Intent
+import android.graphics.Bitmap
 import android.os.Bundle
+import android.util.Base64
+import android.view.Display
 import android.view.Gravity
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
@@ -50,10 +53,13 @@ import com.getlora.wattrouter.Done
 import com.getlora.wattrouter.Generation
 import com.getlora.wattrouter.Generations
 import com.getlora.wattrouter.Handle
+import com.getlora.wattrouter.Image
 import com.getlora.wattrouter.Node
 import com.getlora.wattrouter.Onward
 import com.getlora.wattrouter.Reading
 import com.getlora.wattrouter.Viewing
+import java.io.ByteArrayOutputStream
+import kotlinx.coroutines.suspendCancellableCoroutine
 import com.getlora.wattrouter.Way
 
 /** The screen, when somebody has allowed it to be read. */
@@ -307,6 +313,88 @@ class DrivingService : AccessibilityService() {
     fun read(): Reading? {
         val tree = screen() ?: return null
         return viewing?.read(tree)
+    }
+
+    /**
+     * A picture of what is on screen, as a data URL.
+     *
+     * Three conversions, and each is why this is not a field on a reading. The
+     * framework answers a hardware buffer; a bitmap wraps it; a PNG compresses
+     * it; base64 encodes that. A caller wanting lines should not pay for any of
+     * it.
+     *
+     * #610 measured what happens without `android:canTakeScreenshot`: the
+     * binder throws SecurityException before the callback is reached at all,
+     * saying "Services don't have the capability of taking the screenshot".
+     * That is why the attribute is in driving.xml now, and it arrives with this
+     * because a capability declared ahead of its caller is one nobody can weigh.
+     *
+     * # Rely
+     * Called from a tool, off the main thread. Suspends until the framework
+     * answers, which it does on the executor given.
+     *
+     * @return null when the framework refuses or answers nothing. One answer
+     *   for both, because a caller can do nothing different about either.
+     */
+    suspend fun capture(): Image? = suspendCancellableCoroutine { waiting ->
+        val answered = java.util.concurrent.atomic.AtomicBoolean(false)
+
+        // Guarded because a callback that fired twice would resume a
+        // continuation twice, which throws rather than being ignored.
+        //
+        // Nothing to undo on cancellation: the value is a string, and the
+        // hardware buffer it came from was closed before this was built.
+        fun answer(image: Image?) {
+            if (answered.compareAndSet(false, true)) {
+                waiting.resume(image) { _, _, _ -> }
+            }
+        }
+
+        runCatching {
+            takeScreenshot(
+                Display.DEFAULT_DISPLAY,
+                { it.run() },
+                object : TakeScreenshotCallback {
+                    override fun onSuccess(screenshot: ScreenshotResult) {
+                        answer(encoded(screenshot))
+                    }
+
+                    override fun onFailure(errorCode: Int) = answer(null)
+                },
+            )
+        }.onFailure {
+            // Thrown from the binder rather than delivered to the callback,
+            // which #610 found and is why this is caught rather than trusted to
+            // arrive as onFailure.
+            answer(null)
+        }
+    }
+
+    /**
+     * A screenshot as a data URL, or null if any step of it will not.
+     *
+     * PNG rather than JPEG. A screen is text and flat colour, which is what PNG
+     * is for and what JPEG is worst at: a compression artefact around a letter
+     * is a letter the model reads wrong, and this picture exists to be read.
+     *
+     * The buffer is closed whatever happens. It is a hardware allocation and
+     * leaving one to a finaliser is leaving it until the process is under
+     * memory pressure, which is exactly when a screenshot was expensive.
+     */
+    private fun encoded(screenshot: ScreenshotResult): Image? = try {
+        screenshot.hardwareBuffer.use { buffer ->
+            Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace)?.let { bitmap ->
+                ByteArrayOutputStream().use { bytes ->
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, bytes)
+                    val encoded = Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP)
+                    Image("data:image/png;base64,$encoded")
+                }
+            }
+        }
+    } catch (refused: RuntimeException) {
+        // A buffer the platform will not wrap, or an allocation that failed.
+        // Null for the reason capture states: a caller can do nothing different.
+        null
     }
 
     /**

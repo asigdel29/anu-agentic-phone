@@ -103,6 +103,36 @@ interface Phone {
     suspend fun read(): Reading?
 
     /**
+     * A picture of what is on screen.
+     *
+     * Separate from [read] rather than a field on a [Reading], because the two
+     * cost different things: a reading is a tree walk and this is a frame
+     * grab, compressed and encoded, and a caller that wanted lines should not
+     * pay for pixels it never asked for.
+     *
+     * Encoded here rather than answered as bytes, so no framework type and no
+     * PNG crosses the seam. Conversation.Image is a data URL for the same
+     * reason: what it holds is what goes on the wire.
+     *
+     * # Rely
+     * As [read], and dearer: a frame grab plus a PNG compress plus a base64 of
+     * the result. Called when a tool asks, never per turn.
+     *
+     * @return null when there is nothing to capture, on [read]'s terms, and
+     *   also when the framework refuses. Those are one answer here because a
+     *   caller can do nothing different about either: #610 measured that a
+     *   service without android:canTakeScreenshot is refused, and that is a
+     *   manifest that shipped wrong rather than a state to recover from.
+     *
+     * Defaulted to null so a Phone that cannot capture says so by saying
+     * nothing, which is every test double and would be an iOS one. A decorator
+     * must still override it: Budgeted and Confirmed wrap the real phone, and
+     * inheriting this would make capture unavailable through the only path a
+     * turn ever takes.
+     */
+    suspend fun capture(): Image? = null
+
+    /**
      * Tap what a handle names.
      *
      * The seam takes the action rather than answering the node, because a

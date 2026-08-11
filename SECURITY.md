@@ -92,6 +92,14 @@ ever added, which is a request to come back and rewrite this paragraph rather th
 So an application that wants to hide from this agent has a way. `FLAG_SECURE` is not it, and
 that is the whole of the correction #472 made.
 
+**And since #439 the agent can capture the screen as well as read it.** `driving.xml` declares
+`android:canTakeScreenshot`, which #610 measured is required, and a captured screen crosses to
+the provider the way anything else a tool produced does. `FLAG_SECURE` windows *are* black
+rectangles in a capture, which is the half of the old claim that was always true, so a banking
+screen is readable through the node tree and not through a picture. Nothing is written to disk,
+including the application's own cache, which `how-the-agent-drives.md` already makes a rule about
+what the code may contain rather than about what it does at runtime.
+
 ### A connected server writes into the model's context
 
 An MCP server (#596) offers tools, and the agent runs them the way it runs the compiled ones.
