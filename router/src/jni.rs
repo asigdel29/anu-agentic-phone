@@ -4,6 +4,10 @@
 //!   2026-08-08  A. Sigdel  Created.
 //!   2026-08-09  A. Sigdel  Reads the chain off the router rather than
 //!                          rebuilding it from the environment.
+//!   2026-08-11  A. Sigdel  Stopped comparing itself to a C ABI and a second
+//!                          phone. #545 removed the second and #565 the first,
+//!                          and four sentences here went on defining this file
+//!                          by what it was not.
 //!
 //! Contents
 //!   `Java_..._nativeConfigure`  The credential the core reads from.
@@ -12,22 +16,20 @@
 //!   `Java_..._nativeDecide`  The whole decision path, as one envelope.
 //!
 //! One envelope rather than the four accessors `core.rs` offers. Reading a tier
-//! and then walking its chain is four crossings from Kotlin where it is four
-//! function calls from Swift, and a decision arriving in pieces is one a caller
-//! can assemble wrongly. The shape is `answer.rs`'s, so Android decodes
-//! exactly what Swift decodes.
+//! and then walking its chain is four crossings, and a decision arriving in
+//! pieces is one a caller can assemble wrongly. The shape is `answer.rs`'s,
+//! which is what everything on this boundary answers with.
 //!
-//! A null `jstring` is reachable from Kotlin in a way a null `const char *`
-//! mostly is not, because a nullable Kotlin type compiles to one without
-//! complaint.
+//! A null `jstring` is reachable from Kotlin, because a nullable Kotlin type
+//! compiles to one without complaint, so every entry point below reads its
+//! arguments before it trusts them.
 //!
-//! Not the C ABI with different names. `core.rs` hands back a struct by value and
-//! borrowed `const char *`; JNI deals in `jstring`, which the JVM owns on both
-//! sides, so this is a translation layer and the translation is where the
-//! mistakes are.
+//! Not `core.rs` with different names. That module hands back a struct by
+//! value; JNI deals in `jstring`, which the JVM owns on both sides, so this is
+//! a translation layer and the translation is where the mistakes are.
 //!
-//! No panic may cross into the JVM: undefined behaviour, exactly as into C, and
-//! the guard belongs here for the same reason it belongs in `core.rs`.
+//! No panic may cross into the JVM: it is undefined behaviour, and the guard
+//! belongs here for the same reason it belongs at any foreign boundary.
 //!
 //! The symbol names are the contract with `Core.kt` and nothing checks them at
 //! build time: getting one wrong is an `UnsatisfiedLinkError` the first time
@@ -203,7 +205,7 @@ pub extern "system" fn Java_com_getlora_wattrouter_Core_nativeDecide<'a>(
         .map_or(std::ptr::null_mut(), jni::objects::JString::into_raw)
 }
 
-/// The same envelope the C half uses, so both phones decode one shape.
+/// The envelope `answer.rs` defines, so everything Kotlin decodes is one shape.
 #[derive(Serialize)]
 #[serde(rename_all = "snake_case")]
 enum Answer<T: Serialize> {

@@ -2,13 +2,20 @@
 //!
 //! History
 //!   2026-08-08  A. Sigdel  Created.
+//!   2026-08-11  A. Sigdel  Named what is here rather than what used to be.
+//!                          #565 took the C ABI and #581 took the prefix; the
+//!                          list below outlived both, and one of the four it
+//!                          named had already become a `Drop`.
 //!
 //! Contents
-//!   `Memory`                     A store; opaque.
-//!   `wattrouter_memory_open`     Bound it, then open it.
-//!   `wattrouter_memory_free`     Release it.
-//!   `wattrouter_memory_remember` Put a turn in.
-//!   `wattrouter_memory_recall`   Ask it something.
+//!   `Memory`    A store, and the lock that makes one shareable.
+//!   `open`      Bound it, then open it.
+//!   `remember`  Put a turn in.
+//!   `recall`    Ask it something.
+//!
+//! There is no release. The store closes when the `Memory` drops, which is what
+//! `jni_memory` does with the box it holds; the entry point that used to be
+//! named here was the C ABI's way of saying the same thing.
 //!
 //! Opening is where the horizon runs. `ZeroMem::open` loads and indexes every
 //! turn, so bounding afterwards is bounding it after paying for it, so
@@ -24,7 +31,7 @@ use crate::memory;
 use std::path::Path;
 use std::sync::Mutex;
 
-/// A memory store; opaque to C.
+/// A memory store.
 pub struct Memory {
     /// The store, behind the lock that makes one handle shareable.
     inner: Mutex<zeromem::ZeroMem>,
