@@ -812,6 +812,31 @@ mod tests {
     }
 
     #[test]
+    fn the_ssh_transport_is_linked_in() {
+        // What #644 measured, kept so it cannot be switched off by accident.
+        // Cargo.toml turns `ssh` on for git2, which pulls libssh2 and OpenSSL
+        // into the phone's build; dropping the feature compiles everything in
+        // this crate and fails on a phone the first time somebody pushes.
+        //
+        // The discriminator is which failure arrives rather than whether one
+        // does. With no transport linked, libgit2 refuses the scheme before it
+        // touches the network. With one linked it gets as far as the socket.
+        // Port 1 on the loopback is refused immediately either way, so this
+        // needs no network and waits for nothing.
+        let scratch = Scratch::new("ssh-linked");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        let mut remote = repo.remote_anonymous("ssh://127.0.0.1:1/x.git").unwrap();
+
+        let Err(why) = remote.connect(git2::Direction::Fetch) else {
+            panic!("something answered on port 1 of the loopback")
+        };
+        assert!(
+            !why.message().contains("unsupported"),
+            "libgit2 has no ssh transport: {why}",
+        );
+    }
+
+    #[test]
     fn an_identity_is_written_where_git_keeps_it() {
         let scratch = Scratch::new("identify");
         let repo = git2::Repository::init(scratch.path()).unwrap();
