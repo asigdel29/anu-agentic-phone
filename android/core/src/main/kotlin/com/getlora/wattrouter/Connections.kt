@@ -4,12 +4,12 @@
 //   2026-08-10  A. Sigdel  Created with #596.
 //
 // Contents
-//   Connection  One server, as somebody saved it.
-//   refusing    Why a pair cannot be saved, or null.
+//   Connection   One server, as somebody saved it.
+//   refusing     Why a pair cannot be saved, or null.
+//   Connections  The list, between launches.
 //
-// Credential.kt's shape, and its reason: the decision is a pure function this
-// module's JVM suite can reach. The store that keeps a list of these is the
-// next change, and it goes in this file beside them.
+// Credential.kt's shape, and its reason: the decisions are pure functions this
+// module's JVM suite can reach, and the class around them only stores.
 //
 // Not the Keystore, which is where the provider key goes. A server address is
 // not a secret and sealing it would say it was; what a server needs to prove
@@ -26,6 +26,17 @@
 // of saving is the only place that failure has a sentence attached to it.
 
 package com.getlora.wattrouter
+
+import android.content.Context
+import android.content.SharedPreferences
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 
 /**
  * One server, as somebody saved it.
@@ -83,5 +94,74 @@ fun refusing(label: String, endpoint: String, taken: Set<String> = emptySet()): 
             "The address is missing its host."
 
         else -> null
+    }
+}
+
+/** The servers this person has connected, between launches. */
+class Connections(private val store: SharedPreferences) {
+
+    constructor(context: Context) : this(
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE),
+    )
+
+    /**
+     * Every connection, in the order they were added.
+     *
+     * # Returns
+     * What was saved, or empty. Anything that will not parse is empty rather
+     * than a throw: a preferences file somebody edited should leave the phone
+     * working, which is the rule `modeFrom` follows for the same reason.
+     */
+    val all: List<Connection>
+        get() = runCatching {
+            Json.parseToJsonElement(store.getString(KEY, null) ?: "[]").jsonArray
+                .mapNotNull { entry ->
+                    val row = entry.jsonObject
+                    val label = row["label"]?.jsonPrimitive?.contentOrNull
+                    val endpoint = row["endpoint"]?.jsonPrimitive?.contentOrNull
+                    if (label.isNullOrBlank() || endpoint.isNullOrBlank()) {
+                        null
+                    } else {
+                        Connection(label, endpoint)
+                    }
+                }
+        }.getOrDefault(emptyList())
+
+    /**
+     * Add one, or answer why not.
+     *
+     * # Returns
+     * Null when it was saved, otherwise [refusing]'s reason. The check is here
+     * rather than only at the field, so a caller cannot store a pair the screen
+     * would have refused.
+     */
+    fun add(label: String, endpoint: String): String? {
+        val why = refusing(label, endpoint, all.map { it.label }.toSet())
+        if (why != null) return why
+
+        write(all + Connection(label.trim(), endpoint.trim()))
+        return null
+    }
+
+    /** Take one away. Unknown labels are ignored rather than reported. */
+    fun forget(label: String) = write(all.filterNot { it.label == label })
+
+    private fun write(connections: List<Connection>) {
+        val json = buildJsonArray {
+            connections.forEach { connection ->
+                add(
+                    buildJsonObject {
+                        put("label", connection.label)
+                        put("endpoint", connection.endpoint)
+                    },
+                )
+            }
+        }
+        store.edit().putString(KEY, json.toString()).apply()
+    }
+
+    private companion object {
+        const val FILE = "connections"
+        const val KEY = "servers"
     }
 }
