@@ -42,6 +42,19 @@ enum class Role(val wire: String) {
     TOOL("tool"),
 }
 
+/**
+ * Something to be looked at.
+ *
+ * A data URL rather than bytes, because that is what goes on the wire and this
+ * file's job is the wire. Whatever captured it does the encoding, which keeps
+ * PNG out of a class about building a request and keeps this comparable, which
+ * a class holding a ByteArray is not.
+ *
+ * @property url `data:image/png;base64,…`, WHERE it is already encoded.
+ */
+@JvmInline
+value class Image(val url: String)
+
 /** Something the model asked to run. */
 data class ToolCall(
     /** The provider's identifier, carried untouched: a reply has to name the call
@@ -61,6 +74,15 @@ data class Message(
     /** What it says. Empty on an assistant turn that only asked for tools, which
      *  is ordinary rather than a fault. */
     val content: String,
+    /**
+     * Anything to be looked at rather than read, in the order it should be.
+     *
+     * Empty for every message this application has ever sent, and the encoding
+     * below is unchanged when it is. That is the whole design: a provider gets
+     * the string it has always got until there is genuinely an image, so
+     * carrying one costs nothing on the turns that do not.
+     */
+    val images: List<Image> = emptyList(),
     /** What the model asked to run. Only on an assistant message. */
     val toolCalls: List<ToolCall> = emptyList(),
     /** Which call this answers. Only on a tool message. */
@@ -72,6 +94,17 @@ data class Message(
         fun user(content: String) = Message(Role.USER, content)
 
         /**
+         * Something the person said, with something for the model to look at.
+         *
+         * Separate from [user] rather than a defaulted parameter, so a caller
+         * asking for this has said so. Everything else about the message is the
+         * same, including that the text may be empty: a picture handed over
+         * with nothing said is a complete thing to say.
+         */
+        fun user(content: String, images: List<Image>) =
+            Message(Role.USER, content, images = images)
+
+        /**
          * Something the model said, and anything it asked to have run.
          *
          * A turn that asked for tools must be appended before any result is, and
@@ -79,8 +112,13 @@ data class Message(
          * that was never sent the message announcing that id rejects the whole
          * request, naming, in the way of these things, nothing in particular.
          */
+        // Named, and it has to be. `images` sits before `toolCalls` so that
+        // the two things a message says are next to each other, which means a
+        // positional third argument now means images. This one was positional
+        // and the compiler caught it; a call site passing an empty list would
+        // not have been caught by anything.
         fun assistant(content: String, toolCalls: List<ToolCall> = emptyList()) =
-            Message(Role.ASSISTANT, content, toolCalls)
+            Message(Role.ASSISTANT, content, toolCalls = toolCalls)
 
         /** What a tool produced, answering the call that asked for it. */
         fun tool(content: String, answering: String) =
@@ -90,9 +128,44 @@ data class Message(
     /** As the provider expects it. Absent keys rather than empty ones. */
     fun asJson(): JsonObject = buildJsonObject {
         put("role", role.wire)
-        put("content", content)
+        if (images.isEmpty()) {
+            put("content", content)
+        } else {
+            put("content", contentAsParts())
+        }
         if (toolCalls.isNotEmpty()) put("tool_calls", callsAsJson())
         toolCallId?.let { put("tool_call_id", it) }
+    }
+
+    /**
+     * The content as parts, which is the only shape that can carry an image.
+     *
+     * Text first and only when there is some. A part holding an empty string is
+     * a part a provider may refuse and, where it does not, is a message that
+     * says nothing followed by a picture, which is not what an empty caption
+     * means.
+     */
+    private fun contentAsParts(): JsonArray = buildJsonArray {
+        if (content.isNotEmpty()) {
+            add(
+                buildJsonObject {
+                    put("type", "text")
+                    put("text", content)
+                },
+            )
+        }
+        images.forEach { image ->
+            add(
+                buildJsonObject {
+                    put("type", "image_url")
+                    // Nested, which looks like room for the detail field some
+                    // providers take and is not: this sends what it has and
+                    // lets the provider choose, because a wrong guess about
+                    // resolution costs either detail or tokens.
+                    put("image_url", buildJsonObject { put("url", image.url) })
+                },
+            )
+        }
     }
 
     private fun callsAsJson(): JsonArray = buildJsonArray {
