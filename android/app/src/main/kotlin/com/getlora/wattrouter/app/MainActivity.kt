@@ -64,8 +64,13 @@ import com.getlora.wattrouter.Memory
 import com.getlora.wattrouter.Needed
 import com.getlora.wattrouter.NavigateTool
 import com.getlora.wattrouter.OpenAppTool
+import com.getlora.wattrouter.Connections
+import com.getlora.wattrouter.HttpRpc
 import com.getlora.wattrouter.Permission
 import com.getlora.wattrouter.Planned
+import com.getlora.wattrouter.Reached
+import com.getlora.wattrouter.connect
+import com.getlora.wattrouter.tools
 import com.getlora.wattrouter.Tool
 import com.getlora.wattrouter.ReadScreenTool
 import com.getlora.wattrouter.RecallTool
@@ -103,6 +108,7 @@ class MainActivity : ComponentActivity() {
      * read from a turn rather than from the composition anyway.
      */
     private val modes by lazy { Modes(applicationContext) }
+    private val connections by lazy { Connections(applicationContext) }
 
     /**
      * What another app shared, until a turn takes it.
@@ -132,15 +138,42 @@ class MainActivity : ComponentActivity() {
             // half is already on never sees it, which is the difference
             // between a checklist and a wizard nobody can dismiss.
             var checking by remember { mutableStateOf(!readiness(this).canDrive) }
+            var connecting by remember { mutableStateOf(false) }
+
+            // Null until every saved server has been asked, and the
+            // conversation waits for it, because ToolBox is what the model is
+            // told at the top of a turn: a set that grew afterwards is a tool
+            // it was never offered. With nothing saved this costs a frame.
+            var connected by remember { mutableStateOf<List<Reached>?>(null) }
+            LaunchedEffect(connecting) {
+                if (!connecting) {
+                    connected = connect(connections.all) { HttpRpc(it.endpoint) }
+                }
+            }
 
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     when (val now = state) {
                         is Startup.Ready ->
                             if (checking) {
-                                Checklist { checking = false }
-                            } else {
-                                Conversation(driverFor(now, credential), handed, modes)
+                                Checklist(
+                                    onCarryOn = { checking = false },
+                                    onConnections = { connecting = true },
+                                )
+                            } else if (connecting) {
+                                ConnectionsScreen(
+                                    connected = connected.orEmpty(),
+                                    onAdd = { label, endpoint ->
+                                        connections.add(label, endpoint)
+                                    },
+                                    onForget = { connections.forget(it) },
+                                    // Leaving re-asks, because a server added
+                                    // or forgotten while it was open changes
+                                    // what the next turn is offered.
+                                    onDone = { connecting = false },
+                                )
+                            } else if (connected != null) {
+                                Conversation(driverFor(now, credential, connected!!), handed, modes)
                             }
                         Startup.NoCredential, Startup.CoreRefused ->
                             SignInScreen(refused = now == Startup.CoreRefused) { typed ->
@@ -167,9 +200,13 @@ class MainActivity : ComponentActivity() {
      * work, and wants a foreground service rather than a wider scope here.
      */
     @Composable
-    private fun driverFor(ready: Startup.Ready, credential: Credential): TurnDriver {
+    private fun driverFor(
+        ready: Startup.Ready,
+        credential: Credential,
+        connected: List<Reached>,
+    ): TurnDriver {
         val scope = rememberCoroutineScope()
-        return remember(ready.core) {
+        return remember(ready.core, connected) {
             TurnDriver(
                 Agent(
                     router = ready.core.routing(),
@@ -183,7 +220,13 @@ class MainActivity : ComponentActivity() {
                             BuildConfig.UPSTREAM_BASE_URL,
                         ),
                     ),
-                    tools = ToolBox(remembering() + phone() + working() + driving()),
+                    // Last, so a server cannot displace a compiled tool:
+                    // ToolBox keeps the first of a duplicate name, and prefixed
+                    // makes the collision impossible anyway. Both, because one
+                    // is a rule and the other is an ordering.
+                    tools = ToolBox(
+                        remembering() + phone() + working() + driving() + connected.tools(),
+                    ),
                     budget = budget,
                     // The mode is read here rather than captured, so somebody
                     // who changed it between typing and the model answering
@@ -315,7 +358,7 @@ class MainActivity : ComponentActivity() {
      * they went is the lie a wizard tells.
      */
     @Composable
-    private fun Checklist(onCarryOn: () -> Unit) {
+    private fun Checklist(onCarryOn: () -> Unit, onConnections: () -> Unit) {
         val owner = LocalLifecycleOwner.current
         var now by remember { mutableStateOf(readiness(this)) }
         var seeing by remember { mutableStateOf<String?>(null) }
@@ -338,7 +381,13 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        ReadinessScreen(now, seeing, onOpen = { open(it) }, onCarryOn = onCarryOn)
+        ReadinessScreen(
+            now,
+            seeing,
+            onOpen = { open(it) },
+            onCarryOn = onCarryOn,
+            onConnections = onConnections,
+        )
     }
 
     /**
