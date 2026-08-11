@@ -83,6 +83,9 @@ class DrivingService : AccessibilityService() {
     /** The banner, while a turn is driving. */
     private var banner: Banner? = null
 
+    /** The frame around the display, and whether it is on it. */
+    private var border: Border? = null
+
     /**
      * The bubble, while a turn is not.
      *
@@ -91,6 +94,7 @@ class DrivingService : AccessibilityService() {
      */
     private var head: ChatHead? = null
     private var shown = false
+    private var bordered = false
 
     /**
      * The question, while one is being asked.
@@ -168,6 +172,7 @@ class DrivingService : AccessibilityService() {
         val showing = banner ?: Banner(this) { onStop?.invoke() }.also { banner = it }
         showing.say(what)
         if (!shown) attach(showing)
+        attachBorder()
     }
 
     /**
@@ -262,6 +267,49 @@ class DrivingService : AccessibilityService() {
      * SurfaceControl there is no public way to build, and this window type has
      * been here since API 22. So the permission is gone and so is the choice.
      */
+    /**
+     * Put the frame up, unless it is up.
+     *
+     * A second window rather than a thicker banner, because it is a different
+     * shape: the banner is a strip at the top and this is the edge of the
+     * display. Silent on failure, as [attach] is, and for the same reason: a
+     * turn that cannot draw a frame is still a turn.
+     *
+     * MATCH_PARENT both ways with no gravity, so it is the display. Every touch
+     * flag the banner sets, and one more: FLAG_NOT_TOUCHABLE, because unlike
+     * the banner there is nothing on this to press. Without it a frame around
+     * the screen would be a frame that ate the edge of every gesture, which is
+     * where the back swipe lives.
+     */
+    private fun attachBorder() {
+        if (bordered) return
+
+        val edge = border ?: Border(this).also { border = it }
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            android.graphics.PixelFormat.TRANSLUCENT,
+        )
+
+        bordered = runCatching {
+            getSystemService(WindowManager::class.java).addView(edge.view, params)
+            true
+        }.getOrDefault(false)
+    }
+
+    /** Take it away. Called wherever the banner is taken away, and with it. */
+    private fun detachBorder() {
+        if (!bordered) return
+        border?.let {
+            runCatching { getSystemService(WindowManager::class.java).removeView(it.view) }
+        }
+        bordered = false
+    }
+
     private fun attach(showing: Banner) {
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -286,6 +334,12 @@ class DrivingService : AccessibilityService() {
     }
 
     private fun hide() {
+        // The frame first and unconditionally. It goes up with the banner and
+        // has to come down with it, and an early return on a null banner would
+        // leave a frame around the display of a phone nothing is driving.
+        detachBorder()
+        border = null
+
         val showing = banner ?: return
         if (shown) {
             runCatching { getSystemService(WindowManager::class.java).removeView(showing.view) }
