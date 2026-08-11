@@ -2,16 +2,20 @@
 //!
 //! History
 //!   2026-08-08  A. Sigdel  Created.
+//!   2026-08-11  A. Sigdel  Took a remote, which is where anything leaving this
+//!                          repository has to be told to go.
 //!
 //! Contents
-//!   `Error`     Why an operation could not be done.
-//!   `Head`      Which branch, or which commit, or neither.
-//!   `identify`  Saying who commits from here.
-//!   `head`      Opening a repository, and reading where it is.
-//!   `Change`    One path, and what happened to it.
-//!   `Status`    The working tree, against the index and the head.
-//!   `add`       Staging paths.
-//!   `commit`    Writing what is staged, and refusing to write nothing.
+//!   `Error`       Why an operation could not be done.
+//!   `Head`        Which branch, or which commit, or neither.
+//!   `identify`    Saying who commits from here.
+//!   `head`        Opening a repository, and reading where it is.
+//!   `Change`      One path, and what happened to it.
+//!   `Status`      The working tree, against the index and the head.
+//!   `add`         Staging paths.
+//!   `commit`      Writing what is staged, and refusing to write nothing.
+//!   `Pointed`     What pointing a remote turned out to be.
+//!   `remote_set`  Where a repository sends and receives.
 //!
 //! Everything on the board shells out to `git`. A phone has no shell, so these
 //! come from libgit2, reached as a Rust dependency of this crate, which already
@@ -67,6 +71,17 @@ pub enum Error {
          is using this has to set them, and there is nothing here to do about it"
     )]
     NoIdentity,
+    /// A remote this build has no transport for.
+    ///
+    /// Named with the form that would work, because somebody who copied a URL
+    /// out of a forge has the https one in front of them and the ssh one two
+    /// clicks away.
+    #[error(
+        "{0} is an https remote, and the only transport linked here is ssh. \
+         Use the ssh form of the same remote, which on most forges is \
+         git@host:owner/repository.git"
+    )]
+    HttpsRemote(String),
 }
 
 /// Where `HEAD` points.
@@ -105,6 +120,26 @@ pub enum Made {
     /// model that cannot tell "made you one" from "there already was one" will
     /// report having started work it is in the middle of.
     AlreadyThere,
+}
+
+/// What pointing a remote turned out to be.
+///
+/// [`Made`]'s reasoning, applied to the one operation where getting it wrong is
+/// worse. Adding a remote and repointing one are both ordinary, and a caller
+/// told only "done" cannot tell which happened. The repointing case carries
+/// where it used to point, because that is the only record of it left anywhere.
+#[derive(Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum Pointed {
+    /// There was no remote by that name and now there is.
+    Added,
+    /// There was one, pointing somewhere else.
+    Moved {
+        /// Where it pointed until now.
+        from: String,
+    },
+    /// There was one, already pointing there, and nothing was written.
+    Unchanged,
 }
 
 /// Make a directory into a repository, or say it already was one.
@@ -417,6 +452,54 @@ pub fn commit(path: &Path, message: &str) -> Result<String, Error> {
         .as_str()
         .unwrap_or_default()
         .to_owned())
+}
+
+/// Point a remote somewhere, and say what that changed.
+///
+/// Creates the remote if there is none by that name, and repoints it if there
+/// is. Both are ordinary things to want and neither is a failure, so they are
+/// told apart in the answer rather than collapsed: a model that asked to add a
+/// remote and silently moved an existing one has changed where somebody's work
+/// goes.
+///
+/// An `https://` URL is refused here rather than at the fetch, because this is
+/// the moment somebody can still be told the ssh form. See
+/// `docs/decisions/pushing-from-a-phone.md`: the transport this build links is
+/// ssh, and turning `git2/https` on as well is a scope line rather than a
+/// permanent one.
+///
+/// A filesystem path is a remote too, and deliberately still allowed. It needs
+/// no transport at all, which is what lets every test below run with no
+/// network and no key.
+///
+/// # Errors
+/// [`Error::HttpsRemote`] IF the URL is http or https. [`Error::NotARepository`]
+/// IF nothing at `path` opens as one, and [`Error::Refused`] IF the remote
+/// cannot be written.
+pub fn remote_set(path: &Path, name: &str, url: &str) -> Result<Pointed, Error> {
+    let url = url.trim();
+    let lowered = url.to_ascii_lowercase();
+    if lowered.starts_with("https://") || lowered.starts_with("http://") {
+        return Err(Error::HttpsRemote(url.to_owned()));
+    }
+
+    let repo = open(path)?;
+    let was = repo
+        .find_remote(name)
+        .ok()
+        .and_then(|remote| remote.url().ok().map(ToOwned::to_owned));
+
+    match was {
+        Some(was) if was == url => Ok(Pointed::Unchanged),
+        Some(was) => {
+            repo.remote_set_url(name, url)?;
+            Ok(Pointed::Moved { from: was })
+        }
+        None => {
+            repo.remote(name, url)?;
+            Ok(Pointed::Added)
+        }
+    }
 }
 
 /// The committer name, or a refusal naming what is missing.
@@ -907,6 +990,93 @@ mod tests {
             why.to_string()
                 .contains(&scratch.path().display().to_string()),
             "{why}"
+        );
+    }
+
+    #[test]
+    fn a_remote_that_was_not_there_is_added() {
+        let scratch = Scratch::new("remote-add");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+
+        let pointed = remote_set(scratch.path(), "origin", "/somewhere/else.git").unwrap();
+
+        assert_eq!(Pointed::Added, pointed);
+        assert_eq!(
+            "/somewhere/else.git",
+            repo.find_remote("origin").unwrap().url().unwrap()
+        );
+    }
+
+    #[test]
+    fn repointing_a_remote_says_where_it_used_to_point() {
+        // The answer this enum exists for. Somebody who meant to add a remote
+        // and moved one instead has changed where the work goes, and the old
+        // URL is the only record of it left anywhere.
+        let scratch = Scratch::new("remote-move");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        remote_set(scratch.path(), "origin", "/first.git").unwrap();
+
+        let pointed = remote_set(scratch.path(), "origin", "/second.git").unwrap();
+
+        assert_eq!(
+            Pointed::Moved {
+                from: "/first.git".to_owned()
+            },
+            pointed
+        );
+        assert_eq!(
+            "/second.git",
+            repo.find_remote("origin").unwrap().url().unwrap()
+        );
+    }
+
+    #[test]
+    fn pointing_a_remote_where_it_already_points_changes_nothing() {
+        let scratch = Scratch::new("remote-same");
+        git2::Repository::init(scratch.path()).unwrap();
+        remote_set(scratch.path(), "origin", "/first.git").unwrap();
+
+        assert_eq!(
+            Pointed::Unchanged,
+            remote_set(scratch.path(), "origin", "/first.git").unwrap()
+        );
+    }
+
+    #[test]
+    fn an_https_remote_is_refused_and_told_the_form_that_works() {
+        // Refused here rather than at the fetch, which is the moment somebody
+        // still has the forge's page open to copy the other URL from.
+        let scratch = Scratch::new("remote-https");
+        git2::Repository::init(scratch.path()).unwrap();
+
+        for url in [
+            "https://github.com/owner/repository.git",
+            "HTTPS://github.com/owner/repository.git",
+            "http://insecure.example/repository.git",
+        ] {
+            let Err(why) = remote_set(scratch.path(), "origin", url) else {
+                panic!("accepted {url}")
+            };
+            assert!(matches!(why, Error::HttpsRemote(_)), "{why}");
+            assert!(why.to_string().contains("git@host:"), "{why}");
+        }
+    }
+
+    #[test]
+    fn an_ssh_remote_is_accepted_even_though_nothing_here_can_reach_one() {
+        // The refusal above is about the scheme this build has no transport
+        // for, not about every remote that is not a path.
+        let scratch = Scratch::new("remote-ssh");
+        git2::Repository::init(scratch.path()).unwrap();
+
+        assert_eq!(
+            Pointed::Added,
+            remote_set(
+                scratch.path(),
+                "origin",
+                "git@github.com:owner/repository.git"
+            )
+            .unwrap()
         );
     }
 }
