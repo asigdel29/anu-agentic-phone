@@ -150,7 +150,7 @@ Nothing. The application links this repository's own core and Apple's frameworks
 | getrandom | 0.2.17 | MIT OR Apache-2.0 |
 | getrandom | 0.3.4 | MIT OR Apache-2.0 |
 | getrandom | 0.4.3 | MIT OR Apache-2.0 |
-| git2 | 0.20.4 | MIT OR Apache-2.0 |
+| git2 | 0.21.0 | MIT OR Apache-2.0 |
 | h2 | 0.4.15 | MIT |
 | hashbrown | 0.14.5 | MIT OR Apache-2.0 |
 | hashbrown | 0.16.1 | MIT OR Apache-2.0 |

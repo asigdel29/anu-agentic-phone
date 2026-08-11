@@ -61,7 +61,7 @@ axum = "0.8"
 # Not 0.21, which is published. The bump above is the smallest one that clears
 # the advisory, and a version chosen for a reason is worth more than the newest
 # when what it vendors is a C library on three targets.
-git2 = { version = "0.20.4", optional = true, default-features = false }
+git2 = { version = "0.21.0", optional = true, default-features = false }
 # Pinned to the version zeromem uses. Two versions means two libsqlite3-sys,
 # which is two copies of SQLite in one binary: it sometimes links, and when it
 # does the two hold separate page caches over one file. `bundled` for the same
