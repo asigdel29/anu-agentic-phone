@@ -11,7 +11,7 @@ diff to live in, and this is a statement about work that has not been done.
 
 ```
  3  Plan mode        done, and it was what gated 6 and 11
- 9  MCP wired in     written and tested already, reached by nothing
+ 9  MCP wired in     done, and it was written and tested long before
  4  Vision           the shape of a message changes, so it goes before what needs it
  5  Driving visuals  the same capture path as 4
  6  Write tools      dangerous before 3, which is why it is after it
@@ -48,7 +48,7 @@ touches all three, so unit 4 goes before unit 5 rather than beside it.
 | 6 | Write-capable tools | [#393](https://github.com/asigdel29/anu-agentic-phone/issues/393), [#467](https://github.com/asigdel29/anu-agentic-phone/issues/467) | Not started. Needs 3. |
 | 7 | Conversations and memory on Postgres | [#599](https://github.com/asigdel29/anu-agentic-phone/issues/599) | Not started, zero code. Blocked with 1. |
 | 8 | Scheduler and background tasks | [#600](https://github.com/asigdel29/anu-agentic-phone/issues/600) | Not started, zero code. The server half is blocked with 1; the phone half is not. |
-| 9 | MCP into `ToolBox`, and a connections screen | [#596](https://github.com/asigdel29/anu-agentic-phone/issues/596) | `Mcp.kt` is merged and tested. Nothing constructs it. |
+| 9 | MCP into `ToolBox`, and a connections screen | [#596](https://github.com/asigdel29/anu-agentic-phone/issues/596) | Done. Servers are saved, asked at startup, and their tools folded in behind a `mcp_` prefix. |
 | 10 | Voice | [#601](https://github.com/asigdel29/anu-agentic-phone/issues/601) | Not started, zero code. Server transcription is blocked with 1. |
 | 11 | Terminal | [#602](https://github.com/asigdel29/anu-agentic-phone/issues/602) | Not started, zero code. Needs 3. |
 | 12 | Tag, removals, README | | Done. |
