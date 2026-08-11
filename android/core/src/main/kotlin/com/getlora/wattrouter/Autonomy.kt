@@ -133,6 +133,11 @@ class Confirmed(
 
     override suspend fun read(): Reading? = phone.read()
 
+    // Never gated, for the reason this file's header gives: asking permission
+    // to look is not what anybody means by this. Delegated rather than
+    // inherited, because the default answers null.
+    override suspend fun capture(): Image? = phone.capture()
+
     override suspend fun apps(): List<Launchable>? = phone.apps()
 
     override suspend fun tap(at: Handle, from: Generation): Done? =

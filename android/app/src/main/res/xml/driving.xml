@@ -13,6 +13,13 @@
   Settings at all. Nothing consumes them: DrivingService reads the tree when it
   needs it, for the reason its header gives.
 
+  canTakeScreenshot arrives with its first caller and not before. #610 measured
+  what happens without it: the binder throws SecurityException before the
+  callback is reached, saying services do not have the capability. #439 said the
+  call "needs no extra capability", which is now measured false. It is here
+  because DrivingService.capture is here, which is the rule the app's own
+  manifest states about permissions and applies just as well to a capability.
+
   No canPerformGestures, and none is coming. Every action turned out to be a
   node action (click, set text, scroll forward) so no coordinate enters the
   app at all, which is stronger than how-the-agent-drives.md promised.
@@ -35,5 +42,6 @@
     android:accessibilityFlags="flagDefault|flagRequestAccessibilityButton"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:canRetrieveWindowContent="true"
+    android:canTakeScreenshot="true"
     android:description="@string/driving_description"
     android:notificationTimeout="100" />

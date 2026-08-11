@@ -69,13 +69,21 @@ be answering falsely to see through a marker an application set deliberately. So
 that has learned `FLAG_SECURE` leaves the node tree alone has a mechanism that does not, and it
 works against this agent today.
 
-**`takeScreenshot` is refused without `canTakeScreenshot`.** #439 says the call "needs no extra
-capability". Measured false: the same test asks for one and the binder throws
+**`takeScreenshot` needs `canTakeScreenshot`, and now has it.** #439 said the call "needs no
+extra capability". Measured false in #610: the binder throws
 `SecurityException: Services don't have the capability of taking the screenshot`, before the
-callback is reached at all. The attribute is not added either, because nothing calls
-`takeScreenshot` and a capability declared ahead of its caller is one nobody can weigh, which is
-the rule `app/src/main/AndroidManifest.xml` already states about permissions. Vision adds it
-beside its first call, and the estimate for that work is one attribute larger than #439 assumed.
+callback is reached at all. The attribute was not added then, because nothing called
+`takeScreenshot` and a capability declared ahead of its caller is one nobody can weigh.
+
+It arrived with its caller in #439's capture layer. `DrivingService.capture` grabs a frame, wraps
+the hardware buffer, compresses it to PNG and encodes that as a data URL, and
+`SensitiveScreenDeviceTest` asserts both the framework call and the whole path. The refusal that
+test used to assert is now its failure message, because a manifest that lost the attribute reads
+very differently from a frame the platform would not grab.
+
+So the agent can see a screen as well as read one. What that buys over the tree is layout the
+tree describes badly: a chart, a photo, a control drawn on a canvas with no accessibility node
+at all. The last of those is the real gap, and it is the one a node tree cannot close by itself.
 
 **The service is killed and must survive it.** An accessibility service is restarted by the
 system, at which point in-memory state is gone; and it is disabled outright by a settings

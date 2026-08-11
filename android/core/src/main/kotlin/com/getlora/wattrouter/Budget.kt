@@ -84,6 +84,11 @@ class Budgeted(private val phone: Phone, private val budget: Budget) : Phone {
 
     override suspend fun read(): Reading? = phone.read()
 
+    // Reading is free, and a picture of the screen is reading. Delegated
+    // rather than inherited, because the default answers null and this wraps
+    // the phone a turn actually holds.
+    override suspend fun capture(): Image? = phone.capture()
+
     override suspend fun apps(): List<Launchable>? = phone.apps()
 
     override suspend fun tap(at: Handle, from: Generation): Done? =
