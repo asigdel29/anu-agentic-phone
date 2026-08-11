@@ -4,6 +4,8 @@
 //   2026-08-09  A. Sigdel  Created.
 //   2026-08-09  A. Sigdel  A refusal is asked about again, which the prose had
 //                          been promising and the code had not been doing.
+//   2026-08-11  A. Sigdel  The microphone, with the seam that listens through
+//                          it, #650.
 //
 // Contents
 //   Capability       Something a tool needs before it can work.
@@ -43,6 +45,7 @@ enum class Capability(val subject: String, val settings: String) {
     CALENDAR("the calendar", "Settings > Apps > WattRouter > Permissions > Calendar"),
     CONTACTS("contacts", "Settings > Apps > WattRouter > Permissions > Contacts"),
     LOCATION("location", "Settings > Apps > WattRouter > Permissions > Location"),
+    MICROPHONE("the microphone", "Settings > Apps > WattRouter > Permissions > Microphone"),
 }
 
 /** How things stand with a capability. */
