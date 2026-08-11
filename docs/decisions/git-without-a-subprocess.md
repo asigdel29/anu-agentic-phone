@@ -37,6 +37,12 @@ router already crosses with. One crate, one static library per slice, one xcfram
 the alternative was two of each, and two Rust static libraries in one binary means two
 copies of the standard library.
 
+The two paragraphs above are historical and are left as they were argued. There is one
+phone since #545 and `scripts/build-ios-core.sh` is gone, so the evidence in them cannot be
+re-run. The conclusion survives its evidence: `scripts/build-android-core.sh` crosses the
+same crate to `aarch64-linux-android` with `cc`, and `git2` still builds with default
+features off, which is the property the whole argument rested on.
+
 ## What libgit2 does not do
 
 None of this is a bug and none of it is fixable here. It is what the library is.
@@ -72,6 +78,11 @@ test creates in a temporary directory.
 The network half (fetch, push, credentials, pull request creation) is a separate
 decision, taken separately. Splitting it is not caution for its own sake: it is that the
 first half has no privacy story to argue and the second is almost entirely privacy story.
+
+That decision is now taken, in [pushing-from-a-phone.md](pushing-from-a-phone.md). It
+turned out to cost more than a policy: the transports this crate switched off are the ones
+that pull OpenSSL and libssh2, so the network half is a change to what the crate links
+before it is a change to what the agent can do.
 
 ## The honest summary
 
