@@ -55,7 +55,11 @@ class ToolBox(tools: List<Tool>) {
         )
 
         return try {
-            ToolResult(call.id, tool.run(call.arguments))
+            // answer rather than run, which is where a tool that captures
+            // something puts it. Every tool but that one inherits the default,
+            // so this line is the whole of what the change costs here.
+            val answered = tool.answer(call.arguments)
+            ToolResult(call.id, answered.text, answered.images)
         } catch (e: CancellationException) {
             // The one thing that propagates; see Tool.kt.
             throw e
