@@ -89,6 +89,14 @@ class Agent(
      * for no reason.
      */
     private val budget: Budget? = null,
+    /**
+     * Who approves what a turn intends, in Plan mode.
+     *
+     * Null when nobody can be asked, which is every caller that is not the
+     * application: a turn with no surface to put a plan on runs the way Auto
+     * does rather than blocking on an answer that cannot arrive.
+     */
+    private val planned: Planned? = null,
     private val session: String = java.util.UUID.randomUUID().toString(),
 ) {
     /**
@@ -120,20 +128,41 @@ class Agent(
         // produces, and the one where somebody has just said carry on.
         budget?.beginTurn()
 
-        repeat(maxRounds) {
-            val round = ask()
+        repeat(maxRounds) { round ->
+            val asked = ask()
 
             // Built aside and appended together: never a call without its
             // answer, whatever fails in between.
-            val committed = mutableListOf(Message.assistant(round.text, round.calls))
-            for (call in round.calls) {
+            val committed = mutableListOf(Message.assistant(asked.text, asked.calls))
+
+            // Once, before anything runs, and only on the first round. A plan
+            // is what a turn intends, so putting it after a tool has already
+            // touched the phone would be asking about something that happened.
+            //
+            // A resumed turn asks again. What it does next is not what was
+            // approved before the interrupt, and this is the same judgement
+            // beginTurn makes one line above about the budget.
+            if (round == 0 && !approves(asked)) {
+                // Refused before the calls ran, so each still needs an
+                // answering message or the next request carries a call with no
+                // reply, which is the failure this file opens by describing.
+                for (call in asked.calls) {
+                    val declined = ToolResult(call.id, Planned.DECLINED, isError = true)
+                    emit(TurnEvent.Result(declined))
+                    committed += Message.tool(declined.content, answering = call.id)
+                }
+                committed.forEach(conversation::append)
+                return
+            }
+
+            for (call in asked.calls) {
                 val result = tools.run(call)
                 emit(TurnEvent.Result(result))
                 committed += Message.tool(result.content, answering = call.id)
             }
             committed.forEach(conversation::append)
 
-            if (round.calls.isEmpty()) return
+            if (asked.calls.isEmpty()) return
         }
         throw AgentError.TooManyRounds(maxRounds)
     }
@@ -161,6 +190,17 @@ class Agent(
         currentCoroutineContext().ensureActive()
         return Round(text.toString(), calls)
     }
+
+    /**
+     * Whether the turn may run what it just said it would.
+     *
+     * True when nobody is there to ask, which is every caller but the
+     * application. A turn that blocked on an answer with no surface to put the
+     * question on would hang rather than refuse, and hanging is the worse of
+     * the two.
+     */
+    private suspend fun approves(round: Round): Boolean =
+        planned?.approved(Plan(round.text, round.calls.map { it.name })) ?: true
 
     private data class Round(val text: String, val calls: List<ToolCall>)
 
