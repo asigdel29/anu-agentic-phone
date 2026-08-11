@@ -8,6 +8,8 @@
 //!                          that cannot lose anything.
 //!   2026-08-11  A. Sigdel  Took a push, and the refusal that is the reason it
 //!                          was worth writing carefully.
+//!   2026-08-11  A. Sigdel  Took a pull that fast-forwards or says why it
+//!                          cannot, which is the last of these needing no key.
 //!
 //! Contents
 //!   `Error`       Why an operation could not be done.
@@ -22,6 +24,8 @@
 //!   `remote_set`  Where a repository sends and receives.
 //!   `fetch`       Bringing back what a remote has, merging nothing.
 //!   `push`        Sending a branch, and refusing to overwrite anybody.
+//!   `Pulled`      What taking the remote's work turned out to be.
+//!   `pull`        Fast-forwarding, or saying it cannot.
 //!
 //! Everything on the board shells out to `git`. A phone has no shell, so these
 //! come from libgit2, reached as a Rust dependency of this crate, which already
@@ -116,6 +120,22 @@ pub enum Error {
         /// What the remote said, which is the only account of its reasoning.
         detail: String,
     },
+    /// The branch and the remote have both moved, so taking one needs a merge.
+    ///
+    /// The mirror of [`Error::NotFastForward`], and refused for the reason the
+    /// decision record gives: a merge needs conflict resolution, that needs a
+    /// diff surface, and there is no diff surface anywhere in this product. A
+    /// conflicted index on a phone with no way to look at it is worse than
+    /// being told no.
+    #[error(
+        "{branch} and the remote have both moved on, so taking the remote's \
+         work would need a merge. There is nothing here to resolve a conflict \
+         with, so nothing was changed"
+    )]
+    WouldMerge {
+        /// The branch that has diverged.
+        branch: String,
+    },
 }
 
 /// Where `HEAD` points.
@@ -174,6 +194,32 @@ pub enum Pointed {
     },
     /// There was one, already pointing there, and nothing was written.
     Unchanged,
+}
+
+/// What taking the remote's work turned out to be.
+///
+/// Three answers rather than one success, for the reason [`Made`] and
+/// [`Pointed`] already carry: a caller told only "done" cannot tell whether
+/// anything arrived.
+#[derive(Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum Pulled {
+    /// The remote had nothing this branch did not already have.
+    AlreadyHere,
+    /// The branch moved forward to what the remote had.
+    FastForwarded {
+        /// Where it moved to, abbreviated as git would abbreviate it.
+        commit: String,
+    },
+    /// There was no such branch here, so it was created from the remote.
+    ///
+    /// Not an edge case. A repository made by `init_repository` and then
+    /// pointed at a remote has no branch at all, and this is the first pull
+    /// anybody does.
+    Started {
+        /// Where the new branch points.
+        commit: String,
+    },
 }
 
 /// Make a directory into a repository, or say it already was one.
@@ -661,6 +707,74 @@ pub fn push(path: &Path, remote: &str, branch: &str) -> Result<(), Error> {
             detail: why.message().to_owned(),
         }),
         Err(why) => Err(why.into()),
+    }
+}
+
+/// Take what a remote has, if that can be done without merging.
+///
+/// Fetches, then moves the branch to what the remote has when that is a
+/// fast-forward, and refuses when it is not.
+///
+/// The analysis is asked for rather than inferred. Moving the reference without
+/// it is a force-pull: it discards local commits silently, which is exactly
+/// what [`push`] refuses to do in the other direction, and doing it here
+/// because the code is shorter would be the same mistake facing the other way.
+///
+/// The checkout is safe rather than forced. Uncommitted work in the way makes
+/// this fail, and that is the intended behaviour rather than a limitation to
+/// route around: `force()` is a one-word change that would make a red test
+/// green by throwing away whatever was in the tree.
+///
+/// # Errors
+/// [`Error::WouldMerge`] IF the branch and the remote have both moved on.
+/// [`Error::NoSuchRemote`] IF no such remote is configured,
+/// [`Error::NotARepository`] IF nothing at `path` opens as one, and
+/// [`Error::Refused`] IF the fetch, the analysis or the checkout fails.
+pub fn pull(path: &Path, remote: &str, branch: &str) -> Result<Pulled, Error> {
+    fetch(path, remote)?;
+
+    let repo = open(path)?;
+    let tracking = format!("refs/remotes/{remote}/{branch}");
+    let target = repo
+        .find_reference(&tracking)
+        .map_err(|_| Error::NoSuchBranch(format!("{branch} on {remote}")))?
+        .peel_to_commit()?;
+    let onto = repo.find_annotated_commit(target.id())?;
+    let short = target
+        .as_object()
+        .short_id()?
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+
+    let (analysis, _) = repo.merge_analysis(&[&onto])?;
+    if analysis.is_up_to_date() {
+        return Ok(Pulled::AlreadyHere);
+    }
+    if !analysis.is_fast_forward() && !analysis.is_unborn() {
+        return Err(Error::WouldMerge {
+            branch: branch.to_owned(),
+        });
+    }
+
+    let here = format!("refs/heads/{branch}");
+    let started = analysis.is_unborn();
+    match repo.find_reference(&here) {
+        Ok(mut reference) => {
+            reference.set_target(target.id(), "pull: fast-forward")?;
+        }
+        // Unborn, so there is no reference to move and one is made instead.
+        Err(_) => {
+            repo.reference(&here, target.id(), false, "pull: started")?;
+        }
+    }
+    repo.set_head(&here)?;
+    repo.checkout_head(Some(git2::build::CheckoutBuilder::default().safe()))?;
+
+    if started {
+        Ok(Pulled::Started { commit: short })
+    } else {
+        Ok(Pulled::FastForwarded { commit: short })
     }
 }
 
@@ -1479,5 +1593,98 @@ mod tests {
             panic!("pushed to a remote that is not there")
         };
         assert!(matches!(why, Error::NoSuchRemote(_)), "{why}");
+    }
+
+    /// A bare remote, and a repository that has pushed one commit to it.
+    fn pushed_once(scratch: &Scratch, bare: &Scratch) -> (git2::Repository, String) {
+        somewhere_to_push_to(bare);
+        let (repo, branch) = ready_to_push(scratch, bare);
+        push(scratch.path(), "origin", &branch).unwrap();
+        (repo, branch)
+    }
+
+    #[test]
+    fn a_pull_with_nothing_new_says_the_work_is_already_here() {
+        let bare = Scratch::new("pull-same-bare");
+        let scratch = Scratch::new("pull-same");
+        let (_repo, branch) = pushed_once(&scratch, &bare);
+
+        assert_eq!(
+            Pulled::AlreadyHere,
+            pull(scratch.path(), "origin", &branch).unwrap()
+        );
+    }
+
+    #[test]
+    fn a_pull_that_can_fast_forward_does_and_writes_the_file() {
+        let bare = Scratch::new("pull-ff-bare");
+        let theirs = Scratch::new("pull-ff-theirs");
+        let (repo, branch) = pushed_once(&theirs, &bare);
+        commit_a_file(&repo, "b.txt", "second");
+        push(theirs.path(), "origin", &branch).unwrap();
+        let wanted = repo.head().unwrap().peel_to_commit().unwrap().id();
+
+        // A second repository that has the first commit and not the second.
+        let mine = Scratch::new("pull-ff-mine");
+        let here = git2::Repository::init(mine.path()).unwrap();
+        remote_set(mine.path(), "origin", &bare.path().display().to_string()).unwrap();
+        pull(mine.path(), "origin", &branch).unwrap();
+
+        assert_eq!(wanted, here.head().unwrap().peel_to_commit().unwrap().id());
+        assert!(
+            mine.path().join("b.txt").exists(),
+            "a fast-forward left the working tree behind"
+        );
+    }
+
+    #[test]
+    fn the_first_pull_into_an_empty_repository_starts_the_branch() {
+        // The case that is not an edge case: init_repository leaves a
+        // repository with no branch at all, and this is the first pull anybody
+        // does on one.
+        let bare = Scratch::new("pull-unborn-bare");
+        let theirs = Scratch::new("pull-unborn-theirs");
+        let (_repo, branch) = pushed_once(&theirs, &bare);
+
+        let mine = Scratch::new("pull-unborn-mine");
+        git2::Repository::init(mine.path()).unwrap();
+        remote_set(mine.path(), "origin", &bare.path().display().to_string()).unwrap();
+
+        let pulled = pull(mine.path(), "origin", &branch).unwrap();
+
+        assert!(matches!(pulled, Pulled::Started { .. }), "{pulled:?}");
+        assert!(mine.path().join("a.txt").exists());
+    }
+
+    #[test]
+    fn a_pull_that_would_merge_is_refused_and_changes_nothing() {
+        let bare = Scratch::new("pull-diverge-bare");
+        let theirs = Scratch::new("pull-diverge-theirs");
+        let (repo, branch) = pushed_once(&theirs, &bare);
+
+        // Mine takes the first commit, then both sides move.
+        let mine = Scratch::new("pull-diverge-mine");
+        let here = git2::Repository::init(mine.path()).unwrap();
+        remote_set(mine.path(), "origin", &bare.path().display().to_string()).unwrap();
+        pull(mine.path(), "origin", &branch).unwrap();
+        commit_a_file(&here, "mine.txt", "mine");
+        let unmoved = here.head().unwrap().peel_to_commit().unwrap().id();
+
+        commit_a_file(&repo, "theirs.txt", "theirs");
+        push(theirs.path(), "origin", &branch).unwrap();
+
+        let Err(why) = pull(mine.path(), "origin", &branch) else {
+            panic!("a pull that needed a merge went ahead")
+        };
+        assert!(matches!(why, Error::WouldMerge { .. }), "{why}");
+        assert_eq!(
+            unmoved,
+            here.head().unwrap().peel_to_commit().unwrap().id(),
+            "a refused pull moved the branch anyway"
+        );
+        assert!(
+            !mine.path().join("theirs.txt").exists(),
+            "a refused pull wrote their file into the tree"
+        );
     }
 }
