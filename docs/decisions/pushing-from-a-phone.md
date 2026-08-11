@@ -36,14 +36,36 @@ That is the argument. Here is the bill, and it is not small.
 The feature graph confirms it. `git2/ssh` implies `libgit2-sys/ssh`, which depends on
 `libssh2-sys`, which depends on `openssl-sys` on every target but Windows. So SSH means
 cross-compiling **OpenSSL and libssh2 for `aarch64-linux-android`**, through
-`vendored-openssl`, into a shared object that is 4.6M today. HTTPS would have cost OpenSSL
-too, so the marginal cost of choosing SSH over a token is libssh2 and the host-key policy
-below; the shared cost is OpenSSL either way.
+`vendored-openssl`. HTTPS would have cost OpenSSL too, so the marginal cost of choosing SSH
+over a token is libssh2 and the host-key policy below; the shared cost is OpenSSL either
+way.
 
-**That build is unproven and it is allowed to fail.** It is measured before anything
-depends on it, in the shape #472 established: a build, a number, and this file corrected to
-whatever it says. If it cannot be made to work, the local half stands and the network half
-does not happen, and that is a better outcome than discovering it four changes later.
+**That build was allowed to fail, and it was measured before anything depended on it**, in
+the shape #472 established: a build, a number, and this file corrected to whatever it said.
+It said, on `aarch64-linux-android`:
+
+| | Before | After |
+|---|---|---|
+| `libwattrouter.so` | 4.6M | **8.4M** |
+| Page alignment | 16384 | 16384 |
+| `Java_com_getlora_wattrouter*` | 14 | 14 |
+| `wattrouter_*` | 0 | 0 |
+
+3.8M is what a transport costs on a phone, and it is the whole of the cost. Nothing else
+moved.
+
+One thing had to be told rather than guessed, and it is the kind of thing that would have
+read as "the build does not work". OpenSSL is built by its own Makefile rather than by
+`cc-rs`, so it calls `ranlib` by name, and left unset `openssl-src` guesses
+`aarch64-linux-android-ranlib`. NDK r23 and later ship **no** triple-prefixed binutils at
+all; `llvm-ranlib` is the whole of it. `scripts/build-android-core.sh` now exports
+`RANLIB_aarch64_linux_android` beside the `CC` and `AR` it already exported.
+
+That the transport is present rather than merely compiled is checked from Rust, in
+`git.rs`. Asking libgit2 to connect to an `ssh://` URL on a refused port distinguishes the
+two states: without a transport it rejects the scheme before touching the network, and with
+one it reaches the socket. That test is what stops the feature being switched back off by
+somebody tidying the manifest.
 
 An `https://` remote is refused with words rather than attempted. Turning `git2/https` on
 as well is nearly free once OpenSSL is in the build, so this is a scope line and not a

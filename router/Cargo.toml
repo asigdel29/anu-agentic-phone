@@ -47,10 +47,21 @@ fastembed = { version = "5.17.4", optional = true, default-features = false, fea
 # needs body streaming both ways, and axum's Body is hyper's, so the routing
 # convenience costs nothing.
 axum = "0.8"
-# default-features off drops https and ssh, which pull openssl and libssh2 and
-# are the half this does not do; see the decision record. What is left vendors
-# libgit2's C and builds it with cc, which is the toolchain the cross-build
-# already uses.
+# default-features off, then ssh back on by name. It was off entirely until
+# #644, on the grounds that the network half was not being done; that half is
+# decided now in docs/decisions/pushing-from-a-phone.md, and a key rather than a
+# token is what it decided.
+#
+# ssh pulls libssh2, which pulls openssl-sys on every target but Windows, and
+# there is no system OpenSSL on Android to link against. vendored-openssl is
+# what answers that: openssl-src builds it from source with the same NDK
+# toolchain the rest of the vendored C already uses. https stays off, and that
+# is a scope line rather than a permanent one, because it costs almost nothing
+# once OpenSSL is here.
+#
+# Measured on aarch64-linux-android: the shared object goes from 4.6M to 8.4M
+# and keeps its 16384-byte page alignment. That is the whole of what this costs
+# on a phone, and it is written here because the number is the argument.
 #
 # 0.20.4 rather than 0.19: below it, GHSA-j39j-6gw9-jw6h dereferences a Buf
 # whose pointer is null, which is undefined behaviour even for a zero-length
@@ -61,7 +72,10 @@ axum = "0.8"
 # Not 0.21, which is published. The bump above is the smallest one that clears
 # the advisory, and a version chosen for a reason is worth more than the newest
 # when what it vendors is a C library on three targets.
-git2 = { version = "0.21.0", optional = true, default-features = false }
+git2 = { version = "0.21.0", optional = true, default-features = false, features = [
+    "ssh",
+    "vendored-openssl",
+] }
 # Pinned to the version zeromem uses. Two versions means two libsqlite3-sys,
 # which is two copies of SQLite in one binary: it sometimes links, and when it
 # does the two hold separate page caches over one file. `bundled` for the same
