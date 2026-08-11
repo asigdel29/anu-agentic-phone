@@ -6,6 +6,8 @@
 //!   2026-08-09  A. Sigdel  Guarded the four entry points.
 //!   2026-08-10  A. Sigdel  Reads a `String` and answers one with #565. There is
 //!                          no Rust allocation crossing to free.
+//!   2026-08-11  A. Sigdel  Took in identify with #636, so a commit on a phone
+//!                          has somebody to sign it.
 //!
 //! These go through `core_git` rather than `crate::git` directly, so the envelope
 //! a model reads is built in one place. That used to be phrased as both phones
@@ -19,7 +21,7 @@
 //! handle, no `AutoCloseable`, no close. That ceremony would invent a lifetime
 //! which does not exist, and hand somebody a `close` to forget.
 //!
-//! What is left here is five translations and nothing else. `guarded` is
+//! What is left here is six translations and nothing else. `guarded` is
 //! `jni_answer.rs`'s, because the copy that used to be at the bottom of this file
 //! was identical to the one at the bottom of `jni_memory.rs` and neither applied
 //! the rules `jni.rs` states; see #468 and #482. `read` is `jni.rs`'s, for the
@@ -109,6 +111,38 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeAdd<'a>(
         handed(
             &mut env,
             crate::core_git::add(Path::new(&path), &paths_json),
+        )
+    })
+}
+
+/// Say who commits from here.
+///
+/// Three arguments rather than two, and the only entry point in this file that
+/// takes what a person typed rather than what a model wrote. It is called by
+/// the app when it sets a repository up, never from a tool: whose name goes on
+/// the work is not a decision to hand a model.
+///
+/// # Safety
+/// As [`Java_com_getlora_wattrouter_Repository_nativeHead`], for all three.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeIdentify<'a>(
+    mut env: JNIEnv<'a>,
+    _class: JClass<'a>,
+    path: JString<'a>,
+    name: JString<'a>,
+    email: JString<'a>,
+) -> jstring {
+    guarded(std::ptr::null_mut(), || {
+        let (Some(path), Some(name), Some(email)) = (
+            read(&mut env, &path),
+            read(&mut env, &name),
+            read(&mut env, &email),
+        ) else {
+            return std::ptr::null_mut();
+        };
+        handed(
+            &mut env,
+            crate::core_git::identify(Path::new(&path), &name, &email),
         )
     })
 }

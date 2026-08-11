@@ -10,13 +10,15 @@
 //!                          returned pointer, a null and a safety contract.
 //!                          #565 removed all three and left the prose claiming
 //!                          them, which the paragraph below already denies.
+//!   2026-08-11  A. Sigdel  Took in identify with #636.
 //!
 //! Contents
-//!   `init`    Make a directory into a repository.
-//!   `head`    Where `HEAD` points.
-//!   `status`  The working tree, against the index and the head.
-//!   `add`     Staging paths.
-//!   `commit`  Writing what is staged.
+//!   `init`      Make a directory into a repository.
+//!   `identify`  Say who commits from here.
+//!   `head`      Where `HEAD` points.
+//!   `status`    The working tree, against the index and the head.
+//!   `add`       Staging paths.
+//!   `commit`    Writing what is staged.
 //!
 //! Separate from `core.rs` because what these answer is a different shape, not
 //! because that file was full. A decision is three fields; a status is a list of
@@ -52,6 +54,16 @@ use std::path::Path;
 /// is in the middle of.
 pub(crate) fn init(path: &Path) -> String {
     rendered(git::init(path))
+}
+
+/// Say who commits from here, so that committing becomes possible at all.
+///
+/// # Returns
+/// `ok` with nothing under it, or `error` with the reason. Nothing under it
+/// because there is nothing to report that the caller did not just supply: this
+/// is the one entry point here whose whole result is that it worked.
+pub(crate) fn identify(path: &Path, name: &str, email: &str) -> String {
+    rendered(git::identify(path, name, email))
 }
 
 /// Where `HEAD` points: a branch, a commit, or a branch with no commits yet.
@@ -99,7 +111,9 @@ pub(crate) fn add(path: &Path, paths_json: &str) -> String {
 /// `ok` with the short id of the commit written, or `error`. Committing nothing
 /// is an error: libgit2 writes a commit whose tree matches its parent without
 /// complaint, and a model doing that in a loop believes it is making progress
-/// while producing a history of identical trees.
+/// while producing a history of identical trees. So is committing with no
+/// identity, which is every commit on a phone until [`identify`] has been
+/// called.
 pub(crate) fn commit(path: &Path, message: &str) -> String {
     rendered(git::commit(path, message))
 }

@@ -23,6 +23,10 @@ private class Tracked(private val answer: String?) : Worktree {
 
     override fun init() = answer.also { initialised = true }
 
+    // No tool reaches this, and the tests below are of tools, so nothing here
+    // records the call. It is on the interface because the app calls it.
+    override fun identify(name: String, email: String) = answer
+
     override fun head() = answer
 
     override fun status() = answer

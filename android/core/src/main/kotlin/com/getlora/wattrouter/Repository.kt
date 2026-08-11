@@ -12,9 +12,11 @@
 // the parity test in router/src/jni.rs reads this file too, which makes its
 // path part of the contract, the way Core.kt's is.
 //
-// Every call answers the envelope the C ABI already defines. Decoding it is the
-// tools' job, above this: what a model should be told about a failed commit is
-// a decision rather than a deserialisation.
+// Every call answers the envelope answer.rs defines, which is one shape for
+// everything crossing this boundary. Decoding it is the tools' job, above this:
+// what a model should be told about a failed commit is a decision rather than a
+// deserialisation. It used to say the C ABI defines it; #565 removed that and
+// #638 caught four other files still saying so.
 
 package com.getlora.wattrouter
 
@@ -53,8 +55,8 @@ internal fun encodePaths(paths: List<String>): String = paths.joinToString(
  * which are what to refuse and what to say, need no repository to exercise. The
  * same split `Calendars`, `Directory` and `Whereabouts` are on.
  *
- * Every call answers the envelope the C ABI defines, undecoded: what a model
- * should be told about a failed commit is a decision, made above this.
+ * Every call answers the core's envelope undecoded: what a model should be told
+ * about a failed commit is a decision, made above this.
  */
 interface Worktree {
     /**
@@ -65,6 +67,25 @@ interface Worktree {
      * already was one" reports having started work it is midway through.
      */
     fun init(): String?
+
+    /**
+     * Say who commits from here.
+     *
+     * Not on this interface because a tool needs it. No tool does, and none
+     * should: whose name goes on the work is a claim about a person, and a
+     * model choosing one is a model deciding whose. The app calls this when it
+     * sets the repository up, from what somebody typed once.
+     *
+     * Until it has been called, every [commit] on a phone fails. A phone has no
+     * `~/.gitconfig` and no shell to write one with, and the core reads the
+     * name and the email from the repository's own configuration.
+     *
+     * @param name and [email] as typed. Blank in either is refused rather than
+     *   written, because a blank reads back as configured and moves the failure
+     *   to the signature, where the message says nothing about which half is
+     *   missing.
+     */
+    fun identify(name: String, email: String): String?
 
     fun head(): String?
 
@@ -96,6 +117,10 @@ class Repository(val path: String) : Worktree {
      */
     override fun init(): String? = nativeInit(path)
 
+    /** Say who commits from here, writing it where git keeps it. */
+    override fun identify(name: String, email: String): String? =
+        nativeIdentify(path, name, email)
+
     /** Where `HEAD` points: a branch, a commit, or a branch with no commits
      *  yet. Answers the envelope, or null if the runtime could not allocate. */
     override fun head(): String? = nativeHead(path)
@@ -107,8 +132,8 @@ class Repository(val path: String) : Worktree {
      * Stage paths, and answer with the status that results.
      *
      * @param paths relative to the repository root, WHERE a directory stages
-     *   what is under it. Encoded as JSON here because that is the shape the C
-     *   ABI takes and the shape the model wrote. Turning it into an array on
+     *   what is under it. Encoded as JSON here because that is the shape the
+     *   core takes and the shape the model wrote. Turning it into an array on
      *   the way through would be a third shape for one value.
      */
     override fun add(paths: List<String>): String? = nativeAdd(path, encodePaths(paths))
@@ -129,6 +154,13 @@ class Repository(val path: String) : Worktree {
         }
 
         @JvmStatic private external fun nativeInit(path: String?): String?
+
+        @JvmStatic private external fun nativeIdentify(
+            path: String?,
+            name: String?,
+            email: String?,
+        ): String?
+
         @JvmStatic private external fun nativeHead(path: String?): String?
         @JvmStatic private external fun nativeStatus(path: String?): String?
         @JvmStatic private external fun nativeAdd(path: String?, pathsJson: String?): String?
