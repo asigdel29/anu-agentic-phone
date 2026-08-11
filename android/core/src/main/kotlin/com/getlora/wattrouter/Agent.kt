@@ -159,6 +159,14 @@ class Agent(
                 val result = tools.run(call)
                 emit(TurnEvent.Result(result))
                 committed += Message.tool(result.content, answering = call.id)
+
+                // After its own tool message rather than inside it, because a
+                // tool message cannot carry an image; Message.looked says why.
+                // Still inside the round, so it is committed with everything
+                // else or with nothing.
+                if (result.images.isNotEmpty()) {
+                    committed += Message.looked(call.name, result.images)
+                }
             }
             committed.forEach(conversation::append)
 

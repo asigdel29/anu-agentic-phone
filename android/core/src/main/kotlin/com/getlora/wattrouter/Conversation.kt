@@ -123,6 +123,31 @@ data class Message(
         /** What a tool produced, answering the call that asked for it. */
         fun tool(content: String, answering: String) =
             Message(Role.TOOL, content, toolCallId = answering)
+
+        /**
+         * What a tool captured, as a message that may carry it.
+         *
+         * A tool message cannot. An OpenAI-shaped `content` array is accepted
+         * on a user message and a tool message takes a string, so an image put
+         * on the tool result would be a request the provider refuses on every
+         * turn that captured anything: a feature that works against the stub
+         * server and fails against the thing it ships to.
+         *
+         * That is the whole reason this exists and is not simply an argument to
+         * [tool]. Nothing here has been able to ask the provider which it
+         * accepts, because the account has no credit, so this takes the shape
+         * the specification allows rather than the shape that reads better.
+         *
+         * It is attributed rather than anonymous. A user message appearing in a
+         * transcript that the person did not send is a lie about who said what;
+         * one saying which tool produced it is a caption.
+         *
+         * @param from the tool that captured it, as the model called it.
+         * @param images WHERE it is non-empty, since a caption with nothing
+         *   under it is a message that says a picture is here and has none.
+         */
+        fun looked(from: String, images: List<Image>) =
+            Message(Role.USER, "$from produced this:", images = images)
     }
 
     /** As the provider expects it. Absent keys rather than empty ones. */
