@@ -59,6 +59,13 @@ class Signed(private val worktree: Worktree, private val who: () -> Who?) : Work
 
     override fun add(paths: List<String>): String? = worktree.add(paths)
 
+    // Neither writes a commit, so neither needs somebody to sign one. Passing
+    // them through unchanged is the decision rather than an oversight: the one
+    // thing this class does is put an identity in front of `commit`.
+    override fun remoteSet(name: String, url: String): String? = worktree.remoteSet(name, url)
+
+    override fun fetch(name: String): String? = worktree.fetch(name)
+
     /**
      * Say who, then commit.
      *
