@@ -35,6 +35,12 @@ private class Order : Worktree {
         "".also { calls += "remoteSet $name $url" }
 
     override fun fetch(name: String) = "".also { calls += "fetch $name" }
+
+    override fun push(remote: String, branch: String) =
+        "".also { calls += "push $remote $branch" }
+
+    override fun pull(remote: String, branch: String) =
+        "".also { calls += "pull $remote $branch" }
 }
 
 class SignedTest {

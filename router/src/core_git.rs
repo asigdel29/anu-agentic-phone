@@ -12,6 +12,7 @@
 //!                          them, which the paragraph below already denies.
 //!   2026-08-11  A. Sigdel  Took in identify with #636.
 //!   2026-08-12  A. Sigdel  Took in the first two network calls with #668.
+//!   2026-08-12  A. Sigdel  Took in the two that can lose work, with #671.
 //!
 //! Contents
 //!   `init`      Make a directory into a repository.
@@ -22,6 +23,8 @@
 //!   `commit`    Writing what is staged.
 //!   `remote_set` Where a repository sends and receives.
 //!   `fetch`     Bringing back what a remote has, merging nothing.
+//!   `push`      Sending a branch, and refusing to overwrite anybody.
+//!   `pull`      Fast-forwarding, or saying it cannot.
 //!
 //! Separate from `core.rs` because what these answer is a different shape, not
 //! because that file was full. A decision is three fields; a status is a list of
@@ -140,6 +143,31 @@ pub(crate) fn remote_set(path: &Path, name: &str, url: &str) -> String {
 /// rather than a failure and the caller has to read it as one.
 pub(crate) fn fetch(path: &Path, name: &str) -> String {
     rendered(git::fetch(path, name))
+}
+
+/// Send a branch to a remote, and refuse rather than overwrite.
+///
+/// # Returns
+/// `ok` with nothing under it, or `error` with the refusal. There is nothing to
+/// report on success that the caller did not supply, which is [`identify`]'s
+/// reasoning; on failure the refusal is the whole point, and the message for a
+/// non-fast-forward says what happened and offers nothing to try.
+///
+/// There is no `force` and no argument that could become one.
+pub(crate) fn push(path: &Path, remote: &str, branch: &str) -> String {
+    rendered(git::push(path, remote, branch))
+}
+
+/// Take what a remote has, if that can be done without merging.
+///
+/// # Returns
+/// `ok` with a `kind` of `already_here`, `fast_forwarded` or `started`, the last
+/// two carrying the commit. Three answers because a caller told only that it
+/// worked cannot tell whether anything arrived, and `started` is the ordinary
+/// case rather than an edge one: a repository made by `init_repository` and
+/// then pointed at a remote has no branch at all.
+pub(crate) fn pull(path: &Path, remote: &str, branch: &str) -> String {
+    rendered(git::pull(path, remote, branch))
 }
 
 #[cfg(test)]

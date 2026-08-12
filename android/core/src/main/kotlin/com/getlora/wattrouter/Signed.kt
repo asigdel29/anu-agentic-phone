@@ -66,6 +66,10 @@ class Signed(private val worktree: Worktree, private val who: () -> Who?) : Work
 
     override fun fetch(name: String): String? = worktree.fetch(name)
 
+    override fun push(remote: String, branch: String): String? = worktree.push(remote, branch)
+
+    override fun pull(remote: String, branch: String): String? = worktree.pull(remote, branch)
+
     /**
      * Say who, then commit.
      *

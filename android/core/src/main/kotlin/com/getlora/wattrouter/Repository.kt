@@ -3,6 +3,7 @@
 // History
 //   2026-08-09  A. Sigdel  Created.
 //   2026-08-12  A. Sigdel  Reaches a remote, so the work has somewhere to go.
+//   2026-08-12  A. Sigdel  Sends and takes, with the two refusals that matter.
 //
 // Deliberately not Memory.kt's shape. A repository is a path rather than a
 // handle: git::open runs inside every call on the native side, so there is
@@ -120,6 +121,30 @@ interface Worktree {
      * network call that cannot lose anything.
      */
     fun fetch(name: String): String?
+
+    /**
+     * Send a branch to a remote, and refuse rather than overwrite.
+     *
+     * There is no force and no argument that could become one. A remote that
+     * refuses the reference has work this repository does not, which is not a
+     * transient failure and not something to retry: the answer says what
+     * happened and whoever is holding the phone decides whose work survives.
+     * `docs/decisions/pushing-from-a-phone.md` argues that at length.
+     */
+    fun push(remote: String, branch: String): String?
+
+    /**
+     * Take what a remote has, if that can be done without merging.
+     *
+     * Fast-forward only. A merge needs conflict resolution, that needs a diff
+     * surface, and there is none anywhere in this product; a conflicted index
+     * on a phone with no way to look at it is worse than being told no.
+     *
+     * Three answers: already here, fast-forwarded, or started. The last is the
+     * ordinary case rather than an edge one, because a repository made by
+     * `init_repository` and then pointed at a remote has no branch at all.
+     */
+    fun pull(remote: String, branch: String): String?
 }
 
 /**
@@ -177,6 +202,12 @@ class Repository(val path: String) : Worktree {
     /** Bring back what a remote has, and answer with what moved. */
     override fun fetch(name: String): String? = nativeFetch(path, name)
 
+    /** Send a branch, and answer with the refusal if there is one. */
+    override fun push(remote: String, branch: String): String? = nativePush(path, remote, branch)
+
+    /** Fast-forward to what the remote has, or say why that cannot be done. */
+    override fun pull(remote: String, branch: String): String? = nativePull(path, remote, branch)
+
     private companion object {
         init {
             // The same library Core loads. Loading it twice in a process is a
@@ -205,5 +236,17 @@ class Repository(val path: String) : Worktree {
         ): String?
 
         @JvmStatic private external fun nativeFetch(path: String?, name: String?): String?
+
+        @JvmStatic private external fun nativePush(
+            path: String?,
+            remote: String?,
+            branch: String?,
+        ): String?
+
+        @JvmStatic private external fun nativePull(
+            path: String?,
+            remote: String?,
+            branch: String?,
+        ): String?
     }
 }
