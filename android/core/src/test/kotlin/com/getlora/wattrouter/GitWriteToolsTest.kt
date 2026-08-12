@@ -34,6 +34,12 @@ private class Tracked(private val answer: String?) : Worktree {
     override fun add(paths: List<String>) = answer.also { staged = paths }
 
     override fun commit(message: String) = answer.also { this.message = message }
+
+    // On the interface for the app's sake, like identify: no tool reaches
+    // either, so neither records the call.
+    override fun remoteSet(name: String, url: String) = answer
+
+    override fun fetch(name: String) = answer
 }
 
 class GitWriteToolsTest {

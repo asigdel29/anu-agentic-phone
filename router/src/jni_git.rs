@@ -8,6 +8,8 @@
 //!                          no Rust allocation crossing to free.
 //!   2026-08-11  A. Sigdel  Took in identify with #636, so a commit on a phone
 //!                          has somebody to sign it.
+//!   2026-08-12  A. Sigdel  Took in the first two network calls with #668, so
+//!                          the work has somewhere to go.
 //!
 //! These go through `core_git` rather than `crate::git` directly, so the envelope
 //! a model reads is built in one place. That used to be phrased as both phones
@@ -21,7 +23,7 @@
 //! handle, no `AutoCloseable`, no close. That ceremony would invent a lifetime
 //! which does not exist, and hand somebody a `close` to forget.
 //!
-//! What is left here is six translations and nothing else. `guarded` is
+//! What is left here is eight translations and nothing else. `guarded` is
 //! `jni_answer.rs`'s, because the copy that used to be at the bottom of this file
 //! was identical to the one at the bottom of `jni_memory.rs` and neither applied
 //! the rules `jni.rs` states; see #468 and #482. `read` is `jni.rs`'s, for the
@@ -166,5 +168,61 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeCommit<'a>(
             &mut env,
             crate::core_git::commit(Path::new(&path), &message),
         )
+    })
+}
+
+/// Point a remote somewhere, and say what that changed.
+///
+/// # Safety
+/// Called from Kotlin through `Repository.remoteSet`, which passes three
+/// strings it owns.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeRemoteSet<'a>(
+    mut env: JNIEnv<'a>,
+    _class: JClass<'a>,
+    path: JString<'a>,
+    name: JString<'a>,
+    url: JString<'a>,
+) -> jstring {
+    guarded(std::ptr::null_mut(), || {
+        // All three before any of them is used, so a null or a string that is
+        // not UTF-8 is refused rather than half applied. `identify` reads its
+        // three the same way and for the same reason.
+        let Some(path) = read(&mut env, &path) else {
+            return std::ptr::null_mut();
+        };
+        let Some(name) = read(&mut env, &name) else {
+            return std::ptr::null_mut();
+        };
+        let Some(url) = read(&mut env, &url) else {
+            return std::ptr::null_mut();
+        };
+        handed(
+            &mut env,
+            crate::core_git::remote_set(Path::new(&path), &name, &url),
+        )
+    })
+}
+
+/// Bring back what a remote has, merging nothing.
+///
+/// # Safety
+/// Called from Kotlin through `Repository.fetch`, which passes two strings it
+/// owns.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeFetch<'a>(
+    mut env: JNIEnv<'a>,
+    _class: JClass<'a>,
+    path: JString<'a>,
+    name: JString<'a>,
+) -> jstring {
+    guarded(std::ptr::null_mut(), || {
+        let Some(path) = read(&mut env, &path) else {
+            return std::ptr::null_mut();
+        };
+        let Some(name) = read(&mut env, &name) else {
+            return std::ptr::null_mut();
+        };
+        handed(&mut env, crate::core_git::fetch(Path::new(&path), &name))
     })
 }

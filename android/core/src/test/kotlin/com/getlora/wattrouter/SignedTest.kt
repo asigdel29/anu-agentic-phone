@@ -30,6 +30,11 @@ private class Order : Worktree {
 
     override fun commit(message: String) =
         """{"ok":"abc1234"}""".also { calls += "commit $message" }
+
+    override fun remoteSet(name: String, url: String) =
+        "".also { calls += "remoteSet $name $url" }
+
+    override fun fetch(name: String) = "".also { calls += "fetch $name" }
 }
 
 class SignedTest {

@@ -2,6 +2,7 @@
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
+//   2026-08-12  A. Sigdel  Reaches a remote, so the work has somewhere to go.
 //
 // Deliberately not Memory.kt's shape. A repository is a path rather than a
 // handle: git::open runs inside every call on the native side, so there is
@@ -94,6 +95,31 @@ interface Worktree {
     fun add(paths: List<String>): String?
 
     fun commit(message: String): String?
+
+    /**
+     * Point a remote somewhere, and say what that changed.
+     *
+     * Three answers rather than one success: added, moved, or unchanged. A
+     * caller told only that it worked cannot tell whether it has just changed
+     * where somebody's work goes, and the moved case carries the URL it used to
+     * point at, because that is the only record of it left anywhere afterwards.
+     *
+     * An `https://` URL is refused with the ssh form named. This build links
+     * only the ssh transport; see `docs/decisions/pushing-from-a-phone.md`.
+     */
+    fun remoteSet(name: String, url: String): String?
+
+    /**
+     * Bring back what a remote has, merging nothing.
+     *
+     * Answers the reference names that moved, and an empty list when the remote
+     * had nothing this repository did not already have. That is a state rather
+     * than a failure and reads as one.
+     *
+     * Nothing in the working tree changes, which is what makes this the one
+     * network call that cannot lose anything.
+     */
+    fun fetch(name: String): String?
 }
 
 /**
@@ -145,6 +171,12 @@ class Repository(val path: String) : Worktree {
      */
     override fun commit(message: String): String? = nativeCommit(path, message)
 
+    /** Point a remote somewhere, and say whether that added or moved one. */
+    override fun remoteSet(name: String, url: String): String? = nativeRemoteSet(path, name, url)
+
+    /** Bring back what a remote has, and answer with what moved. */
+    override fun fetch(name: String): String? = nativeFetch(path, name)
+
     private companion object {
         init {
             // The same library Core loads. Loading it twice in a process is a
@@ -165,5 +197,13 @@ class Repository(val path: String) : Worktree {
         @JvmStatic private external fun nativeStatus(path: String?): String?
         @JvmStatic private external fun nativeAdd(path: String?, pathsJson: String?): String?
         @JvmStatic private external fun nativeCommit(path: String?, message: String?): String?
+
+        @JvmStatic private external fun nativeRemoteSet(
+            path: String?,
+            name: String?,
+            url: String?,
+        ): String?
+
+        @JvmStatic private external fun nativeFetch(path: String?, name: String?): String?
     }
 }
