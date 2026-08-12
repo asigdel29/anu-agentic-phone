@@ -2,6 +2,8 @@
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
+//   2026-08-11  A. Sigdel  Press to talk, into the field rather than into the
+//                          send it would otherwise be, #659.
 //
 // A `when` over five row types and nothing else. The fold in Transcript.kt
 // exists so this stays that simple: every question about whether a fragment
@@ -11,6 +13,10 @@
 // Keyed on Row.id, which is why those ids come from a counter. A LazyColumn
 // keyed on position re-creates every item below an insert, and with a row that
 // grows a character at a time that reads as the whole conversation flickering.
+//
+// The microphone writes into the field and nothing else, which is the one
+// decision in this file that is not layout. `spokenInto` below is where it is
+// made, and #659 is where it was argued.
 
 package com.getlora.wattrouter.app
 
@@ -32,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,8 +47,10 @@ import androidx.compose.ui.unit.dp
 import com.getlora.wattrouter.Acted
 import com.getlora.wattrouter.Autonomy
 import com.getlora.wattrouter.Decision
+import com.getlora.wattrouter.Heard
 import com.getlora.wattrouter.Row
 import com.getlora.wattrouter.Who
+import kotlinx.coroutines.launch
 
 /**
  * The conversation.
@@ -80,8 +89,23 @@ fun ChatScreen(
     onInterrupt: () -> Unit,
     onMode: (Autonomy) -> Unit,
     onWho: (Who?) -> Unit,
+    /**
+     * Listen once, and answer with what was said or why nothing was.
+     *
+     * Suspends for as long as somebody speaks, so the button it is behind
+     * refuses a second press while one is in flight: two calls must not overlap.
+     */
+    onListen: suspend () -> Heard,
 ) {
     var typed by remember { mutableStateOf("") }
+
+    // Both belong to the microphone button and to nothing else, so they live
+    // beside it. `typed` stays here for the same reason: hoisting a field's
+    // contents into the Activity so that one caller can write to it once would
+    // put the composer's state two files from the composer.
+    var listening by remember { mutableStateOf(false) }
+    var unheard by remember { mutableStateOf<String?>(null) }
+    val speaking = rememberCoroutineScope()
     val scroll = rememberLazyListState()
 
     // Follow the bottom when the reader is already at it, and leave them alone
@@ -118,6 +142,18 @@ fun ChatScreen(
         // often read of the two, and this is a line most people never act on.
         IdentityRow(who, onWho)
 
+        // Why the last press produced nothing, until the next one. Heard.Silence
+        // carries a whole sentence for the person who spoke, and a microphone
+        // that did nothing and said nothing is what it was written against.
+        unheard?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+        }
+
         LayoutRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -129,6 +165,40 @@ fun ChatScreen(
                 placeholder = { Text("Ask something") },
                 modifier = Modifier.weight(1f),
             )
+
+            // Into the field, never into onSend, and that is the whole design.
+            // TurnDriver.send appends and starts the turn in one call, with no
+            // draft and no undo, so a mishearing that went straight there is an
+            // action before anybody read it, and in Auto mode one the agent
+            // then carries out. #601 names that as where this meets #595.
+            //
+            // Refuses a second press while one is open, because listen() holds
+            // the microphone until somebody stops speaking, and the label says
+            // which state it is in rather than leaving that to be guessed.
+            Button(
+                onClick = {
+                    unheard = null
+                    listening = true
+                    speaking.launch {
+                        try {
+                            when (val heard = onListen()) {
+                                is Heard.Words -> typed = spokenInto(typed, heard.said)
+                                is Heard.Silence -> unheard = heard.why
+                            }
+                        } finally {
+                            // In a finally, because a press that threw would
+                            // otherwise leave the button disabled for good: one
+                            // failure would become the failure of every press
+                            // after it, with nothing on screen saying why.
+                            listening = false
+                        }
+                    }
+                },
+                enabled = !listening,
+            ) {
+                Text(if (listening) "Listening" else "Speak")
+            }
+
             // One button, two jobs. A separate stop button would be dead most
             // of the time, and the two states are never both available.
             Button(
@@ -138,6 +208,7 @@ fun ChatScreen(
                     } else {
                         onSend(typed)
                         typed = ""
+                        unheard = null
                     }
                 },
             ) {
@@ -195,6 +266,21 @@ private fun RoutingPanel(decision: Decision) {
         modifier = Modifier.padding(bottom = 8.dp),
     )
 }
+
+/**
+ * What the field holds once a transcript arrives in it.
+ *
+ * Appended rather than substituted. The field may already hold something
+ * somebody typed, and losing it is the same class of loss the whole approach
+ * exists to avoid, only smaller: a press of the microphone should never be a
+ * way to delete a sentence.
+ *
+ * One space between the two, and none at either end. A transcript is handed
+ * back without surrounding space, an empty field must not produce a leading
+ * one, and a field ending in a space must not produce two.
+ */
+internal fun spokenInto(typed: String, said: String): String =
+    listOf(typed.trim(), said.trim()).filter { it.isNotEmpty() }.joinToString(" ")
 
 /** Lines of a tool's result shown before it is cut off. */
 private const val RESULT_LINES = 6
