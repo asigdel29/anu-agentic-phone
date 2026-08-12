@@ -14,14 +14,14 @@ diff to live in, and this is a statement about work that has not been done.
  9  MCP wired in     done, and it was written and tested long before
  4  Vision           done, and it was what changed the shape of a message
  5  Driving visuals  done, on the capture path 4 built
+10  Voice            the phone half is done; server transcription waits
  6  Write tools      dangerous before 3, which is why it is after it
 11  Terminal         the largest new surface, and it needs nothing from the server
-10  Voice            on-device capture; server transcription waits
  1 2 7 8             the day Railway is provisioned
 13  the fork         continues throughout, one property at a time
 ```
 
-Three things decide that sequence.
+Four things decide that sequence.
 
 **Four units are blocked outside this repository.** Units 1, 2, 7 and 8 all need a database,
 which needs Railway provisioned, which has not happened. They are grouped rather than
@@ -36,6 +36,11 @@ the list, which is why it went first. Units 6 and 11 are unblocked by it.
 string content, and `Inference` has no notion of an attachment. Anything that carries an image
 touches all three, so unit 4 goes before unit 5 rather than beside it.
 
+**Voice moved up because nothing gated its phone half.** A capability, a seam over the platform
+recognizer and a button wait on neither plan mode nor a shell, so unit 10 went before 6 and 11
+rather than after them. What is gated is its server half, which is why the row below reads half
+rather than done.
+
 ## The units
 
 | # | Unit | Issue | State |
@@ -49,7 +54,7 @@ touches all three, so unit 4 goes before unit 5 rather than beside it.
 | 7 | Conversations and memory on Postgres | [#599](https://github.com/asigdel29/anu-agentic-phone/issues/599) | Not started, zero code. Blocked with 1. |
 | 8 | Scheduler and background tasks | [#600](https://github.com/asigdel29/anu-agentic-phone/issues/600) | Not started, zero code. The server half is blocked with 1; the phone half is not. |
 | 9 | MCP into `ToolBox`, and a connections screen | [#596](https://github.com/asigdel29/anu-agentic-phone/issues/596) | Done. Servers are saved, asked at startup, and their tools folded in behind a `mcp_` prefix. |
-| 10 | Voice | [#601](https://github.com/asigdel29/anu-agentic-phone/issues/601) | Not started, zero code. Server transcription is blocked with 1. |
+| 10 | Voice | [#601](https://github.com/asigdel29/anu-agentic-phone/issues/601) | Half. A `MICROPHONE` capability, an on-device `Listening` seam, a press-to-talk control writing into the message field rather than into `send`, and a checklist row. No speaking back and no wake word. None of it has run on an emulator or a phone. Server transcription is blocked with 1. |
 | 11 | Terminal | [#602](https://github.com/asigdel29/anu-agentic-phone/issues/602) | Not started, zero code. Needs 3. |
 | 12 | Tag, removals, README | | Done. |
 | 13 | An agentic Android | [#603](https://github.com/asigdel29/anu-agentic-phone/issues/603) | Recorded, then built one property at a time. Runs alongside everything above. |

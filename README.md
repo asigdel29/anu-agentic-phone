@@ -95,9 +95,16 @@ Plan says what it is about to do, waits for that to be approved once, and then r
 ([#595](../../issues/595)). Ask confirms every action before it happens, over the app being
 driven, and the question is one the model cannot answer ([#452](../../issues/452)).
 
-**Planned and unbuilt:** a model running on the device itself, voice, scheduled background
-tasks, and a terminal. None of those exist; they are named here so the list above can be read as
-complete, and [the roadmap](docs/roadmap.md) says what order they are in.
+**You can speak instead of typing.** Press the button beside the message field and what you say
+is recognised on the device and put *in the field*, where you send it yourself. A mishearing
+is a word you edit rather than an instruction the agent has already carried out. No audio leaves
+the phone, there is no wake word, and it adds no tool to the table above: a microphone is a
+control you press, not something the model can call. Speaking the answer back is not built
+([#601](../../issues/601)).
+
+**Planned and unbuilt:** a model running on the device itself, speaking answers back, scheduled
+background tasks, and a terminal. None of those exist; they are named here so the list above can
+be read as complete, and [the roadmap](docs/roadmap.md) says what order they are in.
 
 ## Routing
 

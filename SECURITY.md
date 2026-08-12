@@ -140,6 +140,18 @@ about what it does at runtime: no node text to the system log at any level, no s
 disk including the application's own cache, nothing in a crash breadcrumb. The failure that rule
 exists to prevent is somebody enabling verbose logging two years from now.
 
+**The microphone adds nothing to that list.** Recognition happens on the phone, because the code
+calls `createOnDeviceSpeechRecognizer` rather than the ordinary factory. The ordinary one binds
+whichever service holds `RecognitionService`, which on most phones recognises over somebody's
+network; the on-device one matches here or answers an error, so no audio is sent anywhere. The
+transcript is put in the message field and reaches the model only when you send it, exactly as
+typed text does.
+
+The microphone is open only while you have asked to be listened to. There is no wake word and
+nothing here listens on its own. Server-side transcription would change this paragraph, which is
+the reason it is not being added quietly: it is deferred with the server work rather than
+treated as an implementation detail of a button that already exists.
+
 ### Credentials
 
 One: `NEURALWATT_API_KEY`.
@@ -186,3 +198,8 @@ What the emulator has settled is narrower than it sounds and worth naming: the r
 loads its native library under R8, a turn reaches the provider, the tool loop drives another
 application, and the overlay reaches the display. What it cannot settle is a real screen, a
 real calendar, and a person deciding whether they are comfortable.
+
+The microphone is narrower again, and has had less than the rest of this document. Nothing about
+it has run on an emulator or a phone: it was checked by a suite on the host and by reading the
+code. The claim that no audio leaves the device is a claim about which factory that code calls,
+which is the kind a reader can check for themselves and is not the kind anybody has watched.
