@@ -139,17 +139,49 @@ the phone-driving work in #233 does not need one of these to survive.
 Since API 29 an app cannot `exec` a file it wrote into its own data directory. W^X is
 enforced, and this is the single fact that decides how a terminal is built.
 
-The routes that remain:
+**The paragraph that used to follow this one drew the wrong conclusion from it, and #666
+measured the difference.** It read the constraint as deciding whether an app can run anything,
+and picked shipping executables under `jniLibs` on those grounds. The constraint is narrower
+than that: `/system/bin/sh` is neither written by this app nor in its data directory.
 
+`ExecDeviceTest` asks both halves in the app's own process, on a device, at this `targetSdk`.
+Through `adb shell` the question would be about the shell user in another SELinux domain, which
+is not the question. It said:
+
+| | Result |
+|---|---|
+| `/system/bin/sh -c 'echo reached'` | exit 0, `reached` |
+| A file the app wrote into `filesDir`, made executable | `IOException: error=13, Permission denied` |
+| A working directory the app names | honoured |
+| `toybox` | exit 0, and it lists **214 applets** |
+
+So W^X decides **how the agent gets new tools, not whether it can run any**. Both halves matter
+and the change is worth nothing unless they differ, which they do: the system shell runs and a
+file this app wrote does not.
+
+What the platform already ships is not a token set. The 214 include `grep sed find diff patch
+tar xargs ps kill top ls cp mv stat head tail sort uniq wc cut tr sha256sum du df` and a `vi`.
+Most of what a terminal is for on a phone is there before anything is built.
+
+The routes, re-read against that:
+
+- **Use what is on the device.** `/system/bin/sh` and toybox, reached with an argv array. Ships
+  nothing, needs no build, and is the first useful terminal. It cannot install anything, and it
+  will not have a compiler, a language runtime, or the project's own test runner.
 - **Ship executables as native libraries.** Anything in `jniLibs` lands in the app's native
-  library directory, which is executable. It is not a general package manager, but it holds a
-  shell and a fixed set of tools.
-- **Target an older API.** What Termux does, and the reason it is not on Play.
-- **Do not exec at all.** Implement the useful subset in-process, which is what the file
-  tools already do on iOS.
+  library directory, which is executable. Still the answer for a tool the platform does not
+  have, and now an addition to a working terminal rather than a precondition for one.
+- **Target an older API.** What Termux does, and the reason it is not on Play. Nothing here
+  needs it, which is worth knowing: a `targetSdk` chosen to defeat a security boundary would sit
+  oddly beside `SECURITY.md`.
+- **Do not exec at all.** Implement the useful subset in-process. Honest and unable to run a
+  test, which is most of what a terminal is for.
 
-The first is the one that fits: the tools an agent needs are a known list, and a package
-manager the model can install arbitrary binaries with is a larger promise than a terminal.
+One property is fixed by this rather than discovered. **A command is passed as one element of an
+argv array and never concatenated into a command line.** Every shell injection in a tool of this
+kind is a string that was built rather than an array that was passed, and there is a public
+example to point at: an agent that built `am start -d $url` from a model's string runs both
+halves of `https://x.com; pm uninstall com.foo`.
 
 ## A browser is two features that are easy to conflate
 
