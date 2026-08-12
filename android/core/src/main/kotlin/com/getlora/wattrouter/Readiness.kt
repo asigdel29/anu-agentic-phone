@@ -2,6 +2,8 @@
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
+//   2026-08-11  A. Sigdel  The microphone, which is optional the way the
+//                          calendar is, #662.
 //
 // Contents
 //   Needed     One thing that has to be on.
@@ -9,11 +11,11 @@
 //
 // A checklist rather than a wizard, and that is the decision. Every one of
 // these can be revoked from Settings while the app is not looking (the
-// accessibility service, notifications, the calendar, contacts, location) so a
-// one-way flow that congratulates somebody once and never looks again is a flow
-// that lies the first time anything is switched off. Permission.kt refuses to
-// cache its own state for exactly this reason (#229); this is the same rule at
-// the scale of a screen.
+// accessibility service, notifications, the calendar, contacts, location, the
+// microphone) so a one-way flow that congratulates somebody once and never
+// looks again is a flow that lies the first time anything is switched off.
+// Permission.kt refuses to cache its own state for exactly this reason (#229);
+// this is the same rule at the scale of a screen.
 //
 // The restricted-settings step is the one that has no error attached anywhere
 // else. On a sideloaded build the accessibility toggle is visible, greyed, and
@@ -62,6 +64,7 @@ data class Readiness(val steps: List<Needed>) {
             calendar: Boolean,
             contacts: Boolean,
             location: Boolean,
+            microphone: Boolean,
             sideloaded: Boolean,
         ): Readiness = Readiness(
             buildList {
@@ -97,11 +100,17 @@ data class Readiness(val steps: List<Needed>) {
                 add(Needed("Read the calendar", CALENDAR, calendar))
                 add(Needed("Look somebody up in contacts", CONTACTS, contacts))
                 add(Needed("Say roughly where you are", LOCATION, location))
+                // Not "listen to the screen" or anything else carrying that
+                // word: MainActivity routes a row to the accessibility settings
+                // by looking for it, and this one belongs in the app's own.
+                add(Needed("Hear what you say instead of typing it", MICROPHONE, microphone))
             },
         )
 
         private const val CALENDAR = "Settings > Apps > WattRouter > Permissions > Calendar"
         private const val CONTACTS = "Settings > Apps > WattRouter > Permissions > Contacts"
         private const val LOCATION = "Settings > Apps > WattRouter > Permissions > Location"
+        private const val MICROPHONE =
+            "Settings > Apps > WattRouter > Permissions > Microphone"
     }
 }
