@@ -57,6 +57,59 @@ bearing, rather than a rewrite. A backend seam invented under pressure from a mo
 that was tested against two implementations before it shipped, which is one more than most
 get.
 
+## What survived the harness that produced it
+
+Everything above was measured on an iOS simulator against `mlx-swift`, and that tree is retired:
+there is no `ios/` directory, no `Inference` protocol and no `ScriptedInference`. So the paragraphs
+above describe machines this project no longer builds for, and this section is what is true of the
+one it does.
+
+**The sequencing argument survived, and it is the reason any of this is cheap.** The seam it forced
+is still a seam, one language along: `ChainWalk` walks `Step`s that distinguish a local backend from
+a remote one, `Backend::Local` is a type in `router/src/backend.rs`, and `router/src/config.rs`
+parses `local` from the environment. A `phone()` fixture in `chain.rs` asserts that a code-tier
+chain never leaves the device. All of that is chain *construction* and all of it works.
+
+**What does not exist is the executor, and it is one line.** `ChainWalk.kt`:
+
+```kotlin
+if (step.backend != Backend.REMOTE) {
+    last = InferenceError.Unavailable(step.model, "${step.backend} runs nothing here")
+    continue
+}
+```
+
+A non-remote step is counted as an attempt and skipped, deliberately, so the exhausted message stays
+honest about how many models were considered. `backend.rs` still calls `Local` "an MLX build in the
+app's own address space", which is the sentence above's tree rather than this one's.
+
+## The runtime that is already here, and is not this
+
+Worth stating because the crate does link an ONNX runtime and it would be reasonable to assume that
+is a start.
+
+`head.rs` scores a prompt's difficulty with a dot product and a sigmoid over a few kilobytes of
+JSON, and calls that "the entire model". `embed.rs`'s ONNX path is bge-small-en-v1.5 through
+fastembed: a 384-dimension sentence embedder for routing and memory retrieval, about 130 MB
+resident, and `scripts/build-android-core.sh` compiles it out of the phone build with
+`--no-default-features`. The board embeds and the phone hashes.
+
+There is no tokenizer, no KV cache, no decoding loop and no generative weights anywhere in
+`router/src/`. Generation on the phone is not a smaller version of what is here; it is a different
+thing that shares a crate.
+
+## What measuring it would cost now
+
+Named rather than estimated, because the last confident number in this file was wrong.
+
+The probe is the same shape and a different platform: the smallest possible case, on hardware,
+before any model choice. What is unknown is not tokens per second but whether the runtime
+initialises at all under the app's own address space, which is exactly what the simulator answered
+no to last time and for a reason specific to that simulator.
+
+It needs a phone, which makes it #510's checklist rather than a thing to plan around, and it needs
+a candidate runtime chosen for Android rather than inherited from the Swift attempt.
+
 ## The hedge that was wrong
 
 The plan listed simulator incompatibility as a risk to find out about early and rated the
