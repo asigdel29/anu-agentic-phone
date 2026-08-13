@@ -7,9 +7,9 @@
 // contract for everything written so far. A screenshot is not prose, and
 // encoding one as text would be handing a model base64 to read.
 //
-// The case to read first is the default. Twenty tools answer prose and none
+// The case to read first is the default. Twenty-two tools answer prose and none
 // of them was edited, because `answer` wraps `run` unless a tool says
-// otherwise. A change that made all twenty say `Answer("…")` would be a
+// otherwise. A change that made all twenty-two say `Answer("…")` would be a
 // change to every tool in the application for the sake of one.
 
 package com.getlora.wattrouter
@@ -54,7 +54,7 @@ class ToolAnswerTest {
 
     @Test
     fun aToolThatOnlyAnswersProseNeedsNoChanges() {
-        // The default, which is the whole reason twenty files are untouched.
+        // The default, which is the whole reason twenty-two files are untouched.
         runTest {
             val says = Says("done")
 
