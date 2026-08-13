@@ -111,7 +111,10 @@ and a command still running after a minute is stopped.
 
 **Planned and unbuilt:** a model running on the device itself, speaking answers back, and
 scheduled background tasks. None of those exist; they are named here so the list above can be
-read as complete, and [the roadmap](docs/roadmap.md) says what order they are in.
+read as complete. [The roadmap](docs/roadmap.md) says what order the second and third are in. The
+first has no order, because it has no design:
+[`inference-needs-a-phone.md`](docs/decisions/inference-needs-a-phone.md) says what exists, what
+the one line standing in for it does, and what measuring it would cost.
 
 ## Routing
 
