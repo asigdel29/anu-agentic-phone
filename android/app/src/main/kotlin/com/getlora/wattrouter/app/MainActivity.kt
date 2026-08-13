@@ -18,6 +18,8 @@
 //   2026-08-12  A. Sigdel  Runs one command, in the workspace the git tools
 //                          already use, #677.
 //   2026-08-13  A. Sigdel  Hands the repository a key to reach a host with, #467.
+//   2026-08-13  A. Sigdel  Offers the two network tools that cannot lose
+//                          anything, #467.
 //
 // The core and the driver are built once and held for the process. The core
 // owns a native pointer and a decision cache, and a second one is a second
@@ -63,6 +65,7 @@ import com.getlora.wattrouter.Capability
 import com.getlora.wattrouter.ChainWalk
 import com.getlora.wattrouter.ContactsTool
 import com.getlora.wattrouter.Credential
+import com.getlora.wattrouter.FetchTool
 import com.getlora.wattrouter.FindOnScreenTool
 import com.getlora.wattrouter.GitAddTool
 import com.getlora.wattrouter.GitCommitTool
@@ -98,6 +101,7 @@ import com.getlora.wattrouter.NeuralWattInference
 import com.getlora.wattrouter.Row
 import com.getlora.wattrouter.RunCommandTool
 import com.getlora.wattrouter.ScrollTool
+import com.getlora.wattrouter.SetRemoteTool
 import com.getlora.wattrouter.Startup
 import com.getlora.wattrouter.SystemShell
 import com.getlora.wattrouter.TapTool
@@ -391,6 +395,8 @@ class MainActivity : ComponentActivity() {
             GitInitTool(repository),
             GitAddTool(repository),
             GitCommitTool(repository),
+            SetRemoteTool(repository),
+            FetchTool(repository),
         )
     }
 
