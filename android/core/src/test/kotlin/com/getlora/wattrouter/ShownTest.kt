@@ -86,6 +86,21 @@ class ShownTest {
     }
 
     @Test
+    fun nobodyToAskIsNotTheSameAsSomebodySayingNo() = runTest {
+        // #678. Both stop the command and only one is about a person. A model
+        // told somebody refused when nobody was asked goes looking for what it
+        // did wrong in a command nobody saw, and what is wrong is a setting.
+        val shell = Running()
+
+        val said = Shown(shell, { Autonomy.ASK }, { Said.UNASKED }).run("git status")
+
+        assertEquals(emptyList<String>(), shell.ran)
+        val why = (said as Ran.Refused).why
+        assertTrue(why, why.contains("nobody could be asked"))
+        assertTrue(why, !why.contains("did not allow"))
+    }
+
+    @Test
     fun theRefusalNamesAPersonRatherThanARule() = runTest {
         // A model told a rule refused it looks for another way through, and a
         // shell has many. One told a person did not allow it stops and says so.
