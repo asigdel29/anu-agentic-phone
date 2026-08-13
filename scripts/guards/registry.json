@@ -18,8 +18,8 @@
         {
             "id": "pr-size",
             "script": "pr-size.sh",
-            "mode": "advisory",
-            "description": "The diff is at most 300 lines, excluding lockfiles and vendored data. ADVISORY WHILE #620 LANDS: restore to hard immediately after, and see the pull request that demoted it for why one change could not be split."
+            "mode": "hard",
+            "description": "The diff is at most 300 lines, excluding lockfiles and vendored data."
         },
         {
             "id": "slopgate",
