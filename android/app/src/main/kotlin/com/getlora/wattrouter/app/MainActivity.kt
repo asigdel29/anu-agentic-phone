@@ -15,6 +15,8 @@
 //                          computing it, now that it is about to have a second
 //                          reader.
 //   2026-08-11  A. Sigdel  Listens when the person asks it to, #659.
+//   2026-08-12  A. Sigdel  Runs one command, in the workspace the git tools
+//                          already use, #677.
 //
 // The core and the driver are built once and held for the process. The core
 // owns a native pointer and a decision cache, and a second one is a second
@@ -87,11 +89,14 @@ import com.getlora.wattrouter.Replay
 import com.getlora.wattrouter.RecallTool
 import com.getlora.wattrouter.RememberTool
 import com.getlora.wattrouter.Repository
+import com.getlora.wattrouter.Shown
 import com.getlora.wattrouter.Signed
 import com.getlora.wattrouter.NeuralWattInference
 import com.getlora.wattrouter.Row
+import com.getlora.wattrouter.RunCommandTool
 import com.getlora.wattrouter.ScrollTool
 import com.getlora.wattrouter.Startup
+import com.getlora.wattrouter.SystemShell
 import com.getlora.wattrouter.TapTool
 import com.getlora.wattrouter.ToolBox
 import com.getlora.wattrouter.TypeTextTool
@@ -268,7 +273,8 @@ class MainActivity : ComponentActivity() {
                     // makes the collision impossible anyway. Both, because one
                     // is a rule and the other is an ordering.
                     tools = ToolBox(
-                        remembering() + phone() + working() + driving() + connected.tools(),
+                        remembering() + phone() + working() + driving() + terminal() +
+                            connected.tools(),
                     ),
                     budget = budget,
                     // The mode is read here rather than captured, so somebody
@@ -364,6 +370,26 @@ class MainActivity : ComponentActivity() {
             GitCommitTool(repository),
         )
     }
+
+    /**
+     * The shell, in the same directory the repository is in.
+     *
+     * The [workspace] again rather than a second one, which is what #647 hoisted
+     * it for: a formatter the agent runs and a file it staged have to be the
+     * same file.
+     *
+     * [Shown] outermost, and reading the mode rather than holding one, for the
+     * reason [working] gives about identity. It is also the reason this is not
+     * a [Confirmed]: that seam is a [Phone], and it treats Plan as Auto because
+     * a round's tool names were approved once at the top of the turn. The name
+     * approved here is `run_command`, which is the same name for `git status`
+     * and for `rm -rf .`, so Plan asks.
+     */
+    private fun terminal(): List<Tool> = listOf(
+        RunCommandTool(
+            Shown(SystemShell(workspace.absolutePath), { modes.now }, AndroidConsent()),
+        ),
+    )
 
     /**
      * A share arriving while the app is already open.

@@ -18,12 +18,18 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Every command that reached a shell, in the order it arrived. */
-private class Running : Terminal {
+/**
+ * Every command that reached a shell, in the order it arrived.
+ *
+ * Not private, and it takes what it answers: `TerminalToolsTest` needs the same
+ * recording fake and each of [Ran]'s three shapes out of it, where this file
+ * needs only that something came back. One fake for the seam rather than two,
+ * which is [Decided]'s reasoning one layer along.
+ */
+internal class Running(private val answer: Ran = Ran.Finished(0, "did it", 0)) : Terminal {
     val ran = mutableListOf<String>()
 
-    override suspend fun run(command: String): Ran =
-        Ran.Finished(0, "did it", 0).also { ran += command }
+    override suspend fun run(command: String): Ran = answer.also { ran += command }
 }
 
 // Decided is AutonomyTest's, deliberately shared rather than copied: it is the

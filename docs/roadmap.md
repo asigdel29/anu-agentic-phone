@@ -50,12 +50,12 @@ rather than done.
 | 3 | Three autonomy modes | [#595](https://github.com/asigdel29/anu-agentic-phone/issues/595) | Done. All three are offered; Plan puts the first round to somebody once and then runs unattended. |
 | 4 | Vision: capture, and an image crossing the wire | [#439](https://github.com/asigdel29/anu-agentic-phone/issues/439) | Done. A message carries parts, a tool may answer one, and `look` captures a screen. |
 | 5 | Driving visuals: a border, and a replay card | [#598](https://github.com/asigdel29/anu-agentic-phone/issues/598) | Done. A frame while it drives, and the last six screens afterwards. |
-| 6 | Write-capable tools | [#393](https://github.com/asigdel29/anu-agentic-phone/issues/393), [#467](https://github.com/asigdel29/anu-agentic-phone/issues/467) | Not started. Needs 3. |
+| 6 | Write-capable tools | [#393](https://github.com/asigdel29/anu-agentic-phone/issues/393), [#467](https://github.com/asigdel29/anu-agentic-phone/issues/467) | Half. `init_repository`, `stage_paths` and `commit` are tools, signed by whoever the phone says it is. The network half is written in Rust and carried across JNI as far as `push` and `pull`, with no credential callback, no key and no tool over it yet. |
 | 7 | Conversations and memory on Postgres | [#599](https://github.com/asigdel29/anu-agentic-phone/issues/599) | Not started, zero code. Blocked with 1. |
 | 8 | Scheduler and background tasks | [#600](https://github.com/asigdel29/anu-agentic-phone/issues/600) | Not started, zero code. The server half is blocked with 1; the phone half is not. |
 | 9 | MCP into `ToolBox`, and a connections screen | [#596](https://github.com/asigdel29/anu-agentic-phone/issues/596) | Done. Servers are saved, asked at startup, and their tools folded in behind a `mcp_` prefix. |
 | 10 | Voice | [#601](https://github.com/asigdel29/anu-agentic-phone/issues/601) | Half. A `MICROPHONE` capability, an on-device `Listening` seam, a press-to-talk control writing into the message field rather than into `send`, and a checklist row. No speaking back and no wake word. None of it has run on an emulator or a phone. Server transcription is blocked with 1. |
-| 11 | Terminal | [#602](https://github.com/asigdel29/anu-agentic-phone/issues/602) | Not started, zero code. Needs 3. |
+| 11 | Terminal | [#602](https://github.com/asigdel29/anu-agentic-phone/issues/602) | Done. A `Terminal` seam over `/system/bin/sh` answering three outcomes, a `Shown` gate putting the command itself in front of somebody in Ask and in Plan, and `run_command` wired into the `ToolBox`. Its own surface, with scrollback of its own, is not built and waits on #641. |
 | 12 | Tag, removals, README | | Done. |
 | 13 | An agentic Android | [#603](https://github.com/asigdel29/anu-agentic-phone/issues/603) | Recorded, then built one property at a time. Runs alongside everything above. |
 
