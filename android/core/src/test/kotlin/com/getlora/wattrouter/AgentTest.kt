@@ -37,6 +37,14 @@ class AgentTest {
         }
     }
 
+    /** A tool that throws, which is what ToolBox marks as an error. */
+    private class Broken : Tool {
+        override val name = "broken"
+        override val purpose = "broken"
+        override val schema = """{"type":"object"}"""
+        override suspend fun run(arguments: String): String = error("no")
+    }
+
     private class Echo : Tool {
         override val name = "echo"
         override val purpose = "echo"
@@ -49,6 +57,8 @@ class AgentTest {
     }
 
     private fun call(id: String, args: String = "{}") = StreamEvent.Call(ToolCall(id, "echo", args))
+
+    private fun broken(id: String) = StreamEvent.Call(ToolCall(id, "broken", "{}"))
 
     @Test
     fun aTurnWithNoToolsIsOneRound() = runTest {
@@ -111,6 +121,33 @@ class AgentTest {
         Agent(routing(), ChainWalk(asking), ToolBox(listOf(echo))).send("go").toList()
 
         assertEquals(listOf("""{"n":1}""", """{"n":2}""", """{"n":3}"""), echo.order)
+    }
+
+    @Test
+    fun aRoundStopsAtTheFirstCallThatBroke() = runTest {
+        // #675's fourth. The calls in a round were decided together against one
+        // screen, so what follows a failure was planned for a phone that is no
+        // longer in that state: a tap after a failed open is a tap on whatever
+        // happened to be there.
+        val asking = Rounds(
+            listOf(
+                listOf(call("c1", """{"n":1}"""), broken("c2"), call("c3", """{"n":3}""")),
+                listOf(StreamEvent.Text("done")),
+            ),
+        )
+        val echo = Echo()
+
+        val events = Agent(routing(), ChainWalk(asking), ToolBox(listOf(echo, Broken())))
+            .send("go").toList()
+
+        // The second broke, so the third never ran.
+        assertEquals(listOf("""{"n":1}"""), echo.order)
+        // And it still answered, because a call with no reply is what this file
+        // opens by describing.
+        val results = events.filterIsInstance<TurnEvent.Result>().map { it.result }
+        assertEquals(listOf("c1", "c2", "c3"), results.map { it.id })
+        assertTrue(results[2].content, results[2].content.startsWith("this did not run"))
+        assertTrue(results[2].isError)
     }
 
     @Test
