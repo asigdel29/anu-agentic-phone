@@ -33,6 +33,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -64,6 +65,14 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun ChatScreen(
+    /**
+     * Open the settings.
+     *
+     * The one control here that goes somewhere else, and the reason #641 could
+     * be closed: before it, the connections screen was reachable exactly once
+     * and every setting since landed on this screen for want of anywhere else.
+     */
+    onSettings: () -> Unit,
     rows: List<Row>,
     /**
      * What the last turn did to the phone, oldest first.
@@ -124,6 +133,16 @@ fun ChatScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        // Above the transcript rather than below the composer: it is read once
+        // and then never again by most people, and everything under the
+        // transcript is read while somebody decides what to send.
+        LayoutRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            TextButton(onClick = onSettings) { Text("Settings") }
+        }
+
         routing?.let { RoutingPanel(it) }
 
         LazyColumn(
