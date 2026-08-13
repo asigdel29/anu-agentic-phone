@@ -63,6 +63,9 @@ enum class Where {
      * makes it right to come back to as well as to pass through.
      */
     Readiness,
+
+    /** The public half of the key this phone pushes with, and the hosts it pinned. */
+    SigningKey,
 }
 
 /**

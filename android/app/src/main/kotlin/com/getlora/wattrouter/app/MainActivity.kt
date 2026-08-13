@@ -21,6 +21,7 @@
 //   2026-08-13  A. Sigdel  Offers the two network tools that cannot lose
 //                          anything, #467.
 //   2026-08-13  A. Sigdel  Offers the two that can, #467.
+//   2026-08-13  A. Sigdel  Shows the key and the hosts it has met, #467.
 //
 // The core and the driver are built once and held for the process. The core
 // owns a native pointer and a decision cache, and a second one is a second
@@ -246,6 +247,13 @@ class MainActivity : ComponentActivity() {
                                     onDone = { where = Where.Settings },
                                 )
 
+                                Where.SigningKey -> SigningKeyScreen(
+                                    shown = reaching.shown,
+                                    hosts = met(),
+                                    onMake = { reaching.ensure() },
+                                    onDone = { where = Where.Settings },
+                                )
+
                                 Where.Settings -> SettingsScreen(
                                     destinations = places(connected),
                                     onGo = { where = it },
@@ -442,6 +450,15 @@ class MainActivity : ComponentActivity() {
             Where.Connections,
         ),
         Destination(
+            "Signing key",
+            if (reaching.isMade) {
+                "Made. Add it to a forge to push from this phone."
+            } else {
+                "None yet. One is made when you ask to see it."
+            },
+            Where.SigningKey,
+        ),
+        Destination(
             "Readiness",
             if (readiness(this).canDrive) {
                 "Everything the phone half needs is on."
@@ -451,6 +468,16 @@ class MainActivity : ComponentActivity() {
             Where.Readiness,
         ),
     )
+
+    /**
+     * Every host pinned, one line each, or empty before the first connection.
+     *
+     * Read rather than parsed. `git::trust` writes a host and a hash per line
+     * and this shows them; a second reader that understood the format would be
+     * a second place to keep in step with it, for a screen that only displays.
+     */
+    private fun met(): List<String> =
+        runCatching { pins.readLines().filter { it.isNotBlank() } }.getOrDefault(emptyList())
 
     /**
      * The shell, in the same directory the repository is in.
