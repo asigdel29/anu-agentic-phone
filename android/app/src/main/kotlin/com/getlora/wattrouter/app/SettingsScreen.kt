@@ -66,6 +66,9 @@ enum class Where {
 
     /** The public half of the key this phone pushes with, and the hosts it pinned. */
     SigningKey,
+
+    /** The provider key, and the only way back to the sign-in screen. */
+    Credential,
 }
 
 /**
