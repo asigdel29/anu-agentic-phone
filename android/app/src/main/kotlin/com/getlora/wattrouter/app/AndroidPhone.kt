@@ -48,6 +48,10 @@ class AndroidPhone(private val context: Context) : Phone {
         DrivingService.connected?.read()
     }
 
+    override suspend fun inFront(): String? = withContext(Dispatchers.Default) {
+        DrivingService.connected?.inFront()
+    }
+
     // Default rather than IO, as read is: the wait is the framework answering
     // on the executor it was handed, not a socket or a file.
     override suspend fun capture(): Image? = withContext(Dispatchers.Default) {

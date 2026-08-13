@@ -19,8 +19,11 @@ private class Static(
     private val reading: Reading?,
     private val why: String? = null,
     private val attached: Boolean = true,
+    private val inFront: String? = null,
 ) : Phone {
     override suspend fun barredNow() = why
+
+    override suspend fun inFront() = inFront
 
     override suspend fun attached() = attached
 
@@ -81,6 +84,23 @@ class ScreenToolsTest {
     }
 
     @Test
+    fun theHeaderSaysWhichAppAndWhen() = runTest {
+        // #675's second. A model that cannot see which application it is in
+        // re-opens applications it is already in, which costs a round and a
+        // launch, and a screen is often about time with no other source for
+        // what now is.
+        val said = ReadScreenTool(
+            Static(
+                Reading(generation, listOf(sighting(id = "send", role = "button", label = "Send", clickable = true))),
+                inFront = "com.google.android.gm",
+            ),
+            clock = { "14:32" },
+        ).run("{}")
+
+        assertTrue(said, said.startsWith("screen k3f9.4 in com.google.android.gm at 14:32\n"))
+    }
+
+    @Test
     fun aScreenIsItsIdAndOneLinePerThing() = runTest {
         val said = ReadScreenTool(
             Static(
@@ -92,8 +112,12 @@ class ScreenToolsTest {
                     ),
                 ),
             ),
+            clock = { "" },
         ).run("{}")
 
+        // No application and no clock, so the header is the id alone. Both are
+        // omitted rather than guessed at: "in an unknown app" is a sentence a
+        // model reasons about, and a missing clause is not.
         assertEquals(
             "screen k3f9.4\n" +
                 "tap       h:send|button|Send||0\n" +

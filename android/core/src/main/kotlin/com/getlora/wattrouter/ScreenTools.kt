@@ -103,6 +103,22 @@ interface Phone {
     suspend fun read(): Reading?
 
     /**
+     * Which application's window is in front, or null if that cannot be said.
+     *
+     * A package name rather than a label, for [Confirmed]'s reason turned to
+     * this purpose: an application calling itself Settings is exactly the case
+     * where the label is the thing lying.
+     *
+     * Defaulted to null so a fake that does not care implements nothing. Every
+     * decorator forwards it, because a decorator answering the default would
+     * report that nothing is in front of a phone that is driving an app.
+     *
+     * # Rely
+     * As [read], and cheaper: one window rather than a tree.
+     */
+    suspend fun inFront(): String? = null
+
+    /**
      * A picture of what is on screen.
      *
      * Separate from [read] rather than a field on a [Reading], because the two
@@ -307,7 +323,16 @@ fun decodeSeen(token: String?): Generation? {
 }
 
 /** Look at the screen. */
-class ReadScreenTool(private val phone: Phone) : Tool {
+class ReadScreenTool(
+    private val phone: Phone,
+    /**
+     * The device's own clock, as `HH:mm`.
+     *
+     * Injected so a test reads a fixed time rather than the machine's, which is
+     * what makes an assertion about the header possible at all.
+     */
+    private val clock: () -> String = { java.time.LocalTime.now().format(MINUTES) },
+) : Tool {
     override val name = "read_screen"
 
     override val purpose =
@@ -328,10 +353,14 @@ class ReadScreenTool(private val phone: Phone) : Tool {
         // then get from tap is a refusal it can plan around.
         phone.barredNow()?.let { return it }
         val reading = phone.read() ?: return unreadable(phone.attached())
-        return describe(reading)
+        return describe(reading, phone.inFront(), clock())
     }
 
     companion object {
+        /** Hours and minutes. Seconds on a screen reading are noise. */
+        private val MINUTES: java.time.format.DateTimeFormatter =
+            java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+
         /** Most lines shown. Past this a model is reading a layout dump. */
         const val LIMIT = 60
 
@@ -368,7 +397,7 @@ class ReadScreenTool(private val phone: Phone) : Tool {
             }
 
         /** What a reading looks like. */
-        fun describe(reading: Reading): String {
+        fun describe(reading: Reading, inFront: String? = null, at: String? = null): String {
             // Distinguishable from an unreadable screen, for the reason every tool here
             // has one: a model told "nothing" cannot tell an empty page from a
             // locked door.
@@ -381,8 +410,29 @@ class ReadScreenTool(private val phone: Phone) : Tool {
 
             val rest = reading.seen.size - LIMIT
             val more = if (rest > 0) "\nand $rest more not shown" else ""
-            return "screen ${encodeSeen(reading.generation)}\n" + lines.joinToString("\n") + more
+            return header(reading, inFront, at) + "\n" + lines.joinToString("\n") + more
         }
+
+        /**
+         * The line above the screen: which screen, which application, and when.
+         *
+         * #675's second. The id alone leaves a model unable to tell where it is,
+         * and one that cannot see which application it is in re-opens
+         * applications it is already in, which costs a round and a launch.
+         *
+         * The clock is here because a screen is often about time (a message
+         * sent "just now", a meeting "in an hour") and the model has no other
+         * source for what now is.
+         *
+         * Both are omitted rather than guessed at when absent. "in an unknown
+         * app" is a sentence a model reasons about; a missing clause is not.
+         */
+        private fun header(reading: Reading, inFront: String?, at: String?): String =
+            buildString {
+                append("screen ${encodeSeen(reading.generation)}")
+                inFront?.takeIf { it.isNotBlank() }?.let { append(" in $it") }
+                at?.takeIf { it.isNotBlank() }?.let { append(" at $it") }
+            }
 
         /**
          * What can be done with it.

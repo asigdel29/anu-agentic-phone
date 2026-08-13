@@ -462,6 +462,16 @@ class DrivingService : AccessibilityService() {
      * The keyguard is read now rather than remembered, because a phone locks while a
      * turn is running, which is the case this is for.
      */
+    /**
+     * Which application's window is in front, or null if none can be read.
+     *
+     * The same value [barredNow] already reads and does not surface. It goes to
+     * the model and nowhere else: how-the-agent-drives.md's rule is that what is
+     * on somebody's screen is not logged, and a package name is a thing about a
+     * person as much as a line of text is.
+     */
+    fun inFront(): String? = rootInActiveWindow?.packageName?.toString()
+
     fun barredNow(): Barred? = barred(
         packageName = rootInActiveWindow?.packageName?.toString(),
         activity = inFront,
