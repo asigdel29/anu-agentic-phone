@@ -3,6 +3,7 @@
 // History
 //   2026-08-09  A. Sigdel  Created, to measure a claim two decision records
 //                          made and neither had tested.
+//   2026-08-12  A. Sigdel  Stop polling once the window has been read, #572.
 //
 // Both records said FLAG_SECURE windows expose nothing through accessibility,
 // and one called that a feature. This asked the platform, and the answer was
@@ -90,9 +91,15 @@ class SecureScreenDeviceTest {
         // window is focused, which is indistinguishable here from the claim
         // being true. Waiting for the window is what makes the assertion mean
         // what it says.
+        //
+        // A `for` with a `break` rather than `repeat`, which is #572: inside
+        // `repeat` the early exit was `return@repeat`, and that leaves the
+        // lambda rather than the loop. Every poll ran, so the answer was
+        // whatever the *last* one saw, and the window going away after it was
+        // read turned a measurement into a failure naming three nodes.
         var seen = 0
         var found = 0
-        repeat(WAITS) {
+        for (attempt in 0 until WAITS) {
             val reading = service!!.read()
             if (reading != null) {
                 seen = reading.seen.size
@@ -100,7 +107,7 @@ class SecureScreenDeviceTest {
                     it.label?.contains(SecureActivity.SECRET) == true ||
                         it.handle.text?.contains(SecureActivity.SECRET) == true
                 }
-                if (found >= 1) return@repeat
+                if (found >= 1) break
             }
             Thread.sleep(PAUSE)
         }
