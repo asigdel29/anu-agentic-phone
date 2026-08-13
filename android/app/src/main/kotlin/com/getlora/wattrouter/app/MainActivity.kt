@@ -283,6 +283,12 @@ class MainActivity : ComponentActivity() {
                                     onDone = { where = Where.Settings },
                                 )
 
+                                Where.Turn -> TurnScreen(
+                                    modes,
+                                    signing,
+                                    onDone = { where = Where.Settings },
+                                )
+
                                 Where.Settings -> SettingsScreen(
                                     destinations = places(connected),
                                     onGo = { where = it },
@@ -293,8 +299,6 @@ class MainActivity : ComponentActivity() {
                                     Conversation(
                                         driverFor(now, credential, connected!!),
                                         handed,
-                                        modes,
-                                        signing,
                                         replay,
                                         ::heard,
                                         aloud,
@@ -500,6 +504,11 @@ class MainActivity : ComponentActivity() {
      * asks the platform. The screen draws rows.
      */
     private fun places(connected: List<Reached>?): List<Destination> = listOf(
+        Destination(
+            "A turn",
+            "What a send does, and who a commit says made it.",
+            Where.Turn,
+        ),
         Destination(
             "Connections",
             when (val servers = connected?.size) {
@@ -707,8 +716,6 @@ class MainActivity : ComponentActivity() {
 private fun Conversation(
     driver: TurnDriver,
     handed: MutableState<String?>,
-    modes: Modes,
-    signing: Signing,
     replay: Replay,
     /** One press of the microphone, permission and all. */
     listen: suspend () -> Heard,
@@ -717,11 +724,11 @@ private fun Conversation(
     /** The door #641 gave this application, and the only one on this screen. */
     onSettings: () -> Unit,
 ) {
-    // Held in composition as well as in the store, because a chip has to
+    // Held in composition as well as in the store, because the switch has to
     // repaint when it is tapped and the store is not observable. The store
-    // stays the truth: it is what the turn loop reads.
-    var mode by remember { mutableStateOf(modes.now) }
-    var who by remember { mutableStateOf(signing.who) }
+    // stays the truth: it is what the turn loop reads. The mode and the name
+    // were held here too until #712 moved both behind the settings door, where
+    // TurnScreen holds its own copy for the same reason.
     var reading by remember { mutableStateOf(aloud.on) }
 
     // Why the last answer was not read out, until the next turn. Spoken.Silence
@@ -795,19 +802,6 @@ private fun Conversation(
         replay = if (isRunning) emptyList() else replay.steps,
         isRunning = isRunning,
         routing = routing,
-        mode = mode,
-        who = who,
-        onMode = {
-            mode = it
-            modes.now = it
-        },
-        // Held in composition as well as in the store, for the reason the mode
-        // is: the line has to repaint when it is saved and the store is not
-        // observable. The store stays the truth, and Signed is what reads it.
-        onWho = {
-            who = it
-            signing.who = it
-        },
         onSend = { text ->
             // Asked at the first send rather than at launch: a permission
             // prompt before anybody has done anything is one people refuse.
