@@ -18,11 +18,15 @@
 // Every candidate this phone could reach is a guess at a person's name, and a
 // guess here is a fabricated author in a history that outlives the phone.
 //
-// On the conversation rather than behind a settings screen, which is Modes.kt's
-// argument, and here there is a second reason: the only other settings screen
-// this application has is reachable from the checklist and the checklist stops
-// appearing once the phone is ready, so a setting put beside it would be one
-// nobody could get back to. That route is a defect of its own and #641 has it.
+// It was on the conversation for Modes.kt's argument and for a second reason:
+// the only other settings screen this application had was reachable from the
+// checklist, and the checklist stops appearing once the phone is ready, so a
+// setting put beside it would be one nobody could get back to.
+//
+// Both are spent. #693 built a door and the second reason went with it; #712
+// moved this row behind that door, because three of the conversation's eight
+// things were settings and a screen where the conversation is the minority is
+// the accumulation #602 predicted. TurnScreen holds the argument.
 //
 // One line while it is set, because most people committing nothing should not
 // have to read about git every time they look at the screen. Unset it says so,

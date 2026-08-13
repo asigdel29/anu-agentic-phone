@@ -60,9 +60,12 @@ import kotlinx.coroutines.launch
  * @param onSend what the person typed. Blank text is the driver's to refuse,
  *   not this function's: one place deciding what counts as a message.
  * @param onInterrupt stop the turn in flight.
- * @param mode how involved this person wants to be. Above the field rather
- *   than behind a settings screen: it changes what the next send does, so it
- *   belongs where the next send is typed.
+ *
+ * What is no longer here is the point of #712. The mode chips and the identity
+ * row were above the field on Modes.kt's rule, that a setting belongs where it
+ * acts, and that rule is not wrong; it was outweighed. Three of this screen's
+ * eight things were settings and the conversation was the minority. They are
+ * behind the door now, and TurnScreen holds the argument.
  */
 @Composable
 fun ChatScreen(
@@ -85,20 +88,8 @@ fun ChatScreen(
     replay: List<Acted>,
     isRunning: Boolean,
     routing: Decision?,
-    mode: Autonomy,
-    /**
-     * Who a commit from this phone would say made it, or null while nobody has
-     * said.
-     *
-     * Here rather than behind a settings screen for [ModeRow]'s reason, and for
-     * a second one #641 records: the only other settings screen this
-     * application has can be reached exactly once.
-     */
-    who: Who?,
     onSend: (String) -> Unit,
     onInterrupt: () -> Unit,
-    onMode: (Autonomy) -> Unit,
-    onWho: (Who?) -> Unit,
     /**
      * Listen once, and answer with what was said or why nothing was.
      *
@@ -168,12 +159,6 @@ fun ChatScreen(
         }
 
         if (!isRunning) ReplayCard(replay)
-
-        ModeRow(mode, onMode)
-
-        // Under the modes rather than over them. What a send does is the more
-        // often read of the two, and this is a line most people never act on.
-        IdentityRow(who, onWho)
 
         // Why the last press produced nothing, until the next one. Heard.Silence
         // carries a whole sentence for the person who spoke, and a microphone
