@@ -1,0 +1,113 @@
+# notices.yml: regenerate THIRD-PARTY.md on the dependency bumps that stale it.
+#
+# History
+#   2026-08-13  A. Sigdel  Created with #569.
+#
+# scripts/notices.sh --check compares THIRD-PARTY.md with the dependency graph,
+# so any change to what the crate depends on makes that file stale by
+# definition. Dependabot edits Cargo.toml and Cargo.lock and nothing else, so
+# every dependency pull request it opens arrives red for a reason that has
+# nothing to do with whether the bump is good. #541 sat failing for eight hours
+# over one line of difference.
+#
+# A gate people learn to expect to be red is a gate that stops being read, which
+# is why this is not solved by making the check advisory: the file exists so the
+# licences this project ships under are stated accurately, and one allowed to
+# drift is wrong exactly when somebody needs it to be right.
+#
+# This workflow has write access to a branch, which is the cost and is worth
+# stating rather than burying. Four things bound it:
+#
+#   1. It runs for dependabot[bot] and nobody else.
+#   2. It refuses a head that is not a branch of this repository. Dependabot
+#      never opens from a fork, so this only ever fires if the trigger is
+#      reached some other way.
+#   3. It runs `scripts/notices.sh` and nothing else. That script is
+#      `cargo metadata` and `jq`: it resolves the graph and never compiles, so
+#      no build script from the bumped dependency executes here.
+#   4. It writes one generated file and pushes nothing else, which the diff
+#      check below enforces rather than trusts.
+#
+# pull_request_target rather than pull_request, because a pull_request run
+# raised by dependabot gets a read-only token and cannot push. That trigger runs
+# the base branch's copy of this file, so what executes is reviewed code even
+# when the branch it checks out is not.
+
+name: Notices
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "router/Cargo.toml"
+      - "router/Cargo.lock"
+
+permissions:
+  contents: read
+
+jobs:
+  regenerate:
+    name: regenerate the notices
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: >-
+      github.actor == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          # The token the push uses. Persisted on purpose, which is the one
+          # place this workflow's write access is actually spent.
+          persist-credentials: true
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: regenerate
+        run: bash scripts/notices.sh
+
+      # Nothing else may have changed. The script writes one file, and a run
+      # that produced anything besides it is a run to stop rather than to push:
+      # this is the check that keeps the write access narrow in fact rather than
+      # in intent.
+      - name: only the notices changed
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only)"
+          if [ -z "$changed" ]; then
+            echo "already current, nothing to push"
+            exit 0
+          fi
+          if [ "$changed" != "THIRD-PARTY.md" ]; then
+            echo "expected THIRD-PARTY.md alone, got:" >&2
+            echo "$changed" >&2
+            exit 1
+          fi
+
+      - name: commit it
+        env:
+          # Through the environment rather than interpolated into the script.
+          # actionlint caught this and it is right to: a branch name is
+          # attacker-controlled text, and a `${{ }}` in a shell line is
+          # substituted before the shell ever sees it, so a name containing a
+          # quote runs as a command. In the environment it is data.
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add THIRD-PARTY.md
+          git commit -m "Regenerate the notices for this bump
+
+          scripts/notices.sh --check compares THIRD-PARTY.md with the dependency
+          graph, and dependabot edits the manifests alone, so this file is stale
+          by definition on every bump. Regenerated here rather than by hand.
+
+          Refs #569."
+          git push origin "HEAD:$BRANCH"
