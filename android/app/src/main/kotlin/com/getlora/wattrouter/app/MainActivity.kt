@@ -103,6 +103,8 @@ import com.getlora.wattrouter.RememberTool
 import com.getlora.wattrouter.Repository
 import com.getlora.wattrouter.Shown
 import com.getlora.wattrouter.Signed
+import com.getlora.wattrouter.Speaking
+import com.getlora.wattrouter.Spoken
 import com.getlora.wattrouter.NeuralWattInference
 import com.getlora.wattrouter.Row
 import com.getlora.wattrouter.RunCommandTool
@@ -114,6 +116,7 @@ import com.getlora.wattrouter.TapTool
 import com.getlora.wattrouter.ToolBox
 import com.getlora.wattrouter.TypeTextTool
 import com.getlora.wattrouter.WaitForChangeTool
+import com.getlora.wattrouter.worthSaying
 import com.getlora.wattrouter.TurnDriver
 import com.getlora.wattrouter.routing
 
@@ -152,6 +155,16 @@ class MainActivity : ComponentActivity() {
      * reference to the Activity here would be one nothing needs.
      */
     private val listening by lazy { AndroidListening(applicationContext) }
+
+    /**
+     * The voice, and whether it is used, built once for the process as above.
+     *
+     * The engine itself is made and shut down per utterance inside
+     * [AndroidSpeaking]; what is held here is the conformance, which is a
+     * context and nothing else.
+     */
+    private val speaking by lazy { AndroidSpeaking(applicationContext) }
+    private val aloud by lazy { Aloud(applicationContext) }
 
     /**
      * Where the tools work, made if it is not there.
@@ -284,6 +297,8 @@ class MainActivity : ComponentActivity() {
                                         signing,
                                         replay,
                                         ::heard,
+                                        aloud,
+                                        speaking,
                                     ) { where = Where.Settings }
                                 }
                             }
@@ -697,6 +712,8 @@ private fun Conversation(
     replay: Replay,
     /** One press of the microphone, permission and all. */
     listen: suspend () -> Heard,
+    aloud: Aloud,
+    speaking: Speaking,
     /** The door #641 gave this application, and the only one on this screen. */
     onSettings: () -> Unit,
 ) {
@@ -705,6 +722,12 @@ private fun Conversation(
     // stays the truth: it is what the turn loop reads.
     var mode by remember { mutableStateOf(modes.now) }
     var who by remember { mutableStateOf(signing.who) }
+    var reading by remember { mutableStateOf(aloud.on) }
+
+    // Why the last answer was not read out, until the next turn. Spoken.Silence
+    // carries a whole sentence for the person, and a voice that did nothing and
+    // said nothing is what it was written against.
+    var unspoken by remember { mutableStateOf<String?>(null) }
     val rows by driver.rows.collectAsState()
     val isRunning by driver.isRunning.collectAsState()
     val routing by driver.routing.collectAsState()
@@ -750,6 +773,19 @@ private fun Conversation(
 
     val asking = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
+    // Spoken when a turn ends rather than as it streams. An answer read a
+    // fragment at a time is a phone stuttering, and worthSaying needs the
+    // finished transcript anyway: a turn that answered and then failed ends
+    // failed, and that is only knowable at the end.
+    //
+    // Keyed on isRunning alongside the service effect rather than inside it,
+    // because the two are different subjects: that one is a notification about
+    // work, this one is what the work said.
+    LaunchedEffect(isRunning) {
+        if (isRunning || !reading) return@LaunchedEffect
+        worthSaying(rows)?.let { unspoken = (speaking.say(it) as? Spoken.Silence)?.why }
+    }
+
     ChatScreen(
         onSettings = onSettings,
         rows = rows,
@@ -788,6 +824,13 @@ private fun Conversation(
         },
         onInterrupt = driver::interrupt,
         onListen = listen,
+        aloud = reading,
+        onAloud = {
+            reading = it
+            aloud.on = it
+            if (!it) unspoken = null
+        },
+        unspoken = unspoken,
     )
 }
 

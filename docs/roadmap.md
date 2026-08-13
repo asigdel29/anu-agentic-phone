@@ -14,7 +14,7 @@ diff to live in, and this is a statement about work that has not been done.
  9  MCP wired in     done, and it was written and tested long before
  4  Vision           done, and it was what changed the shape of a message
  5  Driving visuals  done, on the capture path 4 built
-10  Voice            the phone half is done; server transcription waits
+10  Voice            it listens and answers; server transcription waits
  6  Write tools      done, except that nothing has reached a real forge
 11  Terminal         done, except a surface of its own, which waited on a door
  1 2 7 8             the day Railway is provisioned
@@ -60,7 +60,7 @@ rather than done.
 | 7 | Conversations and memory on Postgres | [#599](https://github.com/asigdel29/anu-agentic-phone/issues/599) | Not started, zero code. Blocked with 1. |
 | 8 | Scheduler and background tasks | [#600](https://github.com/asigdel29/anu-agentic-phone/issues/600) | Not started, zero code. The server half is blocked with 1; the phone half is not. |
 | 9 | MCP into `ToolBox`, and a connections screen | [#596](https://github.com/asigdel29/anu-agentic-phone/issues/596) | Done. Servers are saved, asked at startup, and their tools folded in behind a `mcp_` prefix. |
-| 10 | Voice | [#601](https://github.com/asigdel29/anu-agentic-phone/issues/601) | Half. A `MICROPHONE` capability, an on-device `Listening` seam, a press-to-talk control writing into the message field rather than into `send`, and a checklist row. No speaking back and no wake word. None of it has run on an emulator or a phone. Server transcription is blocked with 1. |
+| 10 | Voice | [#601](https://github.com/asigdel29/anu-agentic-phone/issues/601) | Most. A `MICROPHONE` capability, an on-device `Listening` seam, a press-to-talk control writing into the message field rather than into `send`, and a checklist row. It reads an answer back when you ask it to, and never a tool's output. No wake word. None of it has run on an emulator or a phone. Server transcription is blocked with 1. |
 | 11 | Terminal | [#602](https://github.com/asigdel29/anu-agentic-phone/issues/602) | Done. A `Terminal` seam over `/system/bin/sh` answering three outcomes, a `Shown` gate putting the command itself in front of somebody in Ask and in Plan, and `run_command` wired into the `ToolBox`. A command still writes into the transcript rather than a scrollback of its own; #641 built the door that would hold one. |
 | 12 | Tag, removals, README | | Done. |
 | 13 | An agentic Android | [#603](https://github.com/asigdel29/anu-agentic-phone/issues/603) | Recorded, then built one property at a time. Runs alongside everything above. |
