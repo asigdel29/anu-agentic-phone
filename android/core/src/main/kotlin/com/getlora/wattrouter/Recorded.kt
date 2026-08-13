@@ -36,6 +36,10 @@ class Recorded(private val phone: Phone, private val replay: Replay) : Phone {
 
     override suspend fun read(): Reading? = phone.read()
 
+    // Forwarded rather than left to the default, which is null: a decorator
+    // answering that would report nothing in front of a phone driving an app.
+    override suspend fun inFront(): String? = phone.inFront()
+
     override suspend fun capture(): Image? = phone.capture()
 
     override suspend fun apps(): List<Launchable>? = phone.apps()
