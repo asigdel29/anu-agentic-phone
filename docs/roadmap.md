@@ -15,8 +15,8 @@ diff to live in, and this is a statement about work that has not been done.
  4  Vision           done, and it was what changed the shape of a message
  5  Driving visuals  done, on the capture path 4 built
 10  Voice            the phone half is done; server transcription waits
- 6  Write tools      dangerous before 3, which is why it is after it
-11  Terminal         the largest new surface, and it needs nothing from the server
+ 6  Write tools      done, except that nothing has reached a real forge
+11  Terminal         done, except a surface of its own, which waited on a door
  1 2 7 8             the day Railway is provisioned
 13  the fork         continues throughout, one property at a time
 ```
@@ -30,7 +30,13 @@ interleaved because none of them can start.
 **Plan mode gated the two dangerous units, and it has landed.** Write-capable tools and a shell
 are both cases where per-action confirmation is either meaningless or unusable, and where acting
 unattended without having said what you intend is worse. Unit 3 was also the smallest piece on
-the list, which is why it went first. Units 6 and 11 are unblocked by it.
+the list, which is why it went first. Units 6 and 11 are unblocked by it, and both have since
+landed: 6 through #467 and 11 through #602.
+
+It gated them and it did not cover the shell. `Plan.steps` is a list of tool *names*, and for
+every tool but one the name is the action; for a shell the argument is. That is #673, and the
+answer is a second gate at the `Terminal` seam where Plan asks per command, which is the one
+place in this application where the three modes are not three.
 
 **Vision changes the shape of a message.** `Tool.run` answers a `String`, `Conversation` builds
 string content, and `Inference` has no notion of an attachment. Anything that carries an image
@@ -50,12 +56,12 @@ rather than done.
 | 3 | Three autonomy modes | [#595](https://github.com/asigdel29/anu-agentic-phone/issues/595) | Done. All three are offered; Plan puts the first round to somebody once and then runs unattended. |
 | 4 | Vision: capture, and an image crossing the wire | [#439](https://github.com/asigdel29/anu-agentic-phone/issues/439) | Done. A message carries parts, a tool may answer one, and `look` captures a screen. |
 | 5 | Driving visuals: a border, and a replay card | [#598](https://github.com/asigdel29/anu-agentic-phone/issues/598) | Done. A frame while it drives, and the last six screens afterwards. |
-| 6 | Write-capable tools | [#393](https://github.com/asigdel29/anu-agentic-phone/issues/393), [#467](https://github.com/asigdel29/anu-agentic-phone/issues/467) | Tools done. Nine of them: read, init, stage and commit locally, then `set_remote`, `fetch`, `push` and `pull` over ssh, with a key the phone made and a host key it pinned on first sight. `force` is in no schema at any layer. **Nothing here has reached a real forge**, which needs a network, an account and a key. The screen showing the public key to paste is not built and waits on #641. |
+| 6 | Write-capable tools | [#393](https://github.com/asigdel29/anu-agentic-phone/issues/393), [#467](https://github.com/asigdel29/anu-agentic-phone/issues/467) | Done. Nine tools: read, init, stage and commit locally, then `set_remote`, `fetch`, `push` and `pull` over ssh, with a key the phone made and a host key it pinned on first sight, and a screen showing the public half to paste into a forge. `force` is in no schema at any layer. **Nothing here has reached a real forge**, which needs a network, an account and a key, and no test in this repository can stand in for one. |
 | 7 | Conversations and memory on Postgres | [#599](https://github.com/asigdel29/anu-agentic-phone/issues/599) | Not started, zero code. Blocked with 1. |
 | 8 | Scheduler and background tasks | [#600](https://github.com/asigdel29/anu-agentic-phone/issues/600) | Not started, zero code. The server half is blocked with 1; the phone half is not. |
 | 9 | MCP into `ToolBox`, and a connections screen | [#596](https://github.com/asigdel29/anu-agentic-phone/issues/596) | Done. Servers are saved, asked at startup, and their tools folded in behind a `mcp_` prefix. |
 | 10 | Voice | [#601](https://github.com/asigdel29/anu-agentic-phone/issues/601) | Half. A `MICROPHONE` capability, an on-device `Listening` seam, a press-to-talk control writing into the message field rather than into `send`, and a checklist row. No speaking back and no wake word. None of it has run on an emulator or a phone. Server transcription is blocked with 1. |
-| 11 | Terminal | [#602](https://github.com/asigdel29/anu-agentic-phone/issues/602) | Done. A `Terminal` seam over `/system/bin/sh` answering three outcomes, a `Shown` gate putting the command itself in front of somebody in Ask and in Plan, and `run_command` wired into the `ToolBox`. Its own surface, with scrollback of its own, is not built and waits on #641. |
+| 11 | Terminal | [#602](https://github.com/asigdel29/anu-agentic-phone/issues/602) | Done. A `Terminal` seam over `/system/bin/sh` answering three outcomes, a `Shown` gate putting the command itself in front of somebody in Ask and in Plan, and `run_command` wired into the `ToolBox`. A command still writes into the transcript rather than a scrollback of its own; #641 built the door that would hold one. |
 | 12 | Tag, removals, README | | Done. |
 | 13 | An agentic Android | [#603](https://github.com/asigdel29/anu-agentic-phone/issues/603) | Recorded, then built one property at a time. Runs alongside everything above. |
 
