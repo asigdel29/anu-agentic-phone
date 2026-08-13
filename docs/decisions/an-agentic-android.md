@@ -20,8 +20,10 @@ Five things, and each is worked around rather than solved:
 - **The overlay cannot be drawn where it matters most.** `SYSTEM_ALERT_WINDOW` is blocked over
   Settings and over `FLAG_SECURE` windows, so the banner naming what the agent is doing is
   absent on the screens where somebody would most want it.
-- **A shell cannot run what it writes.** W^X since API 29. The route left is shipping binaries
-  under `jniLibs`, which fixes the tool list at build time.
+- **A shell cannot run what it writes.** W^X since API 29, measured in #666 rather than assumed.
+  What it costs is narrower than this line used to claim: the platform's own shell and its 214
+  toybox applets run from an ordinary app, so the tool list is fixed at build time only for
+  tools the platform does not already have.
 - **Play policy forbids the whole premise.** An accessibility service used for automation is
   refused at submission, so distribution is sideloading and only sideloading.
 - **Sideloading itself has a date on it.** Developer verification reaches certified devices on

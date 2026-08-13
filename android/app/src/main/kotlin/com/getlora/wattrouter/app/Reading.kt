@@ -2,13 +2,14 @@
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
+//   2026-08-11  A. Sigdel  Reads the microphone too, #662.
 //
 // Contents
 //   isEnabled     Whether the service is switched on.
 //   isSideloaded  Whether anybody vouched for this install.
 //   readiness     The whole list.
 //
-// Four of the six rows are checkSelfPermission and settled. The two here each
+// Five of the seven rows are checkSelfPermission and settled. The two here each
 // have a trap, and both are functions of a string, so they are checked on the
 // JVM rather than by installing the app two ways.
 
@@ -79,6 +80,7 @@ internal fun readiness(context: Context): Readiness {
         calendar = granted(android.Manifest.permission.READ_CALENDAR),
         contacts = granted(android.Manifest.permission.READ_CONTACTS),
         location = granted(android.Manifest.permission.ACCESS_COARSE_LOCATION),
+        microphone = granted(android.Manifest.permission.RECORD_AUDIO),
         sideloaded = isSideloaded(installerOf(context)),
     )
 }

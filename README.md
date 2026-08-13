@@ -28,13 +28,13 @@ need removing at all.
 
 ## What it can do today
 
-Sixteen tools, all of them registered in the app and none of them aspirational.
+Twenty-three tools, all of them registered in the app and none of them aspirational.
 
 | | |
 |---|---|
-| **The screen** | `read_screen`, `tap`, `type_text`, `scroll`, `navigate`, `open_app`, `wait_for_change`, `find_on_screen` |
+| **The screen** | `read_screen`, `look`, `tap`, `type_text`, `scroll`, `navigate`, `open_app`, `wait_for_change`, `find_on_screen` |
 | **Your things** | `read_calendar`, `find_contact`, `where_am_i` |
-| **Code** | `read_repository`, `stage_paths`, `commit` |
+| **Code** | `read_repository`, `init_repository`, `stage_paths`, `commit`, `set_remote`, `fetch`, `push`, `pull`, `run_command` |
 | **Memory** | `remember`, `recall` |
 | **Anything else** | tools from an [MCP](https://modelcontextprotocol.io) server you connect |
 
@@ -95,10 +95,23 @@ Plan says what it is about to do, waits for that to be approved once, and then r
 ([#595](../../issues/595)). Ask confirms every action before it happens, over the app being
 driven, and the question is one the model cannot answer ([#452](../../issues/452)).
 
-**Planned and unbuilt:** a model running on the device itself, vision
-([#439](../../issues/439)), voice, scheduled background tasks, and a terminal. None of those
-exist; they are named here so the list above can be read as complete, and
-[the roadmap](docs/roadmap.md) says what order they are in.
+**You can speak instead of typing.** Press the button beside the message field and what you say
+is recognised on the device and put *in the field*, where you send it yourself. A mishearing
+is a word you edit rather than an instruction the agent has already carried out. No audio leaves
+the phone, there is no wake word, and it adds no tool to the table above: a microphone is a
+control you press, not something the model can call. Speaking the answer back is not built
+([#601](../../issues/601)).
+
+`run_command` runs one command through the shell Android ships, in the same directory the
+repository tools work in, and it is the one tool a plan approving *names* does not cover: for
+every other tool the name is the action, and for a shell the argument is. So in Ask and in Plan
+the command itself is put in front of you before it runs, whole rather than shortened
+([#673](../../issues/673)). Output is cut at about a thousand tokens and says how much it cut,
+and a command still running after a minute is stopped.
+
+**Planned and unbuilt:** a model running on the device itself, speaking answers back, and
+scheduled background tasks. None of those exist; they are named here so the list above can be
+read as complete, and [the roadmap](docs/roadmap.md) says what order they are in.
 
 ## Routing
 

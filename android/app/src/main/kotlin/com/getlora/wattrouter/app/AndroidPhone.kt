@@ -19,6 +19,7 @@ import android.content.Context
 import com.getlora.wattrouter.Done
 import com.getlora.wattrouter.Generation
 import com.getlora.wattrouter.Handle
+import com.getlora.wattrouter.Image
 import com.getlora.wattrouter.Launchable
 import com.getlora.wattrouter.Onward
 import com.getlora.wattrouter.Phone
@@ -45,6 +46,16 @@ class AndroidPhone(private val context: Context) : Phone {
 
     override suspend fun read(): Reading? = withContext(Dispatchers.Default) {
         DrivingService.connected?.read()
+    }
+
+    override suspend fun inFront(): String? = withContext(Dispatchers.Default) {
+        DrivingService.connected?.inFront()
+    }
+
+    // Default rather than IO, as read is: the wait is the framework answering
+    // on the executor it was handed, not a socket or a file.
+    override suspend fun capture(): Image? = withContext(Dispatchers.Default) {
+        DrivingService.connected?.capture()
     }
 
     override suspend fun tap(at: Handle, from: Generation): Done? =

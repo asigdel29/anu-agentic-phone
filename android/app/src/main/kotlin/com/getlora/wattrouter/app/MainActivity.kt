@@ -11,6 +11,18 @@
 //   2026-08-09  A. Sigdel  Shows the checklist when the phone half is not on.
 //   2026-08-09  A. Sigdel  Can look at the screen and tap it, when the service
 //                          behind that has been switched on.
+//   2026-08-11  A. Sigdel  Holds the workspace, rather than the git tools
+//                          computing it, now that it is about to have a second
+//                          reader.
+//   2026-08-11  A. Sigdel  Listens when the person asks it to, #659.
+//   2026-08-12  A. Sigdel  Runs one command, in the workspace the git tools
+//                          already use, #677.
+//   2026-08-13  A. Sigdel  Hands the repository a key to reach a host with, #467.
+//   2026-08-13  A. Sigdel  Offers the two network tools that cannot lose
+//                          anything, #467.
+//   2026-08-13  A. Sigdel  Offers the two that can, #467.
+//   2026-08-13  A. Sigdel  Shows the key and the hosts it has met, #467.
+//   2026-08-13  A. Sigdel  Gives a wrong provider key a way back, #512.
 //
 // The core and the driver are built once and held for the process. The core
 // owns a native pointer and a decision cache, and a second one is a second
@@ -48,33 +60,56 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.getlora.wattrouter.Agent
+import com.getlora.wattrouter.Barred
 import com.getlora.wattrouter.Budget
 import com.getlora.wattrouter.Budgeted
 import com.getlora.wattrouter.Confirmed
 import com.getlora.wattrouter.CalendarTool
+import com.getlora.wattrouter.Capability
 import com.getlora.wattrouter.ChainWalk
 import com.getlora.wattrouter.ContactsTool
 import com.getlora.wattrouter.Credential
+import com.getlora.wattrouter.FetchTool
 import com.getlora.wattrouter.FindOnScreenTool
 import com.getlora.wattrouter.GitAddTool
 import com.getlora.wattrouter.GitCommitTool
+import com.getlora.wattrouter.GitInitTool
 import com.getlora.wattrouter.GitStatusTool
+import com.getlora.wattrouter.Heard
 import com.getlora.wattrouter.LocationTool
+import com.getlora.wattrouter.LookTool
 import com.getlora.wattrouter.Memory
 import com.getlora.wattrouter.Needed
 import com.getlora.wattrouter.NavigateTool
 import com.getlora.wattrouter.OpenAppTool
+import com.getlora.wattrouter.Connections
+import com.getlora.wattrouter.HttpRpc
 import com.getlora.wattrouter.Permission
+import com.getlora.wattrouter.PermissionError
 import com.getlora.wattrouter.Planned
+import com.getlora.wattrouter.PullTool
+import com.getlora.wattrouter.PushTool
+import com.getlora.wattrouter.Reach
+import com.getlora.wattrouter.Reached
+import com.getlora.wattrouter.Reaching
+import com.getlora.wattrouter.connect
+import com.getlora.wattrouter.tools
 import com.getlora.wattrouter.Tool
 import com.getlora.wattrouter.ReadScreenTool
+import com.getlora.wattrouter.Recorded
+import com.getlora.wattrouter.Replay
 import com.getlora.wattrouter.RecallTool
 import com.getlora.wattrouter.RememberTool
 import com.getlora.wattrouter.Repository
+import com.getlora.wattrouter.Shown
+import com.getlora.wattrouter.Signed
 import com.getlora.wattrouter.NeuralWattInference
 import com.getlora.wattrouter.Row
+import com.getlora.wattrouter.RunCommandTool
 import com.getlora.wattrouter.ScrollTool
+import com.getlora.wattrouter.SetRemoteTool
 import com.getlora.wattrouter.Startup
+import com.getlora.wattrouter.SystemShell
 import com.getlora.wattrouter.TapTool
 import com.getlora.wattrouter.ToolBox
 import com.getlora.wattrouter.TypeTextTool
@@ -95,6 +130,9 @@ class MainActivity : ComponentActivity() {
      */
     private val budget = Budget()
 
+    /** What the last turn did, for the card the transcript will show. */
+    private val replay = Replay()
+
     /**
      * How involved this person wants to be, read per action by [Confirmed].
      *
@@ -103,6 +141,39 @@ class MainActivity : ComponentActivity() {
      * read from a turn rather than from the composition anyway.
      */
     private val modes by lazy { Modes(applicationContext) }
+    private val signing by lazy { Signing(applicationContext) }
+    private val connections by lazy { Connections(applicationContext) }
+
+    /**
+     * The microphone, built once for the process like the three above it.
+     *
+     * The application context rather than this Activity: it outlives a rotation
+     * and the recognizer is torn down at the end of every press anyway, so a
+     * reference to the Activity here would be one nothing needs.
+     */
+    private val listening by lazy { AndroidListening(applicationContext) }
+
+    /**
+     * Where the tools work, made if it is not there.
+     *
+     * Here rather than inside the one function that reads it today, because it
+     * is about to have more than one reader: #602 requires a terminal to run in
+     * the workspace the tools already have rather than invent a second. Two
+     * places computing one path is two places that have to agree, and nothing
+     * would check that they did.
+     */
+    private val workspace by lazy { java.io.File(filesDir, "work").apply { mkdirs() } }
+
+    /**
+     * The key this phone pushes with, and the hosts it has met.
+     *
+     * Beside the workspace rather than in it: the workspace is a repository the
+     * agent writes to, and a private key inside one is a private key a model can
+     * stage. Neither is made here; [Reaching.ensure] makes the key when somebody
+     * asks to see it, and `git::trust` writes the pins on the first connection.
+     */
+    private val reaching by lazy { Reaching(applicationContext) }
+    private val pins by lazy { java.io.File(filesDir, "known-hosts") }
 
     /**
      * What another app shared, until a turn takes it.
@@ -128,19 +199,93 @@ class MainActivity : ComponentActivity() {
             var state by remember { mutableStateOf(started ?: Startup.begin(this)) }
             started = state
 
-            // Shown only when something required is off. Somebody whose phone
-            // half is already on never sees it, which is the difference
-            // between a checklist and a wizard nobody can dismiss.
-            var checking by remember { mutableStateOf(!readiness(this).canDrive) }
+            // One place rather than two booleans, which is #641: `connecting`
+            // was set from the checklist and nowhere else and `checking` was
+            // never set true again, so the connections screen could be reached
+            // exactly once in an installation's life and nothing said so.
+            //
+            // The checklist still opens by itself when something required is
+            // off, which is the difference between a checklist and a wizard
+            // nobody can dismiss; it is now somewhere to come back to as well.
+            var where by remember {
+                mutableStateOf(
+                    if (readiness(this).canDrive) Where.Conversation else Where.Readiness,
+                )
+            }
+
+            // Null until every saved server has been asked, and the
+            // conversation waits for it, because ToolBox is what the model is
+            // told at the top of a turn: a set that grew afterwards is a tool
+            // it was never offered. With nothing saved this costs a frame.
+            var connected by remember { mutableStateOf<List<Reached>?>(null) }
+            LaunchedEffect(where) {
+                if (where != Where.Connections) {
+                    connected = connect(connections.all) { HttpRpc(it.endpoint) }
+                }
+            }
 
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     when (val now = state) {
                         is Startup.Ready ->
-                            if (checking) {
-                                Checklist { checking = false }
-                            } else {
-                                Conversation(driverFor(now, credential), handed, modes)
+                            when (where) {
+                                Where.Readiness -> Checklist(
+                                    // Onward rather than closed: at launch this
+                                    // is the way in, and from the settings it is
+                                    // the way back to where the tap came from.
+                                    onCarryOn = { where = Where.Conversation },
+                                    onConnections = { where = Where.Connections },
+                                )
+
+                                Where.Connections -> ConnectionsScreen(
+                                    connected = connected.orEmpty(),
+                                    onAdd = { label, endpoint ->
+                                        connections.add(label, endpoint)
+                                    },
+                                    onForget = { connections.forget(it) },
+                                    // Leaving re-asks, because a server added
+                                    // or forgotten while it was open changes
+                                    // what the next turn is offered.
+                                    onDone = { where = Where.Settings },
+                                )
+
+                                Where.SigningKey -> SigningKeyScreen(
+                                    shown = reaching.shown,
+                                    hosts = met(),
+                                    onMake = { reaching.ensure() },
+                                    onDone = { where = Where.Settings },
+                                )
+
+                                Where.Credential -> CredentialScreen(
+                                    onForget = { credential.forget() },
+                                    // Re-read rather than assumed. begin() is
+                                    // what decides which of the three states
+                                    // this is, and a forget that half failed
+                                    // would otherwise show a sign-in screen
+                                    // over a key that is still stored.
+                                    onSignIn = {
+                                        state = Startup.begin(this@MainActivity)
+                                        where = Where.Conversation
+                                    },
+                                    onDone = { where = Where.Settings },
+                                )
+
+                                Where.Settings -> SettingsScreen(
+                                    destinations = places(connected),
+                                    onGo = { where = it },
+                                    onDone = { where = Where.Conversation },
+                                )
+
+                                Where.Conversation -> if (connected != null) {
+                                    Conversation(
+                                        driverFor(now, credential, connected!!),
+                                        handed,
+                                        modes,
+                                        signing,
+                                        replay,
+                                        ::heard,
+                                    ) { where = Where.Settings }
+                                }
                             }
                         Startup.NoCredential, Startup.CoreRefused ->
                             SignInScreen(refused = now == Startup.CoreRefused) { typed ->
@@ -167,9 +312,13 @@ class MainActivity : ComponentActivity() {
      * work, and wants a foreground service rather than a wider scope here.
      */
     @Composable
-    private fun driverFor(ready: Startup.Ready, credential: Credential): TurnDriver {
+    private fun driverFor(
+        ready: Startup.Ready,
+        credential: Credential,
+        connected: List<Reached>,
+    ): TurnDriver {
         val scope = rememberCoroutineScope()
-        return remember(ready.core) {
+        return remember(ready.core, connected) {
             TurnDriver(
                 Agent(
                     router = ready.core.routing(),
@@ -183,7 +332,14 @@ class MainActivity : ComponentActivity() {
                             BuildConfig.UPSTREAM_BASE_URL,
                         ),
                     ),
-                    tools = ToolBox(remembering() + phone() + working() + driving()),
+                    // Last, so a server cannot displace a compiled tool:
+                    // ToolBox keeps the first of a duplicate name, and prefixed
+                    // makes the collision impossible anyway. Both, because one
+                    // is a rule and the other is an ordering.
+                    tools = ToolBox(
+                        remembering() + phone() + working() + driving() + terminal() +
+                            connected.tools(),
+                    ),
                     budget = budget,
                     // The mode is read here rather than captured, so somebody
                     // who changed it between typing and the model answering
@@ -191,6 +347,7 @@ class MainActivity : ComponentActivity() {
                     // same way, one action at a time, and the two never both
                     // fire: Planned is silent in every mode but Plan.
                     planned = Planned({ modes.now }, AndroidApproval()),
+                    replay = replay,
                 ),
                 scope,
             )
@@ -230,22 +387,167 @@ class MainActivity : ComponentActivity() {
     )
 
     /**
+     * One press of the microphone.
+     *
+     * Deliberately not in the list above. It is a person's button rather than
+     * a tool, and the difference is the point: a model that could call this
+     * could open the microphone in a turn nobody was watching.
+     *
+     * The same [Permission] as those three, in [CalendarTool]'s order, and the
+     * refusal is returned rather than thrown for its reason too. A refusal here
+     * has somewhere to be read, because [Heard.Silence] is already what the
+     * button shows when a press produces nothing.
+     *
+     * # Rely
+     * Called from the composition's scope, which cancels with the screen. It may
+     * put a dialog on screen, and then holds the microphone until whoever
+     * pressed it stops speaking.
+     */
+    private suspend fun heard(): Heard {
+        try {
+            permission.obtain(Capability.MICROPHONE)
+        } catch (e: PermissionError) {
+            return Heard.Silence(e.message.orEmpty())
+        }
+        return listening.listen()
+    }
+
+    /**
      * The repository the agent works in.
      *
-     * `filesDir/work`, made if it is not there. A directory is not a repository
-     * and the core has no `init` (#393), so until one arrives here these three
-     * answer that it is not one, which is true and actionable, and the whole
-     * of what is missing is a single entry point rather than anything above it.
+     * The [workspace]. A directory is still not a repository, so on a fresh
+     * install the other three answer that it is not one until [GitInitTool] has
+     * been called. That is the model's call to make rather than this function's:
+     * the two answers `init` distinguishes are "made you one" and "there already
+     * was one", and a repository created here at startup would spend that
+     * distinction before anybody could read it.
      */
     private fun working(): List<Tool> {
-        val root = java.io.File(filesDir, "work").apply { mkdirs() }
-        val repository = Repository(root.absolutePath)
+        // Signed outermost, and reading the setting rather than holding one:
+        // this function runs once, where driverFor remembers the driver, so an
+        // identity captured here would be whichever was set at launch.
+        val repository = Signed(
+            // Asked per call rather than held, as the identity below it and for
+            // a sharper reason: a key can stop existing between two calls, since
+            // the keystore drops its entries when the screen lock is removed.
+            // Null until somebody has made one, which is a repository that can
+            // reach a path remote and nothing else.
+            Repository(workspace.absolutePath) {
+                reaching.secret()?.let { Reach(it, pins.absolutePath) }
+            },
+        ) { signing.who }
         return listOf(
             GitStatusTool(repository),
+            GitInitTool(repository),
             GitAddTool(repository),
             GitCommitTool(repository),
+            SetRemoteTool(repository),
+            FetchTool(repository),
+            PushTool(repository),
+            PullTool(repository),
         )
     }
+
+    /**
+     * What the model would see, bounded, or what to do to make it say anything.
+     *
+     * #511. The panel is the moment somebody decides whether they are
+     * comfortable with an application that reads other applications, and with
+     * the service on it was guaranteed to show a refusal instead: read_screen
+     * begins with barredNow, and the screen in front at that moment is this
+     * one, which Barred refuses correctly and by design.
+     *
+     * So the refusal becomes the instruction that resolves it. The screen
+     * re-reads on resume, which it has always done for its own reasons, so
+     * following the sentence is what produces the evidence: open something,
+     * come back, and this is a reading of what was in front when you left.
+     *
+     * Not read without the gate, which was the cheap answer. The bar stops the
+     * agent acting on its own screen and reading it would be harmless, but the
+     * evidence would then be a reading of the checklist, which demonstrates
+     * nothing about the applications anybody is actually worried about.
+     */
+    private fun evidence(said: String): String =
+        if (said.startsWith(Barred.ITSELF.why)) {
+            "This is the assistant's own screen, and it does not read its own. " +
+                "Open something else and come back here: this panel reads again " +
+                "every time you return, so what it shows will be what the model " +
+                "would see of that."
+        } else {
+            said.lines().take(LOOK).joinToString("\n")
+        }
+
+    /**
+     * What the settings screen offers, and one line about each.
+     *
+     * Built here rather than in the screen, because the counts are this
+     * Activity's: [Connections] is a store it holds and readiness is a thing it
+     * asks the platform. The screen draws rows.
+     */
+    private fun places(connected: List<Reached>?): List<Destination> = listOf(
+        Destination(
+            "Connections",
+            when (val servers = connected?.size) {
+                null, 0 -> "No servers. Their tools join every turn."
+                1 -> "One server, and its tools join every turn."
+                else -> "$servers servers, and their tools join every turn."
+            },
+            Where.Connections,
+        ),
+        Destination(
+            "Signing key",
+            if (reaching.isMade) {
+                "Made. Add it to a forge to push from this phone."
+            } else {
+                "None yet. One is made when you ask to see it."
+            },
+            Where.SigningKey,
+        ),
+        Destination(
+            "Provider key",
+            "Stored. Forget it to sign in with a different one.",
+            Where.Credential,
+        ),
+        Destination(
+            "Readiness",
+            if (readiness(this).canDrive) {
+                "Everything the phone half needs is on."
+            } else {
+                "Something the phone half needs is off."
+            },
+            Where.Readiness,
+        ),
+    )
+
+    /**
+     * Every host pinned, one line each, or empty before the first connection.
+     *
+     * Read rather than parsed. `git::trust` writes a host and a hash per line
+     * and this shows them; a second reader that understood the format would be
+     * a second place to keep in step with it, for a screen that only displays.
+     */
+    private fun met(): List<String> =
+        runCatching { pins.readLines().filter { it.isNotBlank() } }.getOrDefault(emptyList())
+
+    /**
+     * The shell, in the same directory the repository is in.
+     *
+     * The [workspace] again rather than a second one, which is what #647 hoisted
+     * it for: a formatter the agent runs and a file it staged have to be the
+     * same file.
+     *
+     * [Shown] outermost, and reading the mode rather than holding one, for the
+     * reason [working] gives about identity. It is also the reason this is not
+     * a [Confirmed]: that seam is a [Phone], and it treats Plan as Auto because
+     * a round's tool names were approved once at the top of the turn. The name
+     * approved here is `run_command`, which is the same name for `git status`
+     * and for `rm -rf .`, so Plan asks.
+     */
+    private fun terminal(): List<Tool> = listOf(
+        RunCommandTool(
+            Shown(SystemShell(workspace.absolutePath), { modes.now }, AndroidConsent()),
+        ),
+    )
 
     /**
      * A share arriving while the app is already open.
@@ -290,13 +592,20 @@ class MainActivity : ComponentActivity() {
         // spends a budgeted action on a prompt somebody then declines, so a
         // turn refused twenty times has nothing left for the one they would
         // have allowed.
+        // Recorded innermost, so a step the budget refused or a person
+        // declined is not in the replay: those did not happen, and a card
+        // showing one would show a picture of a screen nothing changed.
         val screen = Confirmed(
-            Budgeted(AndroidPhone(applicationContext), budget),
+            Budgeted(Recorded(AndroidPhone(applicationContext), replay), budget),
             { modes.now },
             AndroidConsent(),
         )
         return listOf(
             ReadScreenTool(screen),
+            // Beside read_screen rather than instead of it. A picture has no
+            // handles in it, so every action still goes through a reading;
+            // look is for the layout a tree describes badly.
+            LookTool(screen),
             TapTool(screen),
             TypeTextTool(screen),
             NavigateTool(screen),
@@ -315,7 +624,7 @@ class MainActivity : ComponentActivity() {
      * they went is the lie a wizard tells.
      */
     @Composable
-    private fun Checklist(onCarryOn: () -> Unit) {
+    private fun Checklist(onCarryOn: () -> Unit, onConnections: () -> Unit) {
         val owner = LocalLifecycleOwner.current
         var now by remember { mutableStateOf(readiness(this)) }
         var seeing by remember { mutableStateOf<String?>(null) }
@@ -330,15 +639,26 @@ class MainActivity : ComponentActivity() {
 
         // Evidence rather than a claim, and only once there is any: before the
         // service is on there is nothing to show and nothing to promise.
-        LaunchedEffect(now.canDrive) {
+        //
+        // Keyed on `now` rather than on `now.canDrive`, which is #511's other
+        // half: the observer above replaces `now` on every resume, so coming
+        // back to this screen re-reads. That is what makes the sentence below
+        // an instruction that works rather than a promise.
+        LaunchedEffect(now) {
             seeing = if (!now.canDrive) {
                 null
             } else {
-                ReadScreenTool(AndroidPhone(applicationContext)).run("{}").lines().take(LOOK).joinToString("\n")
+                evidence(ReadScreenTool(AndroidPhone(applicationContext)).run("{}"))
             }
         }
 
-        ReadinessScreen(now, seeing, onOpen = { open(it) }, onCarryOn = onCarryOn)
+        ReadinessScreen(
+            now,
+            seeing,
+            onOpen = { open(it) },
+            onCarryOn = onCarryOn,
+            onConnections = onConnections,
+        )
     }
 
     /**
@@ -373,11 +693,18 @@ private fun Conversation(
     driver: TurnDriver,
     handed: MutableState<String?>,
     modes: Modes,
+    signing: Signing,
+    replay: Replay,
+    /** One press of the microphone, permission and all. */
+    listen: suspend () -> Heard,
+    /** The door #641 gave this application, and the only one on this screen. */
+    onSettings: () -> Unit,
 ) {
     // Held in composition as well as in the store, because a chip has to
     // repaint when it is tapped and the store is not observable. The store
     // stays the truth: it is what the turn loop reads.
     var mode by remember { mutableStateOf(modes.now) }
+    var who by remember { mutableStateOf(signing.who) }
     val rows by driver.rows.collectAsState()
     val isRunning by driver.isRunning.collectAsState()
     val routing by driver.routing.collectAsState()
@@ -424,13 +751,26 @@ private fun Conversation(
     val asking = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     ChatScreen(
+        onSettings = onSettings,
         rows = rows,
+        // Read at composition rather than collected. It changes only while a
+        // turn is running, and the card is drawn only while one is not, so a
+        // flow here would be a subscription that never fires when it is read.
+        replay = if (isRunning) emptyList() else replay.steps,
         isRunning = isRunning,
         routing = routing,
         mode = mode,
+        who = who,
         onMode = {
             mode = it
             modes.now = it
+        },
+        // Held in composition as well as in the store, for the reason the mode
+        // is: the line has to repaint when it is saved and the store is not
+        // observable. The store stays the truth, and Signed is what reads it.
+        onWho = {
+            who = it
+            signing.who = it
         },
         onSend = { text ->
             // Asked at the first send rather than at launch: a permission
@@ -447,6 +787,7 @@ private fun Conversation(
             driver.send(text)
         },
         onInterrupt = driver::interrupt,
+        onListen = listen,
     )
 }
 

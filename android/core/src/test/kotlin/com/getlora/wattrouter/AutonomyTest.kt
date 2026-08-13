@@ -44,11 +44,20 @@ private class Acting : Phone {
     override suspend fun open(packageName: String) = Done.Did(null).also { acts++ }
 }
 
-/** Somebody who answers the same way every time, and remembers being asked. */
-private class Decided(private val answer: Boolean) : Consent {
+/**
+ * Somebody who answers the same way every time, and remembers being asked.
+ *
+ * Not private, and here rather than in each file that wants one: [Consent] is
+ * declared beside [Autonomy], and this is the fake for it. `ShownTest` gates a
+ * `Terminal` through the same seam and had a byte-identical copy, which Kotlin
+ * reads as a redeclaration rather than as two fakes.
+ */
+internal class Decided(private val answer: Said) : Consent {
+    constructor(answer: Boolean) : this(if (answer) Said.YES else Said.NO)
+
     val asked = mutableListOf<Intent>()
 
-    override suspend fun mayI(intent: Intent): Boolean {
+    override suspend fun mayI(intent: Intent): Said {
         asked += intent
         return answer
     }

@@ -97,6 +97,14 @@ class Agent(
      * does rather than blocking on an answer that cannot arrive.
      */
     private val planned: Planned? = null,
+    /**
+     * What this turn did to the phone, cleared at the top of each one.
+     *
+     * Null when nobody will show it, which is every caller but the
+     * application. Recording into one nothing reads would pay for a capture
+     * per action and throw each one away.
+     */
+    private val replay: Replay? = null,
     private val session: String = java.util.UUID.randomUUID().toString(),
 ) {
     /**
@@ -128,6 +136,10 @@ class Agent(
         // produces, and the one where somebody has just said carry on.
         budget?.beginTurn()
 
+        // With the budget, and for its reason: a resumed turn showing the
+        // previous turn's screens is a replay of the wrong thing.
+        replay?.beginTurn()
+
         repeat(maxRounds) { round ->
             val asked = ask()
 
@@ -155,10 +167,37 @@ class Agent(
                 return
             }
 
+            // Stops at the first failure, which is #675's fourth. The calls in
+            // a round were decided together against one screen, so what follows
+            // a failure was decided against a phone that is no longer in the
+            // state it was planned for: a tap after a failed open is a tap on
+            // whatever happened to be there.
+            //
+            // The rest still answer, because a call with no reply is the failure
+            // this file opens by describing. They answer that they did not run,
+            // and they spend no Budget, since Budgeted counts what it does
+            // rather than what was asked.
+            var failed = false
             for (call in asked.calls) {
+                if (failed) {
+                    val aborted = ToolResult(call.id, ABORTED, isError = true)
+                    emit(TurnEvent.Result(aborted))
+                    committed += Message.tool(aborted.content, answering = call.id)
+                    continue
+                }
+
                 val result = tools.run(call)
+                failed = result.isError
                 emit(TurnEvent.Result(result))
                 committed += Message.tool(result.content, answering = call.id)
+
+                // After its own tool message rather than inside it, because a
+                // tool message cannot carry an image; Message.looked says why.
+                // Still inside the round, so it is committed with everything
+                // else or with nothing.
+                if (result.images.isNotEmpty()) {
+                    committed += Message.looked(call.name, result.images)
+                }
             }
             committed.forEach(conversation::append)
 
@@ -211,5 +250,20 @@ class Agent(
          * a few requests rather than a bill.
          */
         const val DEFAULT_MAX_ROUNDS = 8
+
+        /**
+         * What a call that never ran is told, when one before it failed.
+         *
+         * Says which of the two happened, because a model that reads this as
+         * its own failure looks for what it did wrong in a call that did
+         * nothing. It also says the state changed, which is the reason for
+         * stopping rather than a consolation: the calls in a round were decided
+         * together against one screen.
+         */
+        const val ABORTED =
+            "this did not run. Something earlier in the same round failed, and " +
+                "everything after it was decided against a phone that is no " +
+                "longer in the state it was planned for. Look at what happened " +
+                "first, then decide again."
     }
 }

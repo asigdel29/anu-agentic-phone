@@ -2,6 +2,7 @@
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
+//   2026-08-11  A. Sigdel  The microphone row, #662.
 //
 // On the JVM. The case worth having is the first row: somebody sent to the
 // accessibility switch before being told it is greyed out has been sent to a
@@ -22,8 +23,21 @@ class ReadinessTest {
         calendar: Boolean = true,
         contacts: Boolean = true,
         location: Boolean = true,
+        microphone: Boolean = true,
         sideloaded: Boolean = true,
-    ) = Readiness.of(driving, notifying, calendar, contacts, location, sideloaded)
+    ) = Readiness.of(
+        // By name rather than by position. Seven bare booleans is a call where
+        // transposing two compiles and produces a screen that lies about which
+        // permission is off, and this helper is one of the two places that
+        // could do it.
+        driving = driving,
+        notifying = notifying,
+        calendar = calendar,
+        contacts = contacts,
+        location = location,
+        microphone = microphone,
+        sideloaded = sideloaded,
+    )
 
     @Test
     fun restrictedSettingsComesBeforeTheSwitchItUnblocks() {
@@ -66,8 +80,35 @@ class ReadinessTest {
 
     @Test
     fun drivingIsPossibleWithoutTheOptionalOnes() {
-        assertTrue(state(calendar = false, contacts = false, location = false).canDrive)
+        assertTrue(
+            state(
+                calendar = false,
+                contacts = false,
+                location = false,
+                microphone = false,
+            ).canDrive,
+        )
         assertFalse(state(driving = false).canDrive)
+    }
+
+    @Test
+    fun theMicrophoneIsOptionalTheWayTheCalendarIs() {
+        // #601 requires the app to work with it refused, so a row for it must
+        // not be one that stops everything. Off, it is asked for after the
+        // required ones and nothing about driving the phone changes.
+        val off = state(microphone = false)
+
+        assertFalse(off.steps.first { it.what.contains("Hear") }.isRequired)
+        assertTrue(off.canDrive)
+        assertTrue("${off.next}", off.next!!.what.contains("Hear"))
+    }
+
+    @Test
+    fun theMicrophoneRowGoesToTheAppsOwnSettings() {
+        // MainActivity routes a row by looking for "screen" in its label, and a
+        // microphone row carrying that word would send somebody to the
+        // accessibility list to look for a permission that is not in it.
+        assertFalse(state().steps.first { it.what.contains("Hear") }.what.contains("screen"))
     }
 
     @Test

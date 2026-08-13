@@ -103,6 +103,52 @@ interface Phone {
     suspend fun read(): Reading?
 
     /**
+     * Which application's window is in front, or null if that cannot be said.
+     *
+     * A package name rather than a label, for [Confirmed]'s reason turned to
+     * this purpose: an application calling itself Settings is exactly the case
+     * where the label is the thing lying.
+     *
+     * Defaulted to null so a fake that does not care implements nothing. Every
+     * decorator forwards it, because a decorator answering the default would
+     * report that nothing is in front of a phone that is driving an app.
+     *
+     * # Rely
+     * As [read], and cheaper: one window rather than a tree.
+     */
+    suspend fun inFront(): String? = null
+
+    /**
+     * A picture of what is on screen.
+     *
+     * Separate from [read] rather than a field on a [Reading], because the two
+     * cost different things: a reading is a tree walk and this is a frame
+     * grab, compressed and encoded, and a caller that wanted lines should not
+     * pay for pixels it never asked for.
+     *
+     * Encoded here rather than answered as bytes, so no framework type and no
+     * PNG crosses the seam. Conversation.Image is a data URL for the same
+     * reason: what it holds is what goes on the wire.
+     *
+     * # Rely
+     * As [read], and dearer: a frame grab plus a PNG compress plus a base64 of
+     * the result. Called when a tool asks, never per turn.
+     *
+     * @return null when there is nothing to capture, on [read]'s terms, and
+     *   also when the framework refuses. Those are one answer here because a
+     *   caller can do nothing different about either: #610 measured that a
+     *   service without android:canTakeScreenshot is refused, and that is a
+     *   manifest that shipped wrong rather than a state to recover from.
+     *
+     * Defaulted to null so a Phone that cannot capture says so by saying
+     * nothing, which is every test double and would be an iOS one. A decorator
+     * must still override it: Budgeted and Confirmed wrap the real phone, and
+     * inheriting this would make capture unavailable through the only path a
+     * turn ever takes.
+     */
+    suspend fun capture(): Image? = null
+
+    /**
      * Tap what a handle names.
      *
      * The seam takes the action rather than answering the node, because a
@@ -277,7 +323,16 @@ fun decodeSeen(token: String?): Generation? {
 }
 
 /** Look at the screen. */
-class ReadScreenTool(private val phone: Phone) : Tool {
+class ReadScreenTool(
+    private val phone: Phone,
+    /**
+     * The device's own clock, as `HH:mm`.
+     *
+     * Injected so a test reads a fixed time rather than the machine's, which is
+     * what makes an assertion about the header possible at all.
+     */
+    private val clock: () -> String = { java.time.LocalTime.now().format(MINUTES) },
+) : Tool {
     override val name = "read_screen"
 
     override val purpose =
@@ -298,10 +353,14 @@ class ReadScreenTool(private val phone: Phone) : Tool {
         // then get from tap is a refusal it can plan around.
         phone.barredNow()?.let { return it }
         val reading = phone.read() ?: return unreadable(phone.attached())
-        return describe(reading)
+        return describe(reading, phone.inFront(), clock())
     }
 
     companion object {
+        /** Hours and minutes. Seconds on a screen reading are noise. */
+        private val MINUTES: java.time.format.DateTimeFormatter =
+            java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+
         /** Most lines shown. Past this a model is reading a layout dump. */
         const val LIMIT = 60
 
@@ -338,7 +397,7 @@ class ReadScreenTool(private val phone: Phone) : Tool {
             }
 
         /** What a reading looks like. */
-        fun describe(reading: Reading): String {
+        fun describe(reading: Reading, inFront: String? = null, at: String? = null): String {
             // Distinguishable from an unreadable screen, for the reason every tool here
             // has one: a model told "nothing" cannot tell an empty page from a
             // locked door.
@@ -351,8 +410,29 @@ class ReadScreenTool(private val phone: Phone) : Tool {
 
             val rest = reading.seen.size - LIMIT
             val more = if (rest > 0) "\nand $rest more not shown" else ""
-            return "screen ${encodeSeen(reading.generation)}\n" + lines.joinToString("\n") + more
+            return header(reading, inFront, at) + "\n" + lines.joinToString("\n") + more
         }
+
+        /**
+         * The line above the screen: which screen, which application, and when.
+         *
+         * #675's second. The id alone leaves a model unable to tell where it is,
+         * and one that cannot see which application it is in re-opens
+         * applications it is already in, which costs a round and a launch.
+         *
+         * The clock is here because a screen is often about time (a message
+         * sent "just now", a meeting "in an hour") and the model has no other
+         * source for what now is.
+         *
+         * Both are omitted rather than guessed at when absent. "in an unknown
+         * app" is a sentence a model reasons about; a missing clause is not.
+         */
+        private fun header(reading: Reading, inFront: String?, at: String?): String =
+            buildString {
+                append("screen ${encodeSeen(reading.generation)}")
+                inFront?.takeIf { it.isNotBlank() }?.let { append(" in $it") }
+                at?.takeIf { it.isNotBlank() }?.let { append(" at $it") }
+            }
 
         /**
          * What can be done with it.
@@ -508,7 +588,56 @@ class TypeTextTool(private val phone: Phone) : Tool {
             return "no text was given. To empty the field, pass an empty string."
         }
 
-        return TapTool.say(phone, "typed", phone.type(handle, seen, text))
+        val done = phone.type(handle, seen, text)
+        val body = TapTool.say(phone, "typed", done)
+        // Only when something was typed. The other outcomes already say why
+        // the field is not what the model expected, and a line about what it
+        // says now would be a line about a field nothing touched.
+        if (done !is Done.Did) return body
+
+        return saying(fieldNow(handle, done.now)) + "\n\n" + body
+    }
+
+    private companion object {
+        /**
+         * What the field says now, in words.
+         *
+         * #675's first, and the one their ablation puts a number on: they
+         * attribute seven points to closing "silent text input failures". What
+         * this tool answered before was the whole screen, which leaves the model
+         * finding the field again in sixty lines to learn whether its own last
+         * action worked.
+         */
+        fun saying(now: Sighting?): String = when {
+            now == null ->
+                "the field is no longer on the screen, so what it says now " +
+                    "cannot be read back"
+            now.label.isNullOrEmpty() -> "the field now says nothing"
+            else -> "the field now says: ${now.label}"
+        }
+    }
+}
+
+/**
+ * The thing a handle named, in a reading taken after it was acted on.
+ *
+ * Matched on `viewId` rather than on the handle itself, because a handle carries
+ * the text and the text is what just changed: comparing handles would fail
+ * exactly when this is worth reading. A node with no `viewId` is matched on what
+ * does not change, which is its description, its role and its place among its
+ * siblings, and one that matches nothing is not found, which is said rather than
+ * guessed at.
+ */
+internal fun fieldNow(at: Handle, reading: Reading?): Sighting? {
+    val seen = reading?.seen ?: return null
+
+    at.viewId?.takeIf { it.isNotBlank() }?.let { id ->
+        return seen.firstOrNull { it.handle.viewId == id }
+    }
+    return seen.firstOrNull {
+        it.handle.description == at.description &&
+            it.handle.role == at.role &&
+            it.handle.siblingIndex == at.siblingIndex
     }
 }
 
@@ -520,7 +649,9 @@ class NavigateTool(private val phone: Phone) : Tool {
         "Press one of the phone's own buttons: back, home, recents, or " +
             "notifications. What back does depends on where you press it: from " +
             "an app's first screen it leaves the app, and over a keyboard it " +
-            "closes the keyboard. Read the answer to see where you ended up."
+            "closes the keyboard. Read the answer to see where you ended up, and " +
+            "do not send other actions in the same round as this one: the screen " +
+            "will still be moving when they arrive."
 
     override val schema = """
         {"type":"object","properties":{"where":{"type":"string",
@@ -572,13 +703,20 @@ class ScrollTool(private val phone: Phone) : Tool {
 }
 
 /** Start an app by name. */
-class OpenAppTool(private val phone: Phone) : Tool {
+class OpenAppTool(
+    private val phone: Phone,
+    /** As [WaitForChangeTool], and injected for the same reason: a test that
+     *  waits four real seconds per case is a suite people stop running. */
+    private val pause: suspend (Long) -> Unit = { kotlinx.coroutines.delay(it) },
+) : Tool {
     override val name = "open_app"
 
     override val purpose =
-        "Open an app by its name, as it appears under its icon. Answers with the " +
-            "screen afterwards, which will often catch the app still starting, so " +
-            "read it again if it looks unfinished."
+        "Open an app by its name, as it appears under its icon. This waits for " +
+            "the app to settle before answering, so the screen it shows you is " +
+            "the one that is there. Do not send other actions in the same round " +
+            "as this one: anything aimed at the screen you were on before will " +
+            "be aimed at a screen that has gone."
 
     override val schema = """
         {"type":"object","properties":{"name":{"type":"string",
@@ -607,9 +745,40 @@ class OpenAppTool(private val phone: Phone) : Tool {
                     found.joinToString(", ") { it.label } +
                     ". Name one of those exactly."
             } else {
-                TapTool.say(phone, "opened", phone.open(found.single().packageName))
+                val done = phone.open(found.single().packageName)
+                // Settled before answering rather than after, which is #675's
+                // fifth. Answering mid-launch costs a guaranteed wasted round:
+                // the model reads a screen that is still moving, and the only
+                // useful thing it can do with it is read again.
+                if (done is Done.Did) settle()
+                TapTool.say(phone, "opened", done)
             }
         }
+    }
+
+    /**
+     * Wait until two reads in a row see the same screen, or give up.
+     *
+     * Two rather than one, because a launch passes through screens that are each
+     * momentarily stable. Giving up is not reported: what follows is a read
+     * either way, and a launch that is still moving after this is one the model
+     * should see moving rather than be told about.
+     */
+    private suspend fun settle() {
+        var last: Generation? = null
+        repeat(SETTLES) {
+            val now = phone.read()?.generation
+            if (now != null && now == last) return
+            last = now
+            pause(WaitForChangeTool.INTERVAL.toLong())
+        }
+    }
+
+    private companion object {
+        /** Reads before giving up. At [WaitForChangeTool.INTERVAL] apart, three
+         *  seconds, which is a cold start on a slow phone and a guess said as
+         *  one. */
+        const val SETTLES = 12
     }
 }
 
@@ -728,5 +897,66 @@ class FindOnScreenTool(private val phone: Phone) : Tool {
         // With the screen id: a handle without one cannot be acted on, and a
         // list to look at rather than use would be a worse answer than none.
         return ReadScreenTool.describe(Reading(reading.generation, found))
+    }
+}
+
+/**
+ * A picture of the screen, for the layout the tree describes badly.
+ *
+ * The tool #439 was opened for, and it is deliberately not a replacement for
+ * [ReadScreenTool]. A picture has no handles in it, so nothing in it can be
+ * acted on: the model still reads the screen to get a handle and still acts
+ * through one. What this buys is the thing a node tree cannot give at all, and
+ * the purpose below says so rather than leaving a model to find out by trying:
+ * a chart, a photo, a control drawn on a canvas that was never in the tree.
+ *
+ * Barred first, as [ReadScreenTool] is barred first and for the stronger
+ * reason. A picture of the permissions page is a picture of exactly the button
+ * this application must not press, and unlike a reading it carries every pixel
+ * of it whether or not the tree had a node.
+ */
+class LookTool(private val phone: Phone) : Tool {
+    override val name = "look"
+
+    override val purpose =
+        "Take a picture of the screen, for when reading it is not enough: a " +
+            "chart, a photo, a map, or a control drawn in a way that leaves " +
+            "nothing to read. It has no handles in it, so use read_screen to " +
+            "act on anything. Prefer read_screen: it is faster, cheaper, and " +
+            "most screens are text."
+
+    override val schema = """{"type":"object","properties":{}}"""
+
+    /** # Rely
+     *  As [ReadScreenTool]: obtains no capability, because the service is
+     *  granted once from Settings. Dearer than a reading by a frame grab, a
+     *  PNG compress and a base64 of the result. */
+    override suspend fun answer(arguments: String): Answer {
+        phone.barredNow()?.let { return Answer(it) }
+
+        // ReadScreenTool's words, because the two failures are the same two:
+        // a service that is off, and a window that has not arrived. A second
+        // set of sentences for a second tool is a second thing to keep true.
+        val image = phone.capture()
+            ?: return Answer(ReadScreenTool.unreadable(phone.attached()))
+
+        return Answer(SAID, listOf(image))
+    }
+
+    // Narrowed rather than left unimplemented, so a caller wanting text does
+    // not have to know which kind of tool this is. What it loses is the whole
+    // point of the tool, which is why nothing calls it.
+    override suspend fun run(arguments: String): String = answer(arguments).text
+
+    private companion object {
+        /**
+         * What goes in the tool message, which cannot carry the picture.
+         *
+         * Message.looked puts the image in a user message after this one, so
+         * this says a picture follows rather than describing one. A tool result
+         * claiming to be a screenshot, in a message that provably is not one,
+         * is the kind of thing a model reconciles by inventing what it saw.
+         */
+        const val SAID = "a picture of the screen follows this message"
     }
 }

@@ -67,6 +67,13 @@ android/build/
 android/.gradle/
 android/local.properties
 
+# The Kotlin compiler daemon's session markers, which none of the lines above
+# match: `android/*/build/` is a module's output and this sits beside `.gradle`
+# rather than under a module. They are empty files naming a daemon that has
+# exited, so a `git add -A` during a build tracks two names that mean nothing
+# afterwards, and a checkout of a branch carrying them writes them back.
+android/.kotlin/
+
 # The Xcode project, generated from ios/project.yml by `just ios-project`. A
 # checked-in pbxproj is unreviewable under this repository's size limit: it is
 # generated, it reorders itself between Xcode versions, and it conflicts on every

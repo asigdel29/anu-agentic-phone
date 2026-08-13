@@ -38,14 +38,14 @@ Nothing. The application links this repository's own core and Apple's frameworks
 
 ---
 
-## Rust dependencies (302 packages, all features)
+## Rust dependencies (305 packages, all features)
 
 | Licence | Packages |
 |---|---|
-| MIT OR Apache-2.0 | 157 |
-| MIT | 53 |
+| MIT OR Apache-2.0 | 158 |
+| MIT | 54 |
 | Unicode-3.0 | 18 |
-| MIT/Apache-2.0 | 15 |
+| MIT/Apache-2.0 | 16 |
 | Apache-2.0 OR MIT | 14 |
 | Apache-2.0 | 8 |
 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | 5 |
@@ -191,6 +191,7 @@ Nothing. The application links this repository's own core and Apple's frameworks
 | libgit2-sys | 0.18.7+1.9.6 | MIT OR Apache-2.0 |
 | libredox | 0.1.19 | MIT |
 | libsqlite3-sys | 0.30.1 | MIT |
+| libssh2-sys | 0.3.2 | MIT OR Apache-2.0 |
 | libz-sys | 1.1.29 | MIT OR Apache-2.0 |
 | linux-raw-sys | 0.12.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | litemap | 0.8.2 | Unicode-3.0 |
@@ -220,6 +221,8 @@ Nothing. The application links this repository's own core and Apple's frameworks
 | once_cell | 1.21.4 | MIT OR Apache-2.0 |
 | onig | 6.5.3 | MIT |
 | onig_sys | 69.9.3 | MIT |
+| openssl-src | 300.6.1+3.6.3 | MIT/Apache-2.0 |
+| openssl-sys | 0.9.117 | MIT |
 | option-ext | 0.2.0 | MPL-2.0 |
 | ort | 2.0.0-rc.13 | MIT OR Apache-2.0 |
 | ort-sys | 2.0.0-rc.13 | MIT OR Apache-2.0 |

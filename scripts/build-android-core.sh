@@ -93,11 +93,23 @@ if ! rustup target list --installed | grep -qx "$TARGET"; then
     rustup target add "$TARGET"
 fi
 
-# cc and ar for the vendored C (libgit2 and SQLite both build one) and the
-# linker for the Rust half. Named per target, which is how cargo and cc-rs each
-# find theirs.
+# cc, ar and ranlib for the vendored C (libgit2, SQLite and OpenSSL each build
+# one) and the linker for the Rust half. Named per target, which is how cargo
+# and cc-rs each find theirs.
+#
+# ranlib is the odd one and it is here for a reason worth keeping. Nothing asked
+# for it until OpenSSL arrived: libgit2 and SQLite are built by cc-rs, which
+# indexes an archive through `ar s`, where OpenSSL is built by its own Makefile
+# and calls ranlib by name. Left unset, openssl-src guesses the name from the
+# triple and asks for aarch64-linux-android-ranlib, which NDK r23 and later do
+# not ship: there are zero triple-prefixed binutils in the toolchain now and
+# llvm-ranlib is the whole of it. The failure is seven lines of
+# "command not found" from inside `make install_dev`, after OpenSSL has already
+# configured and compiled, which is a long way to go to be told the name of a
+# tool.
 export CC_aarch64_linux_android="$BIN/aarch64-linux-android$API-clang"
 export AR_aarch64_linux_android="$BIN/llvm-ar"
+export RANLIB_aarch64_linux_android="$BIN/llvm-ranlib"
 export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$CC_aarch64_linux_android"
 
 printf 'building %s\n' "$TARGET"

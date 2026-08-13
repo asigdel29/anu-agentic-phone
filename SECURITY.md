@@ -34,6 +34,10 @@ share, and the build and deployment scripts.
 - **NeuralWatt, Hermes Agent and zeromem.** Report those to the people who wrote them.
 - **The platform's own behaviour.** What an accessibility service is allowed to do is Android's
   decision; the section below records it rather than disputing it.
+- **What a server you connected does.** An MCP server is somebody else's code on somebody
+  else's machine, reached because you asked for it. What this repository owes you is that
+  connecting one cannot displace a compiled tool and cannot happen without you typing an
+  address; the section below says what it does not owe you.
 
 ## The threat model
 
@@ -88,6 +92,42 @@ ever added, which is a request to come back and rewrite this paragraph rather th
 So an application that wants to hide from this agent has a way. `FLAG_SECURE` is not it, and
 that is the whole of the correction #472 made.
 
+**And since #439 the agent can capture the screen as well as read it.** `driving.xml` declares
+`android:canTakeScreenshot`, which #610 measured is required, and a captured screen crosses to
+the provider the way anything else a tool produced does. `FLAG_SECURE` windows *are* black
+rectangles in a capture, which is the half of the old claim that was always true, so a banking
+screen is readable through the node tree and not through a picture. Nothing is written to disk,
+including the application's own cache, which `how-the-agent-drives.md` already makes a rule about
+what the code may contain rather than about what it does at runtime.
+
+### A connected server writes into the model's context
+
+An MCP server (#596) offers tools, and the agent runs them the way it runs the compiled ones.
+Two things about that are worth stating plainly, because neither is obvious from a settings
+screen that says `Connected servers`.
+
+**A tool's description is model input written by somebody else.** The name and the sentence
+saying what a tool does are passed through as the server wrote them, on every turn, into the
+context of a model that is about to act on the phone. They are not sanitised, and that is
+deliberate: editing them would be pretending the risk is textual when the risk is that the
+server is trusted at all. It is the same class of problem as the section above about screen
+content, arriving through a channel somebody chose to open.
+
+**What it cannot do is take a name that already means something.** Every remote tool is offered
+as `mcp_<yourlabel>_<name>`, so a server offering `tap` is offered as `mcp_desk_tap` and the
+compiled `tap` that actually touches the screen is never displaced. The label is the one you
+typed rather than one the server chose, so a server cannot decide how it appears in the list you
+used to decide whether to trust it. `McpTest` and `ConnectedTest` hold both ends of that.
+
+Two smaller properties. A server is reached over https only, because a released build cannot
+send cleartext at all and a plain-http server would work for whoever built the APK and fail for
+everybody else. And a server that is unreachable contributes no tools and stops nothing: the
+turn runs with what it has.
+
+What is not mitigated is the first paragraph. A server you connect can describe its tools in
+whatever words it likes, and those words reach the model. Connect ones you trust, which is what
+the screen says and the whole of what can honestly be claimed.
+
 ### What leaves the device
 
 A tool result becomes a message, and the next request carries it to the model. So calendar
@@ -99,6 +139,18 @@ logged: `how-the-agent-drives.md` makes that a rule about what the code may cont
 about what it does at runtime: no node text to the system log at any level, no screenshot to
 disk including the application's own cache, nothing in a crash breadcrumb. The failure that rule
 exists to prevent is somebody enabling verbose logging two years from now.
+
+**The microphone adds nothing to that list.** Recognition happens on the phone, because the code
+calls `createOnDeviceSpeechRecognizer` rather than the ordinary factory. The ordinary one binds
+whichever service holds `RecognitionService`, which on most phones recognises over somebody's
+network; the on-device one matches here or answers an error, so no audio is sent anywhere. The
+transcript is put in the message field and reaches the model only when you send it, exactly as
+typed text does.
+
+The microphone is open only while you have asked to be listened to. There is no wake word and
+nothing here listens on its own. Server-side transcription would change this paragraph, which is
+the reason it is not being added quietly: it is deferred with the server work rather than
+treated as an implementation detail of a button that already exists.
 
 ### Credentials
 
@@ -146,3 +198,8 @@ What the emulator has settled is narrower than it sounds and worth naming: the r
 loads its native library under R8, a turn reaches the provider, the tool loop drives another
 application, and the overlay reaches the display. What it cannot settle is a real screen, a
 real calendar, and a person deciding whether they are comfortable.
+
+The microphone is narrower again, and has had less than the rest of this document. Nothing about
+it has run on an emulator or a phone: it was checked by a suite on the host and by reading the
+code. The claim that no audio leaves the device is a claim about which factory that code calls,
+which is the kind a reader can check for themselves and is not the kind anybody has watched.

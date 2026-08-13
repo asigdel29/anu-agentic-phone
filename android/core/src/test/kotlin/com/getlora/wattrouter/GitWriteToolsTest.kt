@@ -1,7 +1,8 @@
-// GitWriteToolsTest.kt: what the two write tools refuse, and what they say.
+// GitWriteToolsTest.kt: what the three write tools refuse, and what they say.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
+//   2026-08-11  A. Sigdel  Took in the one that makes a repository, #393.
 //
 // On the JVM against a scripted Worktree, which is the seam's whole purpose:
 // Repository loads the library when its class initialises, so a tool holding one
@@ -18,8 +19,13 @@ import org.junit.Test
 private class Tracked(private val answer: String?) : Worktree {
     var staged: List<String>? = null
     var message: String? = null
+    var initialised = false
 
-    override fun init() = answer
+    override fun init() = answer.also { initialised = true }
+
+    // No tool reaches this, and the tests below are of tools, so nothing here
+    // records the call. It is on the interface because the app calls it.
+    override fun identify(name: String, email: String) = answer
 
     override fun head() = answer
 
@@ -28,9 +34,63 @@ private class Tracked(private val answer: String?) : Worktree {
     override fun add(paths: List<String>) = answer.also { staged = paths }
 
     override fun commit(message: String) = answer.also { this.message = message }
+
+    // On the interface for the app's sake, like identify: no tool reaches
+    // either, so neither records the call.
+    override fun remoteSet(name: String, url: String) = answer
+
+    override fun fetch(name: String) = answer
+
+    override fun push(remote: String, branch: String) = answer
+
+    override fun pull(remote: String, branch: String) = answer
 }
 
 class GitWriteToolsTest {
+    @Test
+    fun makingARepositoryReadsDifferentlyFromFindingOne() {
+        // The distinction the entry point exists for. Collapsed into one
+        // success, a model that re-ran init would report having started work it
+        // is in the middle of.
+        assertTrue(made("""{"ok":{"kind":"created"}}""").startsWith("made this directory"))
+        assertEquals(
+            "there was already a repository here, and nothing was changed",
+            made("""{"ok":{"kind":"already_there"}}"""),
+        )
+    }
+
+    @Test
+    fun aRefusedInitKeepsTheCoresWords() {
+        // A path inside a file and a path nothing may write to are different
+        // problems, and only the core knows which one it met.
+        assertEquals(
+            "Permission denied",
+            made("""{"error":"Permission denied"}"""),
+        )
+    }
+
+    @Test
+    fun anInitAnswerNothingCanReadIsNotGuessedAt() {
+        assertEquals("the repository could not be created at all", made(null))
+        assertEquals("the repository answered nothing readable", made("not json"))
+        // A kind a later core learned. Reading it as "created" would have the
+        // model report having made something it did not.
+        assertEquals(
+            "the repository answered nothing readable",
+            made("""{"ok":{"kind":"reopened"}}"""),
+        )
+    }
+
+    @Test
+    fun initAsksTheRepositoryAndSaysBackWhatItAnswered() = runTest {
+        val worktree = Tracked("""{"ok":{"kind":"already_there"}}""")
+
+        val said = GitInitTool(worktree).run("{}")
+
+        assertTrue("the repository should have been asked", worktree.initialised)
+        assertEquals("there was already a repository here, and nothing was changed", said)
+    }
+
     @Test
     fun aCommitIsSaidBackWithItsId() {
         // "Committed" alone leaves a model unable to reference what it wrote,

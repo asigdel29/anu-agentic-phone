@@ -2,6 +2,8 @@
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
+//   2026-08-11  A. Sigdel  The microphone, which is a fourth thing a phone can
+//                          be without, #650.
 //
 // Permission and the Asking seam live in core/ because everything about them can
 // be checked without a phone. This is the half that cannot, and it is longer
@@ -67,6 +69,9 @@ internal fun permissionFor(capability: Capability): String = when (capability) {
     // the dialog, and none of that buys anything here: an agent answering where
     // somebody is does not need to know which side of the street.
     Capability.LOCATION -> Manifest.permission.ACCESS_COARSE_LOCATION
+    // Holding a stream, and nothing about where it goes. AndroidListening is
+    // what answers that question, by matching on the phone.
+    Capability.MICROPHONE -> Manifest.permission.RECORD_AUDIO
 }
 
 /**
@@ -147,15 +152,18 @@ class AndroidAsking(private val activity: ComponentActivity) : Asking {
     /**
      * Whether the phone has the thing behind the permission.
      *
-     * Location is the one of the three a phone can genuinely lack; the calendar
-     * and contacts providers are platform, and one holding no event is empty
-     * rather than absent. Resolving their authorities to guess would be worse
-     * than not guessing: package visibility filters that lookup from targetSdk
-     * 30 upwards, so its "no" means two things and one of them is wrong.
+     * Location and the microphone are the two of the four a phone can genuinely
+     * lack; the calendar and contacts providers are platform, and one holding no
+     * event is empty rather than absent. Resolving their authorities to guess
+     * would be worse than not guessing: package visibility filters that lookup
+     * from targetSdk 30 upwards, so its "no" means two things and one of them is
+     * wrong.
      */
     private fun isPresent(capability: Capability): Boolean = when (capability) {
         Capability.LOCATION ->
             activity.packageManager.hasSystemFeature(PackageManager.FEATURE_LOCATION)
+        Capability.MICROPHONE ->
+            activity.packageManager.hasSystemFeature(PackageManager.FEATURE_MICROPHONE)
         Capability.CALENDAR, Capability.CONTACTS -> true
     }
 }

@@ -6,13 +6,25 @@
 //!   2026-08-10  A. Sigdel  Answers JSON rather than C strings with #565. The
 //!                          name is the last of the ABI here and goes with the
 //!                          others.
+//!   2026-08-11  A. Sigdel  Corrected the five doc comments still describing a
+//!                          returned pointer, a null and a safety contract.
+//!                          #565 removed all three and left the prose claiming
+//!                          them, which the paragraph below already denies.
+//!   2026-08-11  A. Sigdel  Took in identify with #636.
+//!   2026-08-12  A. Sigdel  Took in the first two network calls with #668.
+//!   2026-08-12  A. Sigdel  Took in the two that can lose work, with #671.
 //!
 //! Contents
-//!   `init`     Make a directory into a repository.
-//!   `head`     Where `HEAD` points.
-//!   `status`   The working tree, against the index and the head.
-//!   `add`      Staging paths.
-//!   `commit`   Writing what is staged.
+//!   `init`      Make a directory into a repository.
+//!   `identify`  Say who commits from here.
+//!   `head`      Where `HEAD` points.
+//!   `status`    The working tree, against the index and the head.
+//!   `add`       Staging paths.
+//!   `commit`    Writing what is staged.
+//!   `remote_set` Where a repository sends and receives.
+//!   `fetch`     Bringing back what a remote has, merging nothing.
+//!   `push`      Sending a branch, and refusing to overwrite anybody.
+//!   `pull`      Fast-forwarding, or saying it cannot.
 //!
 //! Separate from `core.rs` because what these answer is a different shape, not
 //! because that file was full. A decision is three fields; a status is a list of
@@ -39,34 +51,32 @@ use std::path::Path;
 /// Make a directory into a repository, or say it already was one.
 ///
 /// # Returns
-/// An owned JSON string to pass to [`wattrouter_string_free`], carrying `ok`
-/// with a `kind` of `created` or `already_there`, or `error` with the reason.
-/// Null IF `path` was null or not UTF-8, or the call panicked.
+/// `ok` with a `kind` of `created` or `already_there`, or `error` with the
+/// reason.
 ///
 /// The two successes are named separately on purpose. `git init` is idempotent
 /// and this could have answered one success for both; a model that cannot tell
 /// "made you one" from "there already was one" reports having started work it
 /// is in the middle of.
-///
-/// # Safety
-/// `path` must be null or a valid NUL-terminated string outliving the call. The
-/// returned pointer must be released with [`wattrouter_string_free`] and not
-/// with `free`.
 pub(crate) fn init(path: &Path) -> String {
     rendered(git::init(path))
+}
+
+/// Say who commits from here, so that committing becomes possible at all.
+///
+/// # Returns
+/// `ok` with nothing under it, or `error` with the reason. Nothing under it
+/// because there is nothing to report that the caller did not just supply: this
+/// is the one entry point here whose whole result is that it worked.
+pub(crate) fn identify(path: &Path, name: &str, email: &str) -> String {
+    rendered(git::identify(path, name, email))
 }
 
 /// Where `HEAD` points: a branch, a commit, or a branch with no commits yet.
 ///
 /// # Returns
-/// An owned JSON string to pass to [`wattrouter_string_free`], carrying `ok` with
-/// a `kind` of `branch`, `detached` or `unborn`, or `error` with the reason.
-/// Null IF `path` was null or not UTF-8, or the call panicked.
-///
-/// # Safety
-/// `path` must be null or a valid NUL-terminated string outliving the call. The
-/// returned pointer must be released with [`wattrouter_string_free`] and not with
-/// `free`.
+/// `ok` with a `kind` of `branch`, `detached` or `unborn`, or `error` with the
+/// reason.
 pub(crate) fn head(path: &Path) -> String {
     rendered(git::open(path).and_then(|repo| git::head(&repo)))
 }
@@ -74,13 +84,8 @@ pub(crate) fn head(path: &Path) -> String {
 /// The working tree, against the index and the head.
 ///
 /// # Returns
-/// An owned JSON string to pass to [`wattrouter_string_free`], carrying `ok` with
-/// the head, `staged` and `unstaged` as `{path, kind}`, and `untracked` and
-/// `conflicted` as paths, or `error` with the reason. Null on the terms
-/// [`wattrouter_git_head`] states.
-///
-/// # Safety
-/// As [`wattrouter_git_head`].
+/// `ok` with the head, `staged` and `unstaged` as `{path, kind}`, and
+/// `untracked` and `conflicted` as paths, or `error` with the reason.
 pub(crate) fn status(path: &Path) -> String {
     rendered(git::status(path))
 }
@@ -95,13 +100,8 @@ pub(crate) fn status(path: &Path) -> String {
 ///   value.
 ///
 /// # Returns
-/// An owned JSON string to pass to [`wattrouter_string_free`], carrying `ok` with
-/// the status after staging, or `error`, which names the missing path IF one is
-/// missing, so a model that misspelt one of four is told which. Null on the terms
-/// [`wattrouter_git_head`] states.
-///
-/// # Safety
-/// As [`wattrouter_git_head`], for both arguments.
+/// `ok` with the status after staging, or `error`, which names the missing path
+/// IF one is missing, so a model that misspelt one of four is told which.
 pub(crate) fn add(path: &Path, paths_json: &str) -> String {
     match serde_json::from_str::<Vec<String>>(paths_json) {
         Ok(paths) => rendered(git::add(path, &paths)),
@@ -114,17 +114,60 @@ pub(crate) fn add(path: &Path, paths_json: &str) -> String {
 /// Commit what is staged.
 ///
 /// # Returns
-/// An owned JSON string to pass to [`wattrouter_string_free`], carrying `ok` with
-/// the short id of the commit written, or `error`. Committing nothing is an
-/// error: libgit2 writes a commit whose tree matches its parent without
+/// `ok` with the short id of the commit written, or `error`. Committing nothing
+/// is an error: libgit2 writes a commit whose tree matches its parent without
 /// complaint, and a model doing that in a loop believes it is making progress
-/// while producing a history of identical trees. Null on the terms
-/// [`wattrouter_git_head`] states.
-///
-/// # Safety
-/// As [`wattrouter_git_head`], for both arguments.
+/// while producing a history of identical trees. So is committing with no
+/// identity, which is every commit on a phone until [`identify`] has been
+/// called.
 pub(crate) fn commit(path: &Path, message: &str) -> String {
     rendered(git::commit(path, message))
+}
+
+/// Point a remote somewhere, and say what that changed.
+///
+/// # Returns
+/// `ok` with a `kind` of `added`, `moved` or `unchanged`, the middle one
+/// carrying the URL it used to point at. Three answers rather than one success
+/// because a caller told only that it worked cannot tell whether it has just
+/// changed where somebody's work goes.
+pub(crate) fn remote_set(path: &Path, name: &str, url: &str) -> String {
+    rendered(git::remote_set(path, name, url))
+}
+
+/// Bring back what a remote has, merging nothing.
+///
+/// # Returns
+/// `ok` with the reference names that moved, which is empty when the remote had
+/// nothing this repository did not already have. An empty list is a state
+/// rather than a failure and the caller has to read it as one.
+pub(crate) fn fetch(path: &Path, name: &str, reach: Option<&git::Reach>) -> String {
+    rendered(git::fetch(path, name, reach))
+}
+
+/// Send a branch to a remote, and refuse rather than overwrite.
+///
+/// # Returns
+/// `ok` with nothing under it, or `error` with the refusal. There is nothing to
+/// report on success that the caller did not supply, which is [`identify`]'s
+/// reasoning; on failure the refusal is the whole point, and the message for a
+/// non-fast-forward says what happened and offers nothing to try.
+///
+/// There is no `force` and no argument that could become one.
+pub(crate) fn push(path: &Path, remote: &str, branch: &str, reach: Option<&git::Reach>) -> String {
+    rendered(git::push(path, remote, branch, reach))
+}
+
+/// Take what a remote has, if that can be done without merging.
+///
+/// # Returns
+/// `ok` with a `kind` of `already_here`, `fast_forwarded` or `started`, the last
+/// two carrying the commit. Three answers because a caller told only that it
+/// worked cannot tell whether anything arrived, and `started` is the ordinary
+/// case rather than an edge one: a repository made by `init_repository` and
+/// then pointed at a remote has no branch at all.
+pub(crate) fn pull(path: &Path, remote: &str, branch: &str, reach: Option<&git::Reach>) -> String {
+    rendered(git::pull(path, remote, branch, reach))
 }
 
 #[cfg(test)]

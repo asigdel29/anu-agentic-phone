@@ -19,8 +19,11 @@ private class Static(
     private val reading: Reading?,
     private val why: String? = null,
     private val attached: Boolean = true,
+    private val inFront: String? = null,
 ) : Phone {
     override suspend fun barredNow() = why
+
+    override suspend fun inFront() = inFront
 
     override suspend fun attached() = attached
 
@@ -81,6 +84,23 @@ class ScreenToolsTest {
     }
 
     @Test
+    fun theHeaderSaysWhichAppAndWhen() = runTest {
+        // #675's second. A model that cannot see which application it is in
+        // re-opens applications it is already in, which costs a round and a
+        // launch, and a screen is often about time with no other source for
+        // what now is.
+        val said = ReadScreenTool(
+            Static(
+                Reading(generation, listOf(sighting(id = "send", role = "button", label = "Send", clickable = true))),
+                inFront = "com.google.android.gm",
+            ),
+            clock = { "14:32" },
+        ).run("{}")
+
+        assertTrue(said, said.startsWith("screen k3f9.4 in com.google.android.gm at 14:32\n"))
+    }
+
+    @Test
     fun aScreenIsItsIdAndOneLinePerThing() = runTest {
         val said = ReadScreenTool(
             Static(
@@ -92,8 +112,12 @@ class ScreenToolsTest {
                     ),
                 ),
             ),
+            clock = { "" },
         ).run("{}")
 
+        // No application and no clock, so the header is the id alone. Both are
+        // omitted rather than guessed at: "in an unknown app" is a sentence a
+        // model reasons about, and a missing clause is not.
         assertEquals(
             "screen k3f9.4\n" +
                 "tap       h:send|button|Send||0\n" +
@@ -316,10 +340,29 @@ class TypeTextToolTest {
         // #518. Every acting tool shares TapTool.say, and before the verb was a
         // parameter all five of them reported that they had tapped something.
         // The transcript is the model's account of what it did.
+        //
+        // Contains rather than starts with, since #675: what the field says now
+        // leads, because it is the answer to the question the call was asking.
         val said = TypeTextTool(Tapping(Done.Did(null))).run(call())
 
-        assertTrue(said, said.startsWith("typed."))
+        assertTrue(said, said.contains("typed."))
         assertTrue(said, !said.contains("tapped"))
+    }
+
+    @Test
+    fun typingSaysWhatTheFieldNowSays() = runTest {
+        // #675's first, and the one with a number on it: they attribute seven
+        // points to closing silent text input failures. What this answered
+        // before was the whole screen, leaving the model to find the field
+        // again in sixty lines to learn whether its own last action worked.
+        val after = Reading(
+            Generation("k3f9", 5),
+            listOf(Sighting(field.copy(text = "hello"), "field", "hello", isEditable = true)),
+        )
+
+        val said = TypeTextTool(Tapping(Done.Did(after))).run(call())
+
+        assertTrue(said, said.startsWith("the field now says: hello"))
     }
 
     @Test
@@ -551,6 +594,66 @@ class OpenAppToolTest {
 
         assertTrue(said, said.startsWith("opened."))
         assertTrue(said, !said.contains("tapped"))
+    }
+
+    @Test
+    fun aFieldIsFoundByItsIdRatherThanByItsOldText() {
+        // The whole reason this is not an equality check: a handle carries the
+        // text, and the text is what just changed.
+        val asked = Handle(viewId = "search", role = "field", text = "")
+        val now = Handle(viewId = "search", role = "field", text = "hello")
+        val reading = Reading(
+            Generation("k3f9", 5),
+            listOf(Sighting(now, "field", "hello", isEditable = true)),
+        )
+
+        assertEquals("hello", fieldNow(asked, reading)?.label)
+    }
+
+    @Test
+    fun aFieldThatWentAwayIsSaidRatherThanGuessedAt() {
+        val asked = Handle(viewId = "search", role = "field")
+        val reading = Reading(Generation("k3f9", 5), emptyList())
+
+        assertEquals(null, fieldNow(asked, reading))
+    }
+
+    @Test
+    fun openingWaitsForTheScreenToStopMoving() = runTest {
+        // #675's fifth. A launch answered mid-flight costs a guaranteed wasted
+        // round: what the model reads is a screen that is still moving, and the
+        // only useful thing it can do with it is read again.
+        var reads = 0
+        val moving = object : Phone by phone(gmail) {
+            override suspend fun read(): Reading {
+                reads++
+                // One screen, then another, then that one again, which is
+                // what settling looks like from here.
+                return Reading(Generation("k3f9", if (reads < 2) 1L else 2L), emptyList())
+            }
+        }
+        val paused = mutableListOf<Long>()
+
+        OpenAppTool(moving, pause = { paused += it }).run("""{"name":"Gmail"}""")
+
+        // Three reads to see a repeat, and not twelve, which is what giving up
+        // would have cost. The wording reads what open() already answered, so
+        // there is no fourth.
+        assertEquals(3, reads)
+        assertEquals(listOf(250L, 250L), paused)
+    }
+
+    @Test
+    fun openingThatWasRefusedDoesNotWaitForAnything() = runTest {
+        // Nothing is starting, so there is nothing to settle. Waiting here
+        // would spend three seconds on an app that never opened.
+        val paused = mutableListOf<Long>()
+        val refused = Tapping(Done.Refused("the screen said no"))
+            .also { it.installed = listOf(gmail) }
+
+        OpenAppTool(refused, pause = { paused += it }).run("""{"name":"Gmail"}""")
+
+        assertEquals(emptyList<Long>(), paused)
     }
 
     @Test

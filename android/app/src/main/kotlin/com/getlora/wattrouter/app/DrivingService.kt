@@ -38,7 +38,10 @@ import android.accessibilityservice.AccessibilityButtonController
 import android.accessibilityservice.AccessibilityService
 import android.app.KeyguardManager
 import android.content.Intent
+import android.graphics.Bitmap
 import android.os.Bundle
+import android.util.Base64
+import android.view.Display
 import android.view.Gravity
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
@@ -50,10 +53,13 @@ import com.getlora.wattrouter.Done
 import com.getlora.wattrouter.Generation
 import com.getlora.wattrouter.Generations
 import com.getlora.wattrouter.Handle
+import com.getlora.wattrouter.Image
 import com.getlora.wattrouter.Node
 import com.getlora.wattrouter.Onward
 import com.getlora.wattrouter.Reading
 import com.getlora.wattrouter.Viewing
+import java.io.ByteArrayOutputStream
+import kotlinx.coroutines.suspendCancellableCoroutine
 import com.getlora.wattrouter.Way
 
 /** The screen, when somebody has allowed it to be read. */
@@ -77,6 +83,9 @@ class DrivingService : AccessibilityService() {
     /** The banner, while a turn is driving. */
     private var banner: Banner? = null
 
+    /** The frame around the display, and whether it is on it. */
+    private var border: Border? = null
+
     /**
      * The bubble, while a turn is not.
      *
@@ -85,6 +94,7 @@ class DrivingService : AccessibilityService() {
      */
     private var head: ChatHead? = null
     private var shown = false
+    private var bordered = false
 
     /**
      * The question, while one is being asked.
@@ -162,6 +172,7 @@ class DrivingService : AccessibilityService() {
         val showing = banner ?: Banner(this) { onStop?.invoke() }.also { banner = it }
         showing.say(what)
         if (!shown) attach(showing)
+        attachBorder()
     }
 
     /**
@@ -256,6 +267,49 @@ class DrivingService : AccessibilityService() {
      * SurfaceControl there is no public way to build, and this window type has
      * been here since API 22. So the permission is gone and so is the choice.
      */
+    /**
+     * Put the frame up, unless it is up.
+     *
+     * A second window rather than a thicker banner, because it is a different
+     * shape: the banner is a strip at the top and this is the edge of the
+     * display. Silent on failure, as [attach] is, and for the same reason: a
+     * turn that cannot draw a frame is still a turn.
+     *
+     * MATCH_PARENT both ways with no gravity, so it is the display. Every touch
+     * flag the banner sets, and one more: FLAG_NOT_TOUCHABLE, because unlike
+     * the banner there is nothing on this to press. Without it a frame around
+     * the screen would be a frame that ate the edge of every gesture, which is
+     * where the back swipe lives.
+     */
+    private fun attachBorder() {
+        if (bordered) return
+
+        val edge = border ?: Border(this).also { border = it }
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            android.graphics.PixelFormat.TRANSLUCENT,
+        )
+
+        bordered = runCatching {
+            getSystemService(WindowManager::class.java).addView(edge.view, params)
+            true
+        }.getOrDefault(false)
+    }
+
+    /** Take it away. Called wherever the banner is taken away, and with it. */
+    private fun detachBorder() {
+        if (!bordered) return
+        border?.let {
+            runCatching { getSystemService(WindowManager::class.java).removeView(it.view) }
+        }
+        bordered = false
+    }
+
     private fun attach(showing: Banner) {
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -280,6 +334,12 @@ class DrivingService : AccessibilityService() {
     }
 
     private fun hide() {
+        // The frame first and unconditionally. It goes up with the banner and
+        // has to come down with it, and an early return on a null banner would
+        // leave a frame around the display of a phone nothing is driving.
+        detachBorder()
+        border = null
+
         val showing = banner ?: return
         if (shown) {
             runCatching { getSystemService(WindowManager::class.java).removeView(showing.view) }
@@ -310,6 +370,88 @@ class DrivingService : AccessibilityService() {
     }
 
     /**
+     * A picture of what is on screen, as a data URL.
+     *
+     * Three conversions, and each is why this is not a field on a reading. The
+     * framework answers a hardware buffer; a bitmap wraps it; a PNG compresses
+     * it; base64 encodes that. A caller wanting lines should not pay for any of
+     * it.
+     *
+     * #610 measured what happens without `android:canTakeScreenshot`: the
+     * binder throws SecurityException before the callback is reached at all,
+     * saying "Services don't have the capability of taking the screenshot".
+     * That is why the attribute is in driving.xml now, and it arrives with this
+     * because a capability declared ahead of its caller is one nobody can weigh.
+     *
+     * # Rely
+     * Called from a tool, off the main thread. Suspends until the framework
+     * answers, which it does on the executor given.
+     *
+     * @return null when the framework refuses or answers nothing. One answer
+     *   for both, because a caller can do nothing different about either.
+     */
+    suspend fun capture(): Image? = suspendCancellableCoroutine { waiting ->
+        val answered = java.util.concurrent.atomic.AtomicBoolean(false)
+
+        // Guarded because a callback that fired twice would resume a
+        // continuation twice, which throws rather than being ignored.
+        //
+        // Nothing to undo on cancellation: the value is a string, and the
+        // hardware buffer it came from was closed before this was built.
+        fun answer(image: Image?) {
+            if (answered.compareAndSet(false, true)) {
+                waiting.resume(image) { _, _, _ -> }
+            }
+        }
+
+        runCatching {
+            takeScreenshot(
+                Display.DEFAULT_DISPLAY,
+                { it.run() },
+                object : TakeScreenshotCallback {
+                    override fun onSuccess(screenshot: ScreenshotResult) {
+                        answer(encoded(screenshot))
+                    }
+
+                    override fun onFailure(errorCode: Int) = answer(null)
+                },
+            )
+        }.onFailure {
+            // Thrown from the binder rather than delivered to the callback,
+            // which #610 found and is why this is caught rather than trusted to
+            // arrive as onFailure.
+            answer(null)
+        }
+    }
+
+    /**
+     * A screenshot as a data URL, or null if any step of it will not.
+     *
+     * PNG rather than JPEG. A screen is text and flat colour, which is what PNG
+     * is for and what JPEG is worst at: a compression artefact around a letter
+     * is a letter the model reads wrong, and this picture exists to be read.
+     *
+     * The buffer is closed whatever happens. It is a hardware allocation and
+     * leaving one to a finaliser is leaving it until the process is under
+     * memory pressure, which is exactly when a screenshot was expensive.
+     */
+    private fun encoded(screenshot: ScreenshotResult): Image? = try {
+        screenshot.hardwareBuffer.use { buffer ->
+            Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace)?.let { bitmap ->
+                ByteArrayOutputStream().use { bytes ->
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, bytes)
+                    val encoded = Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP)
+                    Image("data:image/png;base64,$encoded")
+                }
+            }
+        }
+    } catch (refused: RuntimeException) {
+        // A buffer the platform will not wrap, or an allocation that failed.
+        // Null for the reason capture states: a caller can do nothing different.
+        null
+    }
+
+    /**
      * Why the agent may not act on what is showing, or null.
      *
      * Reading goes through this too, which is where the tempting exception is:
@@ -320,6 +462,16 @@ class DrivingService : AccessibilityService() {
      * The keyguard is read now rather than remembered, because a phone locks while a
      * turn is running, which is the case this is for.
      */
+    /**
+     * Which application's window is in front, or null if none can be read.
+     *
+     * The same value [barredNow] already reads and does not surface. It goes to
+     * the model and nowhere else: how-the-agent-drives.md's rule is that what is
+     * on somebody's screen is not logged, and a package name is a thing about a
+     * person as much as a line of text is.
+     */
+    fun inFront(): String? = rootInActiveWindow?.packageName?.toString()
+
     fun barredNow(): Barred? = barred(
         packageName = rootInActiveWindow?.packageName?.toString(),
         activity = inFront,

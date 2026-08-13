@@ -2,15 +2,34 @@
 //!
 //! History
 //!   2026-08-08  A. Sigdel  Created.
+//!   2026-08-11  A. Sigdel  Took a remote, which is where anything leaving this
+//!                          repository has to be told to go.
+//!   2026-08-11  A. Sigdel  Took a fetch, which is the one network operation
+//!                          that cannot lose anything.
+//!   2026-08-11  A. Sigdel  Took a push, and the refusal that is the reason it
+//!                          was worth writing carefully.
+//!   2026-08-11  A. Sigdel  Took a pull that fast-forwards or says why it
+//!                          cannot, which is the last of these needing no key.
+//!   2026-08-11  A. Sigdel  Remembers a host's key the first time and refuses a
+//!                          changed one, before anything can reach a host.
 //!
 //! Contents
-//!   `Error`   Why an operation could not be done.
-//!   `Head`    Which branch, or which commit, or neither.
-//!   `head`    Opening a repository, and reading where it is.
-//!   `Change`  One path, and what happened to it.
-//!   `Status`  The working tree, against the index and the head.
-//!   `add`     Staging paths.
-//!   `commit`  Writing what is staged, and refusing to write nothing.
+//!   `Error`       Why an operation could not be done.
+//!   `Head`        Which branch, or which commit, or neither.
+//!   `identify`    Saying who commits from here.
+//!   `head`        Opening a repository, and reading where it is.
+//!   `Change`      One path, and what happened to it.
+//!   `Status`      The working tree, against the index and the head.
+//!   `add`         Staging paths.
+//!   `commit`      Writing what is staged, and refusing to write nothing.
+//!   `Pointed`     What pointing a remote turned out to be.
+//!   `remote_set`  Where a repository sends and receives.
+//!   `fetch`       Bringing back what a remote has, merging nothing.
+//!   `push`        Sending a branch, and refusing to overwrite anybody.
+//!   `Pulled`      What taking the remote's work turned out to be.
+//!   `pull`        Fast-forwarding, or saying it cannot.
+//!   `Trusted`     Whether a host's key was known already.
+//!   `trust`       Pinning a host on first sight, and refusing a changed one.
 //!
 //! Everything on the board shells out to `git`. A phone has no shell, so these
 //! come from libgit2, reached as a Rust dependency of this crate, which already
@@ -53,11 +72,90 @@ pub enum Error {
     #[error("nothing is staged, so there is nothing to commit. Stage what should go in first")]
     NothingStaged,
     /// No identity to sign a commit with.
+    ///
+    /// It still names the two keys, which is what a person reading a transcript
+    /// needs. What it stops doing is telling the reader to set them: "Set
+    /// user.name and user.email" is an instruction for a shell, and the caller
+    /// that meets this most often is a model on a phone which has none and
+    /// should not be looking for one. Whose job it is, is the part that is true
+    /// everywhere.
     #[error(
-        "no name and email are configured for git, so a commit cannot be signed. \
-         Set user.name and user.email"
+        "no user.name and user.email are set for this repository, so a commit \
+         cannot be signed. They are a claim about who somebody is, so whoever \
+         is using this has to set them, and there is nothing here to do about it"
     )]
     NoIdentity,
+    /// A remote this build has no transport for.
+    ///
+    /// Named with the form that would work, because somebody who copied a URL
+    /// out of a forge has the https one in front of them and the ssh one two
+    /// clicks away.
+    #[error(
+        "{0} is an https remote, and the only transport linked here is ssh. \
+         Use the ssh form of the same remote, which on most forges is \
+         git@host:owner/repository.git"
+    )]
+    HttpsRemote(String),
+    /// No remote by that name.
+    ///
+    /// The library reports this as a message about a URL, which reads as a
+    /// network failure for what is almost always a typed name that does not
+    /// match one that is there.
+    #[error("no remote called {0} is configured, so there is nowhere to reach")]
+    NoSuchRemote(String),
+    /// No branch by that name in this repository.
+    #[error("no branch called {0} in this repository, so there is nothing to send")]
+    NoSuchBranch(String),
+    /// The remote refused the reference, which means somebody else is on it.
+    ///
+    /// Deliberately terminal. `docs/decisions/pushing-from-a-phone.md` argues
+    /// that a non-fast-forward is not a transient failure and not something to
+    /// retry: it is somebody else's work on the branch, and the only ways past
+    /// it destroy one side or the other. Whoever is holding the phone decides
+    /// that, so the message says what happened and offers nothing to try.
+    #[error(
+        "{reference} was refused by the remote: {detail}. That means the remote \
+         has work this repository does not, so sending would overwrite it. \
+         Fetch and look at what is there before deciding whose work survives"
+    )]
+    NotFastForward {
+        /// The reference the remote refused.
+        reference: String,
+        /// What the remote said, which is the only account of its reasoning.
+        detail: String,
+    },
+    /// The branch and the remote have both moved, so taking one needs a merge.
+    ///
+    /// The mirror of [`Error::NotFastForward`], and refused for the reason the
+    /// decision record gives: a merge needs conflict resolution, that needs a
+    /// diff surface, and there is no diff surface anywhere in this product. A
+    /// conflicted index on a phone with no way to look at it is worse than
+    /// being told no.
+    #[error(
+        "{branch} and the remote have both moved on, so taking the remote's \
+         work would need a merge. There is nothing here to resolve a conflict \
+         with, so nothing was changed"
+    )]
+    WouldMerge {
+        /// The branch that has diverged.
+        branch: String,
+    },
+    /// A host answered with a different key than the one pinned for it.
+    ///
+    /// Refused in words and never as a prompt.
+    /// `docs/decisions/pushing-from-a-phone.md`: a dialog at that moment is a
+    /// dialog somebody dismisses on a train, and the one time it matters is the
+    /// one time it is indistinguishable from every other time.
+    #[error(
+        "{host} answered with a different key than the one remembered for it. \
+         That is what a machine in the middle looks like, and it is also what a \
+         rebuilt server looks like, so nothing was sent and nothing was \
+         changed. Somebody who knows which it is has to say so"
+    )]
+    HostKeyChanged {
+        /// The host whose key no longer matches.
+        host: String,
+    },
 }
 
 /// Where `HEAD` points.
@@ -98,6 +196,205 @@ pub enum Made {
     AlreadyThere,
 }
 
+/// What pointing a remote turned out to be.
+///
+/// [`Made`]'s reasoning, applied to the one operation where getting it wrong is
+/// worse. Adding a remote and repointing one are both ordinary, and a caller
+/// told only "done" cannot tell which happened. The repointing case carries
+/// where it used to point, because that is the only record of it left anywhere.
+#[derive(Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum Pointed {
+    /// There was no remote by that name and now there is.
+    Added,
+    /// There was one, pointing somewhere else.
+    Moved {
+        /// Where it pointed until now.
+        from: String,
+    },
+    /// There was one, already pointing there, and nothing was written.
+    Unchanged,
+}
+
+/// What taking the remote's work turned out to be.
+///
+/// Three answers rather than one success, for the reason [`Made`] and
+/// [`Pointed`] already carry: a caller told only "done" cannot tell whether
+/// anything arrived.
+#[derive(Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum Pulled {
+    /// The remote had nothing this branch did not already have.
+    AlreadyHere,
+    /// The branch moved forward to what the remote had.
+    FastForwarded {
+        /// Where it moved to, abbreviated as git would abbreviate it.
+        commit: String,
+    },
+    /// There was no such branch here, so it was created from the remote.
+    ///
+    /// Not an edge case. A repository made by `init_repository` and then
+    /// pointed at a remote has no branch at all, and this is the first pull
+    /// anybody does.
+    Started {
+        /// Where the new branch points.
+        commit: String,
+    },
+}
+
+/// Whether a host's key was already known.
+///
+/// Two answers rather than one success, and the difference is the whole
+/// security posture: [`Trusted::Pinned`] is a connection nobody has checked and
+/// [`Trusted::Known`] is one that matches what was checked before.
+#[derive(Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum Trusted {
+    /// Nothing was known about this host, so its key is now what is expected.
+    ///
+    /// The weakness stated rather than buried: this connection is trusted
+    /// blind. On a phone with no shell there is nothing else to trust, and
+    /// moving the decision to first use is what makes every later connection
+    /// checkable at all.
+    Pinned,
+    /// The host answered with the key already remembered for it.
+    Known,
+}
+
+/// Remember a host's key the first time, and refuse a changed one.
+///
+/// The file is one host per line, the host and a hash of its key. It is not a
+/// `known_hosts` file and does not pretend to be one: that format carries
+/// hashed hostnames, markers, revocation and certificate authorities, and
+/// something that looks like it while implementing a tenth of it is a trap for
+/// whoever reads it next.
+///
+/// A line that cannot be read is treated as a line that is not there. A
+/// preferences file somebody edited by hand should leave the phone working,
+/// which is the reasoning `modeFrom` already carries on the Kotlin side.
+///
+/// # Errors
+/// [`Error::HostKeyChanged`] IF a key is remembered for this host and is not
+/// this one, in which case **nothing is written**. [`Error::Refused`] IF the
+/// file cannot be read or written.
+pub fn trust(pins: &Path, host: &str, key: &[u8]) -> Result<Trusted, Error> {
+    use sha2::{Digest, Sha256};
+
+    let seen = format!("{:x}", Sha256::digest(key));
+    let existing = match std::fs::read_to_string(pins) {
+        Ok(text) => text,
+        // Absent is empty. The first host pinned on a phone is the first time
+        // this file exists at all.
+        Err(why) if why.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(why) => return Err(Error::Refused(why.to_string())),
+    };
+
+    for line in existing.lines() {
+        let mut fields = line.split_whitespace();
+        let (Some(known_host), Some(known_key), None) =
+            (fields.next(), fields.next(), fields.next())
+        else {
+            continue;
+        };
+        if known_host != host {
+            continue;
+        }
+        return if known_key == seen {
+            Ok(Trusted::Known)
+        } else {
+            Err(Error::HostKeyChanged {
+                host: host.to_owned(),
+            })
+        };
+    }
+
+    let mut text = existing;
+    if !text.is_empty() && !text.ends_with('\n') {
+        text.push('\n');
+    }
+    text.push_str(host);
+    text.push(' ');
+    text.push_str(&seen);
+    text.push('\n');
+    std::fs::write(pins, text).map_err(|why| Error::Refused(why.to_string()))?;
+    Ok(Trusted::Pinned)
+}
+
+/// What a call over the network needs: a key to offer, and what to check against.
+///
+/// One argument rather than two on each of [`fetch`], [`push`] and [`pull`],
+/// because neither half is useful alone. A key with nothing to check the host
+/// against authenticates the phone to whoever answered, and a pin file with no
+/// key gets as far as being asked for one.
+///
+/// Passed as `Option`, and `None` is a call that reaches a path remote or an
+/// ssh remote wanting no key. Every test in this file passes `None`, which is
+/// the point: none of them has a forge to reach.
+pub struct Reach<'a> {
+    key: &'a str,
+    pins: &'a Path,
+}
+
+impl<'a> Reach<'a> {
+    /// # Arguments
+    /// `key` an OpenSSH private key WHERE it is the text of one rather than a
+    /// path to one. In memory on purpose: `docs/decisions/pushing-from-a-phone.md`
+    /// keeps it out of the filesystem, so the only copy at rest is the sealed
+    /// one the Keystore holds.
+    ///
+    /// `pins` the file host keys are remembered in, as [`trust`] writes it.
+    #[must_use]
+    pub fn new(key: &'a str, pins: &'a Path) -> Self {
+        Self { key, pins }
+    }
+}
+
+/// Put a [`Reach`]'s two callbacks on a set of them.
+///
+/// `changed` is where a refused host is left. A callback answers libgit2 rather
+/// than this crate, so it cannot return [`Error::HostKeyChanged`]; it records
+/// the host here and fails the transfer, and the caller reads this afterwards
+/// to say which failure it was rather than reporting a network problem.
+fn reaching<'a>(
+    callbacks: &mut git2::RemoteCallbacks<'a>,
+    reach: &'a Reach<'a>,
+    changed: &'a std::cell::RefCell<Option<String>>,
+) {
+    let key = reach.key;
+    callbacks.credentials(move |_url, username, _allowed| {
+        // `git` when the URL named nobody, which is what the ssh form of every
+        // forge remote uses and what a user@host URL overrides.
+        git2::Cred::ssh_key_from_memory(username.unwrap_or("git"), None, key, None)
+    });
+
+    let pins = reach.pins;
+    callbacks.certificate_check(move |certificate, host| {
+        let Some(key) = certificate
+            .as_hostkey()
+            .and_then(git2::cert::CertHostkey::hostkey)
+        else {
+            // Not an ssh host key, which over this transport means libgit2 has
+            // handed something there is no pin format for. Passed through to
+            // its own check rather than accepted here.
+            return Ok(git2::CertificateCheckStatus::CertificatePassthrough);
+        };
+
+        match trust(pins, host, key) {
+            // Ok rather than Passthrough, which is where this diverges from the
+            // sketch in #467. Passthrough means "no opinion, use the default",
+            // and the default is a known_hosts lookup: there is no known_hosts
+            // on a phone, so deferring to it refuses every host and the pin
+            // decides nothing. `trust` is the check, so it answers.
+            Ok(_) => Ok(git2::CertificateCheckStatus::CertificateOk),
+            Err(Error::HostKeyChanged { host }) => {
+                *changed.borrow_mut() = Some(host);
+                Err(git2::Error::from_str("the host key is not the pinned one"))
+            }
+            Err(why) => Err(git2::Error::from_str(&why.to_string())),
+        }
+    });
+}
+
 /// Make a directory into a repository, or say it already was one.
 ///
 /// The directory is created if it is not there. `git init` does that too, and a
@@ -121,6 +418,43 @@ pub fn init(path: &Path) -> Result<Made, Error> {
     std::fs::create_dir_all(path).map_err(|why| Error::Refused(why.to_string()))?;
     git2::Repository::init(path).map_err(|why| Error::Refused(why.message().to_owned()))?;
     Ok(Made::Created)
+}
+
+/// Say who commits from here.
+///
+/// Written into the repository's own configuration, which is where git keeps
+/// this, so a commit made afterwards looks like one anything else wrote. The
+/// alternative was carrying a name and an email down to [`commit`] on every
+/// call; that ignores an identity a repository already has, which is the
+/// surprising way for the ambiguity to fall.
+///
+/// A phone has no `~/.gitconfig` and no shell to write one with, so without
+/// this every [`commit`] on one fails. That is not a hypothetical: nothing
+/// outside this file's tests has ever set either value.
+///
+/// Deliberately not reachable as a tool. An identity is a claim about who
+/// somebody is, and a model choosing one is a model deciding whose name goes
+/// on the work.
+///
+/// # Errors
+/// [`Error::NoIdentity`] IF either value is blank once trimmed, which would
+/// otherwise be written and then read back as configured, giving commits an
+/// author of nobody. [`Error::NotARepository`] IF nothing at `path` opens as
+/// one, and [`Error::Refused`] IF the configuration cannot be written.
+pub fn identify(path: &Path, name: &str, email: &str) -> Result<(), Error> {
+    let (name, email) = (name.trim(), email.trim());
+    if name.is_empty() || email.is_empty() {
+        return Err(Error::NoIdentity);
+    }
+
+    let repo = open(path)?;
+    let mut config = repo.config()?;
+    // Both, or neither. A repository with a name and no email reads as
+    // configured to everything except the signature, which fails at the commit
+    // rather than here.
+    config.set_str("user.name", name)?;
+    config.set_str("user.email", email)?;
+    Ok(())
 }
 
 /// Open a repository.
@@ -373,6 +707,282 @@ pub fn commit(path: &Path, message: &str) -> Result<String, Error> {
         .to_owned())
 }
 
+/// Point a remote somewhere, and say what that changed.
+///
+/// Creates the remote if there is none by that name, and repoints it if there
+/// is. Both are ordinary things to want and neither is a failure, so they are
+/// told apart in the answer rather than collapsed: a model that asked to add a
+/// remote and silently moved an existing one has changed where somebody's work
+/// goes.
+///
+/// An `https://` URL is refused here rather than at the fetch, because this is
+/// the moment somebody can still be told the ssh form. See
+/// `docs/decisions/pushing-from-a-phone.md`: the transport this build links is
+/// ssh, and turning `git2/https` on as well is a scope line rather than a
+/// permanent one.
+///
+/// A filesystem path is a remote too, and deliberately still allowed. It needs
+/// no transport at all, which is what lets every test below run with no
+/// network and no key.
+///
+/// # Errors
+/// [`Error::HttpsRemote`] IF the URL is http or https. [`Error::NotARepository`]
+/// IF nothing at `path` opens as one, and [`Error::Refused`] IF the remote
+/// cannot be written.
+pub fn remote_set(path: &Path, name: &str, url: &str) -> Result<Pointed, Error> {
+    let url = url.trim();
+    let lowered = url.to_ascii_lowercase();
+    if lowered.starts_with("https://") || lowered.starts_with("http://") {
+        return Err(Error::HttpsRemote(url.to_owned()));
+    }
+
+    let repo = open(path)?;
+    let was = repo
+        .find_remote(name)
+        .ok()
+        .and_then(|remote| remote.url().ok().map(ToOwned::to_owned));
+
+    match was {
+        Some(was) if was == url => Ok(Pointed::Unchanged),
+        Some(was) => {
+            repo.remote_set_url(name, url)?;
+            Ok(Pointed::Moved { from: was })
+        }
+        None => {
+            repo.remote(name, url)?;
+            Ok(Pointed::Added)
+        }
+    }
+}
+
+/// Fetch a remote, and answer with the references that moved.
+///
+/// The remote's own refspecs, which for one created by [`remote_set`] means
+/// every branch into `refs/remotes/<name>/`. Nothing is merged, the index is
+/// not touched and no file is written into the working tree: this is the one
+/// network operation that cannot lose anything, which is why it comes before
+/// push and pull rather than with them.
+///
+/// The names rather than the transfer statistics. "Received 3 objects" is a
+/// number nobody can act on, where `refs/remotes/origin/main` is the thing the
+/// next question is about. An empty answer means the remote had nothing this
+/// repository did not already have, which is a state rather than a failure and
+/// reads as one.
+///
+/// `reach` is `None` for a path remote, or an ssh remote wanting no key.
+///
+/// # Errors
+/// [`Error::NoSuchRemote`] IF nothing by that name is configured.
+/// [`Error::HostKeyChanged`] IF a `reach` was given and the host answered with
+/// a key other than the pinned one. [`Error::NotARepository`] IF nothing at
+/// `path` opens as one, and [`Error::Refused`] IF the fetch itself is refused.
+pub fn fetch(path: &Path, name: &str, reach: Option<&Reach>) -> Result<Vec<String>, Error> {
+    let repo = open(path)?;
+    let mut remote = repo
+        .find_remote(name)
+        .map_err(|_| Error::NoSuchRemote(name.to_owned()))?;
+
+    let mut moved = Vec::new();
+    let changed = std::cell::RefCell::new(None);
+    let taken = {
+        let mut callbacks = git2::RemoteCallbacks::new();
+        // update_tips rather than the transfer statistics: it fires once per
+        // reference that actually changed, which is the question being asked.
+        callbacks.update_tips(|reference, _from, _to| {
+            moved.push(reference.to_owned());
+            true
+        });
+        if let Some(reach) = reach {
+            reaching(&mut callbacks, reach, &changed);
+        }
+
+        let mut options = git2::FetchOptions::new();
+        options.remote_callbacks(callbacks);
+        // An empty refspec list means the remote's configured ones, which is
+        // what `git fetch <remote>` with no further argument does.
+        remote.fetch::<&str>(&[], Some(&mut options), None)
+    };
+
+    // Read before the transfer's own error, which for a refused host key is a
+    // message about the transport rather than about who answered.
+    if let Some(host) = changed.into_inner() {
+        return Err(Error::HostKeyChanged { host });
+    }
+    taken?;
+    Ok(moved)
+}
+
+/// Send a branch to a remote, and refuse rather than overwrite.
+///
+/// There is no `force` parameter, and its absence is the decision rather than
+/// an omission. `docs/decisions/pushing-from-a-phone.md`: an argument a model
+/// can set is one it will set, eventually, on the turn where setting it makes
+/// the error go away, and the cost of setting it wrongly here is the only one
+/// on the list that nobody can undo.
+///
+/// A refusal arrives by **two different routes**, and catching only one was the
+/// first thing this got wrong. Against a real forge the remote rejects the
+/// reference and libgit2 reports it through a `push_update_reference` callback
+/// while `push` itself answers `Ok`, because the transport succeeded. Against a
+/// path remote libgit2 works out that the reference is not fast-forwardable
+/// before sending anything and returns the error from `push` directly. Both are
+/// the same event and both must read as [`Error::NotFastForward`].
+///
+/// That second route is matched on the library's message, which is the sort of
+/// thing that goes stale silently. What stops it is that
+/// `a_push_that_is_not_a_fast_forward_is_refused` exercises exactly that path:
+/// if the wording changes, the test fails rather than the refusal disappearing.
+///
+/// The callback route has to be caught rather than inferred from the return,
+/// and that is the whole reason this function is more than three lines. libgit2
+/// answers `Ok` when the *transport* succeeded, so a remote that rejected the
+/// reference reads as a successful push that changed nothing, which is the
+/// worst failure available here. A `push_update_reference` callback fires once
+/// per reference with an optional status message, and a message means refused.
+///
+/// # Errors
+/// [`Error::NotFastForward`] IF the remote refused the reference, which means
+/// it has work this repository does not. [`Error::NoSuchBranch`] IF there is no
+/// such branch here, [`Error::NoSuchRemote`] IF no such remote is configured,
+/// [`Error::HostKeyChanged`] IF a `reach` was given and the host answered with
+/// a key other than the pinned one, [`Error::NotARepository`] IF nothing at
+/// `path` opens as one, and [`Error::Refused`] IF the push fails for any other
+/// reason.
+pub fn push(path: &Path, remote: &str, branch: &str, reach: Option<&Reach>) -> Result<(), Error> {
+    let repo = open(path)?;
+    // Asked here so a typed branch name is answered as one, rather than as
+    // whatever the refspec parser makes of it further down.
+    repo.find_branch(branch, git2::BranchType::Local)
+        .map_err(|_| Error::NoSuchBranch(branch.to_owned()))?;
+    let mut remote = repo
+        .find_remote(remote)
+        .map_err(|_| Error::NoSuchRemote(remote.to_owned()))?;
+
+    let reference = format!("refs/heads/{branch}");
+    let mut refused = None;
+    let changed = std::cell::RefCell::new(None);
+    let sent = {
+        let mut callbacks = git2::RemoteCallbacks::new();
+        callbacks.push_update_reference(|reference, status| {
+            if let Some(detail) = status {
+                refused = Some(Error::NotFastForward {
+                    reference: reference.to_owned(),
+                    detail: detail.to_owned(),
+                });
+            }
+            Ok(())
+        });
+        if let Some(reach) = reach {
+            reaching(&mut callbacks, reach, &changed);
+        }
+
+        let mut options = git2::PushOptions::new();
+        options.remote_callbacks(callbacks);
+        // No leading `+`, which is what a forced refspec would be. There is no
+        // argument that could put one here.
+        let refspec = format!("{reference}:{reference}");
+        remote.push(&[refspec.as_str()], Some(&mut options))
+    };
+
+    // Before the reference refusal and before the transport's own error: a host
+    // that is not the pinned one means nothing was sent at all, so reporting it
+    // as a rejected push would name the wrong problem.
+    if let Some(host) = changed.into_inner() {
+        return Err(Error::HostKeyChanged { host });
+    }
+    if let Some(why) = refused {
+        return Err(why);
+    }
+    match sent {
+        Ok(()) => Ok(()),
+        // The path-remote route described above. `fastforward` rather than
+        // `fast-forward`: libgit2 spells it as one word here and hyphenates it
+        // elsewhere, and matching the hyphenated form silently catches nothing.
+        Err(why) if why.message().contains("fastforward") => Err(Error::NotFastForward {
+            reference,
+            detail: why.message().to_owned(),
+        }),
+        Err(why) => Err(why.into()),
+    }
+}
+
+/// Take what a remote has, if that can be done without merging.
+///
+/// Fetches, then moves the branch to what the remote has when that is a
+/// fast-forward, and refuses when it is not.
+///
+/// The analysis is asked for rather than inferred. Moving the reference without
+/// it is a force-pull: it discards local commits silently, which is exactly
+/// what [`push`] refuses to do in the other direction, and doing it here
+/// because the code is shorter would be the same mistake facing the other way.
+///
+/// The checkout is safe rather than forced. Uncommitted work in the way makes
+/// this fail, and that is the intended behaviour rather than a limitation to
+/// route around: `force()` is a one-word change that would make a red test
+/// green by throwing away whatever was in the tree.
+///
+/// # Errors
+/// [`Error::WouldMerge`] IF the branch and the remote have both moved on.
+/// [`Error::HostKeyChanged`] IF a `reach` was given and the host answered with
+/// a key other than the pinned one, [`Error::NoSuchRemote`] IF no such remote is
+/// configured,
+/// [`Error::NotARepository`] IF nothing at `path` opens as one, and
+/// [`Error::Refused`] IF the fetch, the analysis or the checkout fails.
+pub fn pull(
+    path: &Path,
+    remote: &str,
+    branch: &str,
+    reach: Option<&Reach>,
+) -> Result<Pulled, Error> {
+    // Forwarded rather than dropped: this is the only call here that reaches the
+    // network, so a pull with a key that did not pass it on would ask for one.
+    fetch(path, remote, reach)?;
+
+    let repo = open(path)?;
+    let tracking = format!("refs/remotes/{remote}/{branch}");
+    let target = repo
+        .find_reference(&tracking)
+        .map_err(|_| Error::NoSuchBranch(format!("{branch} on {remote}")))?
+        .peel_to_commit()?;
+    let onto = repo.find_annotated_commit(target.id())?;
+    let short = target
+        .as_object()
+        .short_id()?
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+
+    let (analysis, _) = repo.merge_analysis(&[&onto])?;
+    if analysis.is_up_to_date() {
+        return Ok(Pulled::AlreadyHere);
+    }
+    if !analysis.is_fast_forward() && !analysis.is_unborn() {
+        return Err(Error::WouldMerge {
+            branch: branch.to_owned(),
+        });
+    }
+
+    let here = format!("refs/heads/{branch}");
+    let started = analysis.is_unborn();
+    match repo.find_reference(&here) {
+        Ok(mut reference) => {
+            reference.set_target(target.id(), "pull: fast-forward")?;
+        }
+        // Unborn, so there is no reference to move and one is made instead.
+        Err(_) => {
+            repo.reference(&here, target.id(), false, "pull: started")?;
+        }
+    }
+    repo.set_head(&here)?;
+    repo.checkout_head(Some(git2::build::CheckoutBuilder::default().safe()))?;
+
+    if started {
+        Ok(Pulled::Started { commit: short })
+    } else {
+        Ok(Pulled::FastForwarded { commit: short })
+    }
+}
+
 /// The committer name, or a refusal naming what is missing.
 ///
 /// The library reports an absent identity as "config value not found", which
@@ -407,11 +1017,23 @@ mod tests {
     use super::*;
     use crate::testenv::Scratch;
 
-    /// Give the repository an identity to sign with, as a phone would have to.
+    /// Give the repository an identity to sign with, as a phone has to.
+    ///
+    /// Through the entry point rather than beside it, now that there is one.
+    /// The helper wrote the same two keys by hand, which meant every commit
+    /// test proved a phone could commit only if the phone did it this way, and
+    /// nothing made it. Shadows [`super::identify`] by name on purpose: the
+    /// tests below read better calling it with a repository they already hold.
     fn identify(repo: &git2::Repository) {
-        let mut config = repo.config().unwrap();
-        config.set_str("user.name", "Test").unwrap();
-        config.set_str("user.email", "test@example.com").unwrap();
+        super::identify(repo.workdir().unwrap(), "Test", "test@example.com").unwrap();
+    }
+
+    /// What this repository alone says, with no global gitconfig behind it.
+    fn local(repo: &git2::Repository) -> git2::Config {
+        repo.config()
+            .unwrap()
+            .open_level(git2::ConfigLevel::Local)
+            .unwrap()
     }
 
     /// Commit whatever is in the index, with no parent unless there is one.
@@ -751,5 +1373,654 @@ mod tests {
         };
         assert!(matches!(why, Error::NoIdentity), "{why}");
         assert!(why.to_string().contains("user.email"), "{why}");
+    }
+
+    #[test]
+    fn the_ssh_transport_is_linked_in() {
+        // What #644 measured, kept so it cannot be switched off by accident.
+        // Cargo.toml turns `ssh` on for git2, which pulls libssh2 and OpenSSL
+        // into the phone's build; dropping the feature compiles everything in
+        // this crate and fails on a phone the first time somebody pushes.
+        //
+        // The discriminator is which failure arrives rather than whether one
+        // does. With no transport linked, libgit2 refuses the scheme before it
+        // touches the network. With one linked it gets as far as the socket.
+        // Port 1 on the loopback is refused immediately either way, so this
+        // needs no network and waits for nothing.
+        let scratch = Scratch::new("ssh-linked");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        let mut remote = repo.remote_anonymous("ssh://127.0.0.1:1/x.git").unwrap();
+
+        let Err(why) = remote.connect(git2::Direction::Fetch) else {
+            panic!("something answered on port 1 of the loopback")
+        };
+        assert!(
+            !why.message().contains("unsupported"),
+            "libgit2 has no ssh transport: {why}",
+        );
+    }
+
+    #[test]
+    fn an_identity_is_written_where_git_keeps_it() {
+        let scratch = Scratch::new("identify");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+
+        identify(&repo);
+
+        // Read back through `configured`, which is what `commit` reads through.
+        // Asserting on the config object directly would prove the write and not
+        // that the thing that signs can find it.
+        assert_eq!(configured(&repo, "user.name").unwrap(), "Test");
+        assert_eq!(configured(&repo, "user.email").unwrap(), "test@example.com");
+        // And at the repository's own level, which is the claim in the name.
+        // `configured` reads every level, so on a machine with a gitconfig it
+        // answers whether or not anything was written here.
+        assert_eq!(local(&repo).get_string("user.name").unwrap(), "Test");
+    }
+
+    #[test]
+    fn a_commit_carries_the_identity_that_was_set() {
+        // The round trip, and the whole point: nothing on a phone had ever put
+        // a name on a commit before this.
+        let scratch = Scratch::new("signed");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        super::identify(scratch.path(), "  Ada  ", " ada@example.com ").unwrap();
+
+        write(&repo, "notes.txt", "hello");
+        add(scratch.path(), &["notes.txt".to_owned()]).unwrap();
+        commit(scratch.path(), "the first").unwrap();
+
+        let who = repo.head().unwrap().peel_to_commit().unwrap();
+        // Trimmed on the way in. A name pasted with a trailing space is in
+        // every commit forever otherwise, and it is not a distinction anybody
+        // meant to draw.
+        assert_eq!(who.author().name().unwrap(), "Ada");
+        assert_eq!(who.author().email().unwrap(), "ada@example.com");
+    }
+
+    #[test]
+    fn half_an_identity_is_refused_rather_than_written() {
+        // Written, a blank reads back as configured and the failure moves to
+        // the signature, where the message is the library's and says nothing
+        // about which half is missing.
+        let scratch = Scratch::new("half-identity");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+
+        for (name, email) in [("", "ada@example.com"), ("Ada", "   "), ("", "")] {
+            let Err(why) = super::identify(scratch.path(), name, email) else {
+                panic!("accepted {name:?} and {email:?}")
+            };
+            assert!(matches!(why, Error::NoIdentity), "{why}");
+        }
+        // The repository's own level, not `configured`. The machine running
+        // these tests very likely has a gitconfig with a name in it, and
+        // `configured` would answer with that and pass over a bug here. It is
+        // the same trap a_missing_setting_says_which_settings_are_missing
+        // documents, met from the other side.
+        assert!(local(&repo).get_string("user.name").is_err());
+    }
+
+    #[test]
+    fn identifying_something_that_is_not_a_repository_names_the_path() {
+        let scratch = Scratch::new("identify-nothing");
+
+        let Err(why) = super::identify(scratch.path(), "Ada", "ada@example.com") else {
+            panic!("identified a directory that is not a repository")
+        };
+        assert!(
+            why.to_string()
+                .contains(&scratch.path().display().to_string()),
+            "{why}"
+        );
+    }
+
+    /// A repository with one commit on it, to be fetched from over a path.
+    ///
+    /// A path remote needs no transport, no key and no network, which is what
+    /// lets the tests below run everywhere CI does.
+    fn somewhere_to_fetch_from(scratch: &Scratch) -> (git2::Repository, String) {
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        std::fs::write(scratch.path().join("a.txt"), "first").unwrap();
+        {
+            let mut index = repo.index().unwrap();
+            index.add_path(Path::new("a.txt")).unwrap();
+            index.write().unwrap();
+        }
+        commit_directly(&repo);
+
+        // Read rather than assumed: init.defaultBranch is a global setting, so
+        // the branch this lands on is whatever the machine running the tests
+        // says, and asserting "master" passes here and fails on somebody else.
+        let Head::Branch { name, .. } = head(&repo).unwrap() else {
+            panic!("the source repository has no branch")
+        };
+        (repo, name)
+    }
+
+    #[test]
+    fn a_remote_that_was_not_there_is_added() {
+        let scratch = Scratch::new("remote-add");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+
+        let pointed = remote_set(scratch.path(), "origin", "/somewhere/else.git").unwrap();
+
+        assert_eq!(Pointed::Added, pointed);
+        assert_eq!(
+            "/somewhere/else.git",
+            repo.find_remote("origin").unwrap().url().unwrap()
+        );
+    }
+
+    #[test]
+    fn repointing_a_remote_says_where_it_used_to_point() {
+        // The answer this enum exists for. Somebody who meant to add a remote
+        // and moved one instead has changed where the work goes, and the old
+        // URL is the only record of it left anywhere.
+        let scratch = Scratch::new("remote-move");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        remote_set(scratch.path(), "origin", "/first.git").unwrap();
+
+        let pointed = remote_set(scratch.path(), "origin", "/second.git").unwrap();
+
+        assert_eq!(
+            Pointed::Moved {
+                from: "/first.git".to_owned()
+            },
+            pointed
+        );
+        assert_eq!(
+            "/second.git",
+            repo.find_remote("origin").unwrap().url().unwrap()
+        );
+    }
+
+    #[test]
+    fn pointing_a_remote_where_it_already_points_changes_nothing() {
+        let scratch = Scratch::new("remote-same");
+        git2::Repository::init(scratch.path()).unwrap();
+        remote_set(scratch.path(), "origin", "/first.git").unwrap();
+
+        assert_eq!(
+            Pointed::Unchanged,
+            remote_set(scratch.path(), "origin", "/first.git").unwrap()
+        );
+    }
+
+    #[test]
+    fn an_https_remote_is_refused_and_told_the_form_that_works() {
+        // Refused here rather than at the fetch, which is the moment somebody
+        // still has the forge's page open to copy the other URL from.
+        let scratch = Scratch::new("remote-https");
+        git2::Repository::init(scratch.path()).unwrap();
+
+        for url in [
+            "https://github.com/owner/repository.git",
+            "HTTPS://github.com/owner/repository.git",
+            "http://insecure.example/repository.git",
+        ] {
+            let Err(why) = remote_set(scratch.path(), "origin", url) else {
+                panic!("accepted {url}")
+            };
+            assert!(matches!(why, Error::HttpsRemote(_)), "{why}");
+            assert!(why.to_string().contains("git@host:"), "{why}");
+        }
+    }
+
+    #[test]
+    fn an_ssh_remote_is_accepted_even_though_nothing_here_can_reach_one() {
+        // The refusal above is about the scheme this build has no transport
+        // for, not about every remote that is not a path.
+        let scratch = Scratch::new("remote-ssh");
+        git2::Repository::init(scratch.path()).unwrap();
+
+        assert_eq!(
+            Pointed::Added,
+            remote_set(
+                scratch.path(),
+                "origin",
+                "git@github.com:owner/repository.git"
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn fetching_a_remote_that_is_not_configured_names_it() {
+        let scratch = Scratch::new("fetch-missing");
+        git2::Repository::init(scratch.path()).unwrap();
+
+        let Err(why) = fetch(scratch.path(), "upstream", None) else {
+            panic!("fetched a remote that is not there")
+        };
+        assert!(matches!(why, Error::NoSuchRemote(_)), "{why}");
+        assert!(why.to_string().contains("upstream"), "{why}");
+    }
+
+    #[test]
+    fn a_fetch_brings_back_what_the_other_repository_has() {
+        let source = Scratch::new("fetch-source");
+        let (origin, branch) = somewhere_to_fetch_from(&source);
+        let wanted = origin.head().unwrap().peel_to_commit().unwrap().id();
+
+        let scratch = Scratch::new("fetch-into");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        remote_set(
+            scratch.path(),
+            "origin",
+            &source.path().display().to_string(),
+        )
+        .unwrap();
+
+        let moved = fetch(scratch.path(), "origin", None).unwrap();
+
+        assert!(
+            moved.contains(&format!("refs/remotes/origin/{branch}")),
+            "{moved:?}"
+        );
+        assert!(
+            repo.find_commit(wanted).is_ok(),
+            "the commit was named as fetched and is not here"
+        );
+    }
+
+    #[test]
+    fn a_fetch_with_nothing_new_says_nothing_moved() {
+        // A state rather than a failure, and the one a model meets most: it
+        // fetches, is told nothing changed, and stops asking.
+        let source = Scratch::new("fetch-twice-source");
+        somewhere_to_fetch_from(&source);
+
+        let scratch = Scratch::new("fetch-twice");
+        git2::Repository::init(scratch.path()).unwrap();
+        remote_set(
+            scratch.path(),
+            "origin",
+            &source.path().display().to_string(),
+        )
+        .unwrap();
+        assert!(!fetch(scratch.path(), "origin", None).unwrap().is_empty());
+
+        assert!(fetch(scratch.path(), "origin", None).unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_fetch_merges_nothing_into_the_working_tree() {
+        // The property that makes this the half of a pull that cannot lose
+        // anything, and the reason pull is not in the same change.
+        let source = Scratch::new("fetch-nomerge-source");
+        somewhere_to_fetch_from(&source);
+
+        let scratch = Scratch::new("fetch-nomerge");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        remote_set(
+            scratch.path(),
+            "origin",
+            &source.path().display().to_string(),
+        )
+        .unwrap();
+        fetch(scratch.path(), "origin", None).unwrap();
+
+        assert!(
+            !scratch.path().join("a.txt").exists(),
+            "a fetch wrote a file into the working tree"
+        );
+        assert!(matches!(head(&repo).unwrap(), Head::Unborn { .. }));
+    }
+
+    /// A bare repository, which is a complete remote over a path.
+    fn somewhere_to_push_to(scratch: &Scratch) -> git2::Repository {
+        git2::Repository::init_bare(scratch.path()).unwrap()
+    }
+
+    /// Commit a file, so there is something to send.
+    fn commit_a_file(repo: &git2::Repository, name: &str, body: &str) -> git2::Oid {
+        let root = repo.workdir().unwrap().to_owned();
+        std::fs::write(root.join(name), body).unwrap();
+        {
+            let mut index = repo.index().unwrap();
+            index.add_path(Path::new(name)).unwrap();
+            index.write().unwrap();
+        }
+        commit_directly(repo)
+    }
+
+    /// A repository with one commit, pointed at `remote`.
+    fn ready_to_push(scratch: &Scratch, remote: &Scratch) -> (git2::Repository, String) {
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        commit_a_file(&repo, "a.txt", "first");
+        remote_set(
+            scratch.path(),
+            "origin",
+            &remote.path().display().to_string(),
+        )
+        .unwrap();
+
+        let Head::Branch { name, .. } = head(&repo).unwrap() else {
+            panic!("no branch to push")
+        };
+        (repo, name)
+    }
+
+    #[test]
+    fn a_push_puts_the_branch_on_the_remote() {
+        let bare = Scratch::new("push-bare");
+        let origin = somewhere_to_push_to(&bare);
+        let scratch = Scratch::new("push-from");
+        let (repo, branch) = ready_to_push(&scratch, &bare);
+        let sent = repo.head().unwrap().peel_to_commit().unwrap().id();
+
+        push(scratch.path(), "origin", &branch, None).unwrap();
+
+        let there = origin
+            .find_reference(&format!("refs/heads/{branch}"))
+            .unwrap();
+        assert_eq!(sent, there.peel_to_commit().unwrap().id());
+    }
+
+    #[test]
+    fn a_reach_offered_to_a_transport_that_asks_for_nothing_changes_nothing() {
+        // What a harness with no forge in it can say, stated as exactly that.
+        // The callbacks are installed and a path remote asks for neither, so
+        // this proves the plumbing does not break the path that works today and
+        // says nothing whatever about ssh. What no test here can prove is that
+        // any of it reaches a real host: that needs a network, an account and a
+        // key, and there is none of the three.
+        let scratch_pins = Scratch::new("reach-pins");
+        let pins = scratch_pins.path().join("hosts");
+        let reach = Reach::new("not a key, and never read here", &pins);
+
+        let bare = Scratch::new("reach-bare");
+        let origin = somewhere_to_push_to(&bare);
+        let scratch = Scratch::new("reach-from");
+        let (repo, branch) = ready_to_push(&scratch, &bare);
+        let sent = repo.head().unwrap().peel_to_commit().unwrap().id();
+
+        push(scratch.path(), "origin", &branch, Some(&reach)).unwrap();
+        fetch(scratch.path(), "origin", Some(&reach)).unwrap();
+        let taken = pull(scratch.path(), "origin", &branch, Some(&reach)).unwrap();
+
+        assert_eq!(
+            sent,
+            origin
+                .find_reference(&format!("refs/heads/{branch}"))
+                .unwrap()
+                .peel_to_commit()
+                .unwrap()
+                .id()
+        );
+        assert_eq!(Pulled::AlreadyHere, taken);
+        // Nothing was pinned, because nothing was asked. A file here would mean
+        // the certificate callback had run against a path remote.
+        assert!(!pins.exists());
+    }
+
+    #[test]
+    fn a_push_that_is_not_a_fast_forward_is_refused() {
+        // The decision this whole function exists for. libgit2 answers Ok when
+        // the transport succeeded, so without the callback this reads as a
+        // push that worked and changed nothing.
+        let bare = Scratch::new("push-diverge-bare");
+        let origin = somewhere_to_push_to(&bare);
+        let scratch = Scratch::new("push-diverge");
+        let (repo, branch) = ready_to_push(&scratch, &bare);
+        let shared = repo.head().unwrap().peel_to_commit().unwrap().id();
+
+        // The commit somebody else made. It reaches the remote, and then this
+        // repository goes back before it and off in another direction, which is
+        // what having missed a push looks like from here.
+        commit_a_file(&repo, "b.txt", "second");
+        push(scratch.path(), "origin", &branch, None).unwrap();
+        let theirs = repo.head().unwrap().peel_to_commit().unwrap().id();
+
+        let before = repo.find_commit(shared).unwrap();
+        repo.reset(before.as_object(), git2::ResetType::Hard, None)
+            .unwrap();
+        commit_a_file(&repo, "c.txt", "third");
+
+        let Err(why) = push(scratch.path(), "origin", &branch, None) else {
+            panic!("a non-fast-forward push was accepted")
+        };
+        assert!(matches!(why, Error::NotFastForward { .. }), "{why}");
+
+        // The half that matters more than the refusal: nothing moved.
+        let there = origin
+            .find_reference(&format!("refs/heads/{branch}"))
+            .unwrap();
+        assert_eq!(
+            theirs,
+            there.peel_to_commit().unwrap().id(),
+            "a refused push moved the remote anyway"
+        );
+    }
+
+    #[test]
+    fn a_refused_push_says_what_to_do_and_offers_no_way_round_it() {
+        // The message is the whole interface here: there is no force argument
+        // to reach for, so the words have to carry what happens next.
+        let why = Error::NotFastForward {
+            reference: "refs/heads/main".to_owned(),
+            detail: "non-fast-forward".to_owned(),
+        };
+
+        let said = why.to_string();
+        assert!(said.contains("refs/heads/main"), "{said}");
+        assert!(said.contains("Fetch"), "{said}");
+        assert!(!said.to_lowercase().contains("force"), "{said}");
+    }
+
+    #[test]
+    fn pushing_a_branch_that_is_not_here_names_it() {
+        let bare = Scratch::new("push-nobranch-bare");
+        somewhere_to_push_to(&bare);
+        let scratch = Scratch::new("push-nobranch");
+        ready_to_push(&scratch, &bare);
+
+        let Err(why) = push(scratch.path(), "origin", "not-a-branch", None) else {
+            panic!("pushed a branch that is not here")
+        };
+        assert!(matches!(why, Error::NoSuchBranch(_)), "{why}");
+        assert!(why.to_string().contains("not-a-branch"), "{why}");
+    }
+
+    #[test]
+    fn pushing_to_a_remote_that_is_not_configured_names_it() {
+        let scratch = Scratch::new("push-noremote");
+        let repo = git2::Repository::init(scratch.path()).unwrap();
+        commit_a_file(&repo, "a.txt", "first");
+        let Head::Branch { name, .. } = head(&repo).unwrap() else {
+            panic!("no branch")
+        };
+
+        let Err(why) = push(scratch.path(), "upstream", &name, None) else {
+            panic!("pushed to a remote that is not there")
+        };
+        assert!(matches!(why, Error::NoSuchRemote(_)), "{why}");
+    }
+
+    /// A bare remote, and a repository that has pushed one commit to it.
+    fn pushed_once(scratch: &Scratch, bare: &Scratch) -> (git2::Repository, String) {
+        somewhere_to_push_to(bare);
+        let (repo, branch) = ready_to_push(scratch, bare);
+        push(scratch.path(), "origin", &branch, None).unwrap();
+        (repo, branch)
+    }
+
+    #[test]
+    fn a_pull_with_nothing_new_says_the_work_is_already_here() {
+        let bare = Scratch::new("pull-same-bare");
+        let scratch = Scratch::new("pull-same");
+        let (_repo, branch) = pushed_once(&scratch, &bare);
+
+        assert_eq!(
+            Pulled::AlreadyHere,
+            pull(scratch.path(), "origin", &branch, None).unwrap()
+        );
+    }
+
+    #[test]
+    fn a_pull_that_can_fast_forward_does_and_writes_the_file() {
+        let bare = Scratch::new("pull-ff-bare");
+        let theirs = Scratch::new("pull-ff-theirs");
+        let (repo, branch) = pushed_once(&theirs, &bare);
+        commit_a_file(&repo, "b.txt", "second");
+        push(theirs.path(), "origin", &branch, None).unwrap();
+        let wanted = repo.head().unwrap().peel_to_commit().unwrap().id();
+
+        // A second repository that has the first commit and not the second.
+        let mine = Scratch::new("pull-ff-mine");
+        let here = git2::Repository::init(mine.path()).unwrap();
+        remote_set(mine.path(), "origin", &bare.path().display().to_string()).unwrap();
+        pull(mine.path(), "origin", &branch, None).unwrap();
+
+        assert_eq!(wanted, here.head().unwrap().peel_to_commit().unwrap().id());
+        assert!(
+            mine.path().join("b.txt").exists(),
+            "a fast-forward left the working tree behind"
+        );
+    }
+
+    #[test]
+    fn the_first_pull_into_an_empty_repository_starts_the_branch() {
+        // The case that is not an edge case: init_repository leaves a
+        // repository with no branch at all, and this is the first pull anybody
+        // does on one.
+        let bare = Scratch::new("pull-unborn-bare");
+        let theirs = Scratch::new("pull-unborn-theirs");
+        let (_repo, branch) = pushed_once(&theirs, &bare);
+
+        let mine = Scratch::new("pull-unborn-mine");
+        git2::Repository::init(mine.path()).unwrap();
+        remote_set(mine.path(), "origin", &bare.path().display().to_string()).unwrap();
+
+        let pulled = pull(mine.path(), "origin", &branch, None).unwrap();
+
+        assert!(matches!(pulled, Pulled::Started { .. }), "{pulled:?}");
+        assert!(mine.path().join("a.txt").exists());
+    }
+
+    #[test]
+    fn a_pull_that_would_merge_is_refused_and_changes_nothing() {
+        let bare = Scratch::new("pull-diverge-bare");
+        let theirs = Scratch::new("pull-diverge-theirs");
+        let (repo, branch) = pushed_once(&theirs, &bare);
+
+        // Mine takes the first commit, then both sides move.
+        let mine = Scratch::new("pull-diverge-mine");
+        let here = git2::Repository::init(mine.path()).unwrap();
+        remote_set(mine.path(), "origin", &bare.path().display().to_string()).unwrap();
+        pull(mine.path(), "origin", &branch, None).unwrap();
+        commit_a_file(&here, "mine.txt", "mine");
+        let unmoved = here.head().unwrap().peel_to_commit().unwrap().id();
+
+        commit_a_file(&repo, "theirs.txt", "theirs");
+        push(theirs.path(), "origin", &branch, None).unwrap();
+
+        let Err(why) = pull(mine.path(), "origin", &branch, None) else {
+            panic!("a pull that needed a merge went ahead")
+        };
+        assert!(matches!(why, Error::WouldMerge { .. }), "{why}");
+        assert_eq!(
+            unmoved,
+            here.head().unwrap().peel_to_commit().unwrap().id(),
+            "a refused pull moved the branch anyway"
+        );
+        assert!(
+            !mine.path().join("theirs.txt").exists(),
+            "a refused pull wrote their file into the tree"
+        );
+    }
+
+    #[test]
+    fn a_host_nobody_knew_is_pinned() {
+        let scratch = Scratch::new("pin-first");
+        let pins = scratch.path().join("hosts");
+
+        assert_eq!(
+            Trusted::Pinned,
+            trust(&pins, "github.com", b"a key").unwrap()
+        );
+        assert!(
+            std::fs::read_to_string(&pins)
+                .unwrap()
+                .contains("github.com"),
+            "the host was reported pinned and is not in the file"
+        );
+    }
+
+    #[test]
+    fn the_same_host_answering_the_same_key_is_known() {
+        let scratch = Scratch::new("pin-same");
+        let pins = scratch.path().join("hosts");
+        trust(&pins, "github.com", b"a key").unwrap();
+
+        assert_eq!(
+            Trusted::Known,
+            trust(&pins, "github.com", b"a key").unwrap()
+        );
+    }
+
+    #[test]
+    fn a_changed_key_is_refused_and_nothing_is_written() {
+        // The case the whole file exists for, and the assertion that matters
+        // more than the refusal: a refused check must not quietly re-pin.
+        let scratch = Scratch::new("pin-changed");
+        let pins = scratch.path().join("hosts");
+        trust(&pins, "github.com", b"a key").unwrap();
+        let before = std::fs::read_to_string(&pins).unwrap();
+
+        let Err(why) = trust(&pins, "github.com", b"another key") else {
+            panic!("a changed host key was accepted")
+        };
+        assert!(matches!(why, Error::HostKeyChanged { .. }), "{why}");
+        assert!(why.to_string().contains("github.com"), "{why}");
+        assert_eq!(before, std::fs::read_to_string(&pins).unwrap());
+    }
+
+    #[test]
+    fn one_host_does_not_disturb_another() {
+        let scratch = Scratch::new("pin-two");
+        let pins = scratch.path().join("hosts");
+        trust(&pins, "github.com", b"one").unwrap();
+
+        assert_eq!(Trusted::Pinned, trust(&pins, "gitlab.com", b"two").unwrap());
+        assert_eq!(Trusted::Known, trust(&pins, "github.com", b"one").unwrap());
+        assert_eq!(Trusted::Known, trust(&pins, "gitlab.com", b"two").unwrap());
+    }
+
+    #[test]
+    fn a_line_that_cannot_be_read_is_a_line_that_is_not_there() {
+        // A file somebody edited by hand should leave the phone working, which
+        // is the reasoning modeFrom carries on the Kotlin side. The absent
+        // trailing newline is the likeliest way an edit leaves it.
+        let scratch = Scratch::new("pin-garbage");
+        let pins = scratch.path().join("hosts");
+        std::fs::write(
+            &pins,
+            "nonsense\n\ntoo many fields here now\ngithub.com abc",
+        )
+        .unwrap();
+
+        assert_eq!(Trusted::Pinned, trust(&pins, "gitlab.com", b"two").unwrap());
+
+        let after = std::fs::read_to_string(&pins).unwrap();
+        assert!(after.contains("gitlab.com"), "{after}");
+        assert!(
+            after.contains("github.com abc"),
+            "a line it could not use was thrown away: {after}"
+        );
+    }
+
+    #[test]
+    fn a_refusal_says_both_things_it_could_be() {
+        // There is no prompt to offer, so the words are the whole interface.
+        // Naming only the attack teaches somebody to ignore it the first time
+        // a server is rebuilt, which is the commoner of the two by far.
+        let said = Error::HostKeyChanged {
+            host: "github.com".to_owned(),
+        }
+        .to_string();
+
+        assert!(said.contains("in the middle"), "{said}");
+        assert!(said.contains("rebuilt"), "{said}");
     }
 }

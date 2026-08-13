@@ -5,6 +5,8 @@
 //                          credential, the turn loop and the tools follow.
 //   2026-08-09  A. Sigdel  A release build, and the one R8 rule without which
 //                          it installs and dies at the first native call.
+//   2026-08-13  A. Sigdel  Reads the signing variables the way a daemon cannot
+//                          make stale, #514.
 //
 // The two SDK levels below are decisions, not defaults, and both are the kind
 // somebody tidies up. Each carries its reason at the line.
@@ -72,14 +74,25 @@ android {
     // that will not track a Gradle wrapper jar is not going to track a signing
     // key. Absent the environment there is no config, the release build
     // assembles unsigned, and `just android-release` says which happened.
-    val store = System.getenv("WATTROUTER_KEYSTORE")
+    //
+    // providers.environmentVariable throughout, for the reason spelled out
+    // twenty lines above and applied to UPSTREAM but not to these four: a
+    // daemon's System.getenv is its environment as it was when it started. #514
+    // is what that costs here rather than there. Export the four into a shell
+    // that reuses an older daemon and there is no signing config, so the
+    // release assembles unsigned, and `just android-release` then reads the
+    // variables from its own shell and says the opposite: signed with, over an
+    // APK that is not. A recipe reporting the state of the wrong process is
+    // worse than a build that quietly did nothing.
+    val store = providers.environmentVariable("WATTROUTER_KEYSTORE").orNull
     if (store != null) {
         signingConfigs {
             create("release") {
                 storeFile = file(store)
-                storePassword = System.getenv("WATTROUTER_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("WATTROUTER_KEY_ALIAS")
-                keyPassword = System.getenv("WATTROUTER_KEY_PASSWORD")
+                storePassword =
+                    providers.environmentVariable("WATTROUTER_KEYSTORE_PASSWORD").orNull
+                keyAlias = providers.environmentVariable("WATTROUTER_KEY_ALIAS").orNull
+                keyPassword = providers.environmentVariable("WATTROUTER_KEY_PASSWORD").orNull
             }
         }
     }
