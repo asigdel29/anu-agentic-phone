@@ -550,7 +550,9 @@ class NavigateTool(private val phone: Phone) : Tool {
         "Press one of the phone's own buttons: back, home, recents, or " +
             "notifications. What back does depends on where you press it: from " +
             "an app's first screen it leaves the app, and over a keyboard it " +
-            "closes the keyboard. Read the answer to see where you ended up."
+            "closes the keyboard. Read the answer to see where you ended up, and " +
+            "do not send other actions in the same round as this one: the screen " +
+            "will still be moving when they arrive."
 
     override val schema = """
         {"type":"object","properties":{"where":{"type":"string",
@@ -602,13 +604,20 @@ class ScrollTool(private val phone: Phone) : Tool {
 }
 
 /** Start an app by name. */
-class OpenAppTool(private val phone: Phone) : Tool {
+class OpenAppTool(
+    private val phone: Phone,
+    /** As [WaitForChangeTool], and injected for the same reason: a test that
+     *  waits four real seconds per case is a suite people stop running. */
+    private val pause: suspend (Long) -> Unit = { kotlinx.coroutines.delay(it) },
+) : Tool {
     override val name = "open_app"
 
     override val purpose =
-        "Open an app by its name, as it appears under its icon. Answers with the " +
-            "screen afterwards, which will often catch the app still starting, so " +
-            "read it again if it looks unfinished."
+        "Open an app by its name, as it appears under its icon. This waits for " +
+            "the app to settle before answering, so the screen it shows you is " +
+            "the one that is there. Do not send other actions in the same round " +
+            "as this one: anything aimed at the screen you were on before will " +
+            "be aimed at a screen that has gone."
 
     override val schema = """
         {"type":"object","properties":{"name":{"type":"string",
@@ -637,9 +646,40 @@ class OpenAppTool(private val phone: Phone) : Tool {
                     found.joinToString(", ") { it.label } +
                     ". Name one of those exactly."
             } else {
-                TapTool.say(phone, "opened", phone.open(found.single().packageName))
+                val done = phone.open(found.single().packageName)
+                // Settled before answering rather than after, which is #675's
+                // fifth. Answering mid-launch costs a guaranteed wasted round:
+                // the model reads a screen that is still moving, and the only
+                // useful thing it can do with it is read again.
+                if (done is Done.Did) settle()
+                TapTool.say(phone, "opened", done)
             }
         }
+    }
+
+    /**
+     * Wait until two reads in a row see the same screen, or give up.
+     *
+     * Two rather than one, because a launch passes through screens that are each
+     * momentarily stable. Giving up is not reported: what follows is a read
+     * either way, and a launch that is still moving after this is one the model
+     * should see moving rather than be told about.
+     */
+    private suspend fun settle() {
+        var last: Generation? = null
+        repeat(SETTLES) {
+            val now = phone.read()?.generation
+            if (now != null && now == last) return
+            last = now
+            pause(WaitForChangeTool.INTERVAL.toLong())
+        }
+    }
+
+    private companion object {
+        /** Reads before giving up. At [WaitForChangeTool.INTERVAL] apart, three
+         *  seconds, which is a cold start on a slow phone and a guess said as
+         *  one. */
+        const val SETTLES = 12
     }
 }
 

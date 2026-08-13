@@ -554,6 +554,44 @@ class OpenAppToolTest {
     }
 
     @Test
+    fun openingWaitsForTheScreenToStopMoving() = runTest {
+        // #675's fifth. A launch answered mid-flight costs a guaranteed wasted
+        // round: what the model reads is a screen that is still moving, and the
+        // only useful thing it can do with it is read again.
+        var reads = 0
+        val moving = object : Phone by phone(gmail) {
+            override suspend fun read(): Reading {
+                reads++
+                // One screen, then another, then that one again, which is
+                // what settling looks like from here.
+                return Reading(Generation("k3f9", if (reads < 2) 1L else 2L), emptyList())
+            }
+        }
+        val paused = mutableListOf<Long>()
+
+        OpenAppTool(moving, pause = { paused += it }).run("""{"name":"Gmail"}""")
+
+        // Three reads to see a repeat, and not twelve, which is what giving up
+        // would have cost. The wording reads what open() already answered, so
+        // there is no fourth.
+        assertEquals(3, reads)
+        assertEquals(listOf(250L, 250L), paused)
+    }
+
+    @Test
+    fun openingThatWasRefusedDoesNotWaitForAnything() = runTest {
+        // Nothing is starting, so there is nothing to settle. Waiting here
+        // would spend three seconds on an app that never opened.
+        val paused = mutableListOf<Long>()
+        val refused = Tapping(Done.Refused("the screen said no"))
+            .also { it.installed = listOf(gmail) }
+
+        OpenAppTool(refused, pause = { paused += it }).run("""{"name":"Gmail"}""")
+
+        assertEquals(emptyList<Long>(), paused)
+    }
+
+    @Test
     fun anExactNameWinsOutright() {
         // Even though "Maps" is also a prefix of "Maps Go".
         assertEquals(listOf(maps), matching("Maps", listOf(mapsGo, maps)))
