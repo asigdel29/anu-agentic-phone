@@ -27,7 +27,7 @@ package com.getlora.wattrouter
  * @property text what the model reads. Prose, not a status code.
  * @property images anything to be looked at rather than read. Empty for every
  *   tool but the one that captures a screen, which is why [Tool.answer] has a
- *   default and eighteen tools did not have to be edited to gain a field none
+ *   default and twenty tools did not have to be edited to gain a field none
  *   of them fills.
  */
 data class Answer(val text: String, val images: List<Image> = emptyList())
@@ -82,7 +82,7 @@ interface Tool {
      * Do it, and answer with anything to be looked at as well as read.
      *
      * This is what [ToolBox] calls. It defaults to [run], so a tool whose
-     * answer is prose implements nothing: eighteen of them do that today and
+     * answer is prose implements nothing: twenty of them do that today and
      * none had to be edited to gain a field none of them fills.
      *
      * A tool that captures something overrides this instead, and narrows [run]
