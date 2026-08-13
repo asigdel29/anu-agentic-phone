@@ -588,7 +588,56 @@ class TypeTextTool(private val phone: Phone) : Tool {
             return "no text was given. To empty the field, pass an empty string."
         }
 
-        return TapTool.say(phone, "typed", phone.type(handle, seen, text))
+        val done = phone.type(handle, seen, text)
+        val body = TapTool.say(phone, "typed", done)
+        // Only when something was typed. The other outcomes already say why
+        // the field is not what the model expected, and a line about what it
+        // says now would be a line about a field nothing touched.
+        if (done !is Done.Did) return body
+
+        return saying(fieldNow(handle, done.now)) + "\n\n" + body
+    }
+
+    private companion object {
+        /**
+         * What the field says now, in words.
+         *
+         * #675's first, and the one their ablation puts a number on: they
+         * attribute seven points to closing "silent text input failures". What
+         * this tool answered before was the whole screen, which leaves the model
+         * finding the field again in sixty lines to learn whether its own last
+         * action worked.
+         */
+        fun saying(now: Sighting?): String = when {
+            now == null ->
+                "the field is no longer on the screen, so what it says now " +
+                    "cannot be read back"
+            now.label.isNullOrEmpty() -> "the field now says nothing"
+            else -> "the field now says: ${now.label}"
+        }
+    }
+}
+
+/**
+ * The thing a handle named, in a reading taken after it was acted on.
+ *
+ * Matched on `viewId` rather than on the handle itself, because a handle carries
+ * the text and the text is what just changed: comparing handles would fail
+ * exactly when this is worth reading. A node with no `viewId` is matched on what
+ * does not change, which is its description, its role and its place among its
+ * siblings, and one that matches nothing is not found, which is said rather than
+ * guessed at.
+ */
+internal fun fieldNow(at: Handle, reading: Reading?): Sighting? {
+    val seen = reading?.seen ?: return null
+
+    at.viewId?.takeIf { it.isNotBlank() }?.let { id ->
+        return seen.firstOrNull { it.handle.viewId == id }
+    }
+    return seen.firstOrNull {
+        it.handle.description == at.description &&
+            it.handle.role == at.role &&
+            it.handle.siblingIndex == at.siblingIndex
     }
 }
 

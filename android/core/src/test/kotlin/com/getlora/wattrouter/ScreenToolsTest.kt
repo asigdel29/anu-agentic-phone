@@ -340,10 +340,29 @@ class TypeTextToolTest {
         // #518. Every acting tool shares TapTool.say, and before the verb was a
         // parameter all five of them reported that they had tapped something.
         // The transcript is the model's account of what it did.
+        //
+        // Contains rather than starts with, since #675: what the field says now
+        // leads, because it is the answer to the question the call was asking.
         val said = TypeTextTool(Tapping(Done.Did(null))).run(call())
 
-        assertTrue(said, said.startsWith("typed."))
+        assertTrue(said, said.contains("typed."))
         assertTrue(said, !said.contains("tapped"))
+    }
+
+    @Test
+    fun typingSaysWhatTheFieldNowSays() = runTest {
+        // #675's first, and the one with a number on it: they attribute seven
+        // points to closing silent text input failures. What this answered
+        // before was the whole screen, leaving the model to find the field
+        // again in sixty lines to learn whether its own last action worked.
+        val after = Reading(
+            Generation("k3f9", 5),
+            listOf(Sighting(field.copy(text = "hello"), "field", "hello", isEditable = true)),
+        )
+
+        val said = TypeTextTool(Tapping(Done.Did(after))).run(call())
+
+        assertTrue(said, said.startsWith("the field now says: hello"))
     }
 
     @Test
@@ -575,6 +594,28 @@ class OpenAppToolTest {
 
         assertTrue(said, said.startsWith("opened."))
         assertTrue(said, !said.contains("tapped"))
+    }
+
+    @Test
+    fun aFieldIsFoundByItsIdRatherThanByItsOldText() {
+        // The whole reason this is not an equality check: a handle carries the
+        // text, and the text is what just changed.
+        val asked = Handle(viewId = "search", role = "field", text = "")
+        val now = Handle(viewId = "search", role = "field", text = "hello")
+        val reading = Reading(
+            Generation("k3f9", 5),
+            listOf(Sighting(now, "field", "hello", isEditable = true)),
+        )
+
+        assertEquals("hello", fieldNow(asked, reading)?.label)
+    }
+
+    @Test
+    fun aFieldThatWentAwayIsSaidRatherThanGuessedAt() {
+        val asked = Handle(viewId = "search", role = "field")
+        val reading = Reading(Generation("k3f9", 5), emptyList())
+
+        assertEquals(null, fieldNow(asked, reading))
     }
 
     @Test
