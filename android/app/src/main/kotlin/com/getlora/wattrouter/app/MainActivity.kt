@@ -22,6 +22,7 @@
 //                          anything, #467.
 //   2026-08-13  A. Sigdel  Offers the two that can, #467.
 //   2026-08-13  A. Sigdel  Shows the key and the hosts it has met, #467.
+//   2026-08-13  A. Sigdel  Gives a wrong provider key a way back, #512.
 //
 // The core and the driver are built once and held for the process. The core
 // owns a native pointer and a decision cache, and a second one is a second
@@ -254,6 +255,20 @@ class MainActivity : ComponentActivity() {
                                     onDone = { where = Where.Settings },
                                 )
 
+                                Where.Credential -> CredentialScreen(
+                                    onForget = { credential.forget() },
+                                    // Re-read rather than assumed. begin() is
+                                    // what decides which of the three states
+                                    // this is, and a forget that half failed
+                                    // would otherwise show a sign-in screen
+                                    // over a key that is still stored.
+                                    onSignIn = {
+                                        state = Startup.begin(this@MainActivity)
+                                        where = Where.Conversation
+                                    },
+                                    onDone = { where = Where.Settings },
+                                )
+
                                 Where.Settings -> SettingsScreen(
                                     destinations = places(connected),
                                     onGo = { where = it },
@@ -457,6 +472,11 @@ class MainActivity : ComponentActivity() {
                 "None yet. One is made when you ask to see it."
             },
             Where.SigningKey,
+        ),
+        Destination(
+            "Provider key",
+            "Stored. Forget it to sign in with a different one.",
+            Where.Credential,
         ),
         Destination(
             "Readiness",
