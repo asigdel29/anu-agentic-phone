@@ -1,4 +1,4 @@
-// RepositoryOnDeviceTest.kt: the eight entry points resolve and answer.
+// RepositoryOnDeviceTest.kt: the ten entry points resolve and answer.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
@@ -8,6 +8,13 @@
 //   2026-08-12  A. Sigdel  Took in the two network calls, #668. Neither reaches
 //                          a network here and neither needs to: what is being
 //                          claimed is that the symbols link.
+//   2026-08-12  A. Sigdel  Took in push and pull, #671. What each can claim
+//                          here differs and the tests say which. pull runs end
+//                          to end over a path remote. push needs a bare
+//                          repository as its target and nothing in
+//                          Repository.kt can make one, so only its refusals
+//                          are reachable from a device; the success path is
+//                          proved in git.rs against a bare one a test creates.
 //
 // On a device, because this is the only place the library loads. The parity test
 // in router/src/jni.rs holds the symbol names in step; this is the other half of
@@ -152,5 +159,66 @@ class RepositoryOnDeviceTest {
 
         assertNotNull(refused)
         assertTrue("remoteSet answered $refused", refused!!.contains("git@host:"))
+    }
+
+    @Test
+    fun aPullStartsTheBranchThisRepositoryDidNotHave() {
+        // End to end on a device, and the ordinary first case rather than an
+        // edge one: a repository made by init_repository and pointed at a
+        // remote has no branch at all, so the first pull creates it.
+        val elsewhere = File(directory.parentFile, "pull-from").apply { mkdirs() }
+        val origin = Repository(elsewhere.absolutePath)
+        runBlocking { GitInitTool(origin).run("{}") }
+        origin.identify("Ada", "ada@example.com")
+        File(elsewhere, "a.txt").writeText("first")
+        origin.add(listOf("a.txt"))
+        origin.commit("Add a file")
+        val branch = branchOf(origin)
+
+        val here = Repository(directory.absolutePath)
+        runBlocking { GitInitTool(here).run("{}") }
+        here.remoteSet("origin", elsewhere.absolutePath)
+        val pulled = here.pull("origin", branch)
+
+        assertNotNull(pulled)
+        assertTrue("pull answered $pulled", pulled!!.contains("\"started\""))
+        assertTrue("the file did not arrive", File(directory, "a.txt").exists())
+        elsewhere.deleteRecursively()
+    }
+
+    @Test
+    fun aPushWithNowhereToGoAndNothingToSendSaysWhich() {
+        // Push's success needs a bare repository as its target and nothing
+        // here can make one, so what a device proves about it is that the
+        // symbol links and the refusal crosses back as words. That is a
+        // smaller claim than the one above and reads as one.
+        val here = Repository(directory.absolutePath)
+        runBlocking { GitInitTool(here).run("{}") }
+        here.identify("Ada", "ada@example.com")
+        File(directory, "a.txt").writeText("first")
+        here.add(listOf("a.txt"))
+        here.commit("Add a file")
+
+        val nowhere = here.push("origin", branchOf(here))
+        here.remoteSet("origin", File(directory.parentFile, "absent").absolutePath)
+        val nothing = here.push("origin", "not-a-branch")
+
+        assertNotNull(nowhere)
+        assertTrue("push answered $nowhere", nowhere!!.contains("no remote called origin"))
+        assertNotNull(nothing)
+        assertTrue("push answered $nothing", nothing!!.contains("not-a-branch"))
+    }
+
+    /**
+     * The branch a repository is on, read rather than assumed.
+     *
+     * `init.defaultBranch` is a global setting, so the name a fresh repository
+     * lands on is whatever the machine running this says. Hard-coding "master"
+     * passes on one emulator image and fails on another.
+     */
+    private fun branchOf(repository: Repository): String {
+        val head = repository.head().orEmpty()
+        return Regex("\"name\":\"([^\"]+)\"").find(head)?.groupValues?.get(1)
+            ?: error("no branch in $head")
     }
 }

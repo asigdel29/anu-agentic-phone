@@ -40,6 +40,10 @@ private class Tracked(private val answer: String?) : Worktree {
     override fun remoteSet(name: String, url: String) = answer
 
     override fun fetch(name: String) = answer
+
+    override fun push(remote: String, branch: String) = answer
+
+    override fun pull(remote: String, branch: String) = answer
 }
 
 class GitWriteToolsTest {
