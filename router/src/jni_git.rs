@@ -33,6 +33,26 @@
 
 use crate::jni::read;
 use crate::jni_answer::{guarded, handed};
+
+/// The key and the pin file, when Kotlin passed both.
+///
+/// Owned rather than borrowed, and handed back for the caller to build a
+/// [`crate::git::Reach`] from: that type borrows both halves, so something has
+/// to hold them for the length of the call and a helper answering the borrow
+/// would be answering one to its own local.
+///
+/// Either half absent is no reach at all, which is a repository reaching a path
+/// remote. [`read`] answers `None` for a null argument as well as for a string
+/// it cannot decode, and both mean the same thing here: nothing to reach with.
+fn optional<'a>(
+    env: &mut JNIEnv<'a>,
+    key: &JString<'a>,
+    pins: &JString<'a>,
+) -> Option<(String, std::path::PathBuf)> {
+    let key = read(env, key)?;
+    let pins = read(env, pins)?;
+    Some((key, std::path::PathBuf::from(pins)))
+}
 use jni::JNIEnv;
 use jni::objects::{JClass, JString};
 use jni::sys::jstring;
@@ -209,13 +229,15 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeRemoteSet<'a
 ///
 /// # Safety
 /// Called from Kotlin through `Repository.fetch`, which passes two strings it
-/// owns.
+/// owns and two it may pass as null.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeFetch<'a>(
     mut env: JNIEnv<'a>,
     _class: JClass<'a>,
     path: JString<'a>,
     name: JString<'a>,
+    key: JString<'a>,
+    pins: JString<'a>,
 ) -> jstring {
     guarded(std::ptr::null_mut(), || {
         let Some(path) = read(&mut env, &path) else {
@@ -224,7 +246,14 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeFetch<'a>(
         let Some(name) = read(&mut env, &name) else {
             return std::ptr::null_mut();
         };
-        handed(&mut env, crate::core_git::fetch(Path::new(&path), &name))
+        let held = optional(&mut env, &key, &pins);
+        let reach = held
+            .as_ref()
+            .map(|(key, pins)| crate::git::Reach::new(key, pins));
+        handed(
+            &mut env,
+            crate::core_git::fetch(Path::new(&path), &name, reach.as_ref()),
+        )
     })
 }
 
@@ -232,7 +261,7 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeFetch<'a>(
 ///
 /// # Safety
 /// Called from Kotlin through `Repository.push`, which passes three strings it
-/// owns.
+/// owns and two it may pass as null.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativePush<'a>(
     mut env: JNIEnv<'a>,
@@ -240,6 +269,8 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativePush<'a>(
     path: JString<'a>,
     remote: JString<'a>,
     branch: JString<'a>,
+    key: JString<'a>,
+    pins: JString<'a>,
 ) -> jstring {
     guarded(std::ptr::null_mut(), || {
         let Some(path) = read(&mut env, &path) else {
@@ -251,9 +282,13 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativePush<'a>(
         let Some(branch) = read(&mut env, &branch) else {
             return std::ptr::null_mut();
         };
+        let held = optional(&mut env, &key, &pins);
+        let reach = held
+            .as_ref()
+            .map(|(key, pins)| crate::git::Reach::new(key, pins));
         handed(
             &mut env,
-            crate::core_git::push(Path::new(&path), &remote, &branch),
+            crate::core_git::push(Path::new(&path), &remote, &branch, reach.as_ref()),
         )
     })
 }
@@ -262,7 +297,7 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativePush<'a>(
 ///
 /// # Safety
 /// Called from Kotlin through `Repository.pull`, which passes three strings it
-/// owns.
+/// owns and two it may pass as null.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativePull<'a>(
     mut env: JNIEnv<'a>,
@@ -270,6 +305,8 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativePull<'a>(
     path: JString<'a>,
     remote: JString<'a>,
     branch: JString<'a>,
+    key: JString<'a>,
+    pins: JString<'a>,
 ) -> jstring {
     guarded(std::ptr::null_mut(), || {
         let Some(path) = read(&mut env, &path) else {
@@ -281,9 +318,13 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativePull<'a>(
         let Some(branch) = read(&mut env, &branch) else {
             return std::ptr::null_mut();
         };
+        let held = optional(&mut env, &key, &pins);
+        let reach = held
+            .as_ref()
+            .map(|(key, pins)| crate::git::Reach::new(key, pins));
         handed(
             &mut env,
-            crate::core_git::pull(Path::new(&path), &remote, &branch),
+            crate::core_git::pull(Path::new(&path), &remote, &branch, reach.as_ref()),
         )
     })
 }

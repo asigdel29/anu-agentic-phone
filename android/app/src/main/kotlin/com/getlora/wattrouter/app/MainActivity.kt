@@ -17,6 +17,7 @@
 //   2026-08-11  A. Sigdel  Listens when the person asks it to, #659.
 //   2026-08-12  A. Sigdel  Runs one command, in the workspace the git tools
 //                          already use, #677.
+//   2026-08-13  A. Sigdel  Hands the repository a key to reach a host with, #467.
 //
 // The core and the driver are built once and held for the process. The core
 // owns a native pointer and a decision cache, and a second one is a second
@@ -79,7 +80,9 @@ import com.getlora.wattrouter.HttpRpc
 import com.getlora.wattrouter.Permission
 import com.getlora.wattrouter.PermissionError
 import com.getlora.wattrouter.Planned
+import com.getlora.wattrouter.Reach
 import com.getlora.wattrouter.Reached
+import com.getlora.wattrouter.Reaching
 import com.getlora.wattrouter.connect
 import com.getlora.wattrouter.tools
 import com.getlora.wattrouter.Tool
@@ -150,6 +153,17 @@ class MainActivity : ComponentActivity() {
      * would check that they did.
      */
     private val workspace by lazy { java.io.File(filesDir, "work").apply { mkdirs() } }
+
+    /**
+     * The key this phone pushes with, and the hosts it has met.
+     *
+     * Beside the workspace rather than in it: the workspace is a repository the
+     * agent writes to, and a private key inside one is a private key a model can
+     * stage. Neither is made here; [Reaching.ensure] makes the key when somebody
+     * asks to see it, and `git::trust` writes the pins on the first connection.
+     */
+    private val reaching by lazy { Reaching(applicationContext) }
+    private val pins by lazy { java.io.File(filesDir, "known-hosts") }
 
     /**
      * What another app shared, until a turn takes it.
@@ -362,7 +376,16 @@ class MainActivity : ComponentActivity() {
         // Signed outermost, and reading the setting rather than holding one:
         // this function runs once, where driverFor remembers the driver, so an
         // identity captured here would be whichever was set at launch.
-        val repository = Signed(Repository(workspace.absolutePath)) { signing.who }
+        val repository = Signed(
+            // Asked per call rather than held, as the identity below it and for
+            // a sharper reason: a key can stop existing between two calls, since
+            // the keystore drops its entries when the screen lock is removed.
+            // Null until somebody has made one, which is a repository that can
+            // reach a path remote and nothing else.
+            Repository(workspace.absolutePath) {
+                reaching.secret()?.let { Reach(it, pins.absolutePath) }
+            },
+        ) { signing.who }
         return listOf(
             GitStatusTool(repository),
             GitInitTool(repository),

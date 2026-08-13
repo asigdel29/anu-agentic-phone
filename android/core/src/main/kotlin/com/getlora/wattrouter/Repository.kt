@@ -148,16 +148,36 @@ interface Worktree {
 }
 
 /**
+ * What a call over the network offers, and what it checks who answered against.
+ *
+ * @property key an OpenSSH private key, as text. In memory rather than on disk,
+ *   which is `docs/decisions/pushing-from-a-phone.md`: the only copy at rest is
+ *   the sealed one.
+ * @property pins the file host keys are remembered in. Absolute.
+ */
+data class Reach(val key: String, val pins: String)
+
+/**
  * One repository on disk.
  *
- * Cheap to build and cheap to throw away: it is a path and nothing else, so a
- * second instance over the same directory is not a second anything.
+ * Cheap to build and cheap to throw away: it is a path and a way of asking for
+ * a key, so a second instance over the same directory is not a second anything.
  *
  * @property path the working tree's root, absolute. A relative one resolves
  *   against the process's working directory, which on Android is `/`, so the
  *   mistake it looks like is not the one it is.
+ * @property reach how to reach a host, asked once per call rather than held.
+ *   [Signed] takes its identity the same way and for the same reason: a key
+ *   captured at construction would be whichever existed at launch, and this one
+ *   can stop existing between two calls, since the keystore drops its entries
+ *   when the screen lock is removed. Answering null is a repository that can
+ *   still reach a path remote and nothing else, which is what every caller
+ *   before #467 was.
  */
-class Repository(val path: String) : Worktree {
+class Repository(
+    val path: String,
+    private val reach: () -> Reach? = { null },
+) : Worktree {
 
     /**
      * Make [path] into a repository, or say it already was one.
@@ -200,13 +220,15 @@ class Repository(val path: String) : Worktree {
     override fun remoteSet(name: String, url: String): String? = nativeRemoteSet(path, name, url)
 
     /** Bring back what a remote has, and answer with what moved. */
-    override fun fetch(name: String): String? = nativeFetch(path, name)
+    override fun fetch(name: String): String? = reach().let { nativeFetch(path, name, it?.key, it?.pins) }
 
     /** Send a branch, and answer with the refusal if there is one. */
-    override fun push(remote: String, branch: String): String? = nativePush(path, remote, branch)
+    override fun push(remote: String, branch: String): String? =
+        reach().let { nativePush(path, remote, branch, it?.key, it?.pins) }
 
     /** Fast-forward to what the remote has, or say why that cannot be done. */
-    override fun pull(remote: String, branch: String): String? = nativePull(path, remote, branch)
+    override fun pull(remote: String, branch: String): String? =
+        reach().let { nativePull(path, remote, branch, it?.key, it?.pins) }
 
     private companion object {
         init {
@@ -235,18 +257,27 @@ class Repository(val path: String) : Worktree {
             url: String?,
         ): String?
 
-        @JvmStatic private external fun nativeFetch(path: String?, name: String?): String?
+        @JvmStatic private external fun nativeFetch(
+            path: String?,
+            name: String?,
+            key: String?,
+            pins: String?,
+        ): String?
 
         @JvmStatic private external fun nativePush(
             path: String?,
             remote: String?,
             branch: String?,
+            key: String?,
+            pins: String?,
         ): String?
 
         @JvmStatic private external fun nativePull(
             path: String?,
             remote: String?,
             branch: String?,
+            key: String?,
+            pins: String?,
         ): String?
     }
 }
