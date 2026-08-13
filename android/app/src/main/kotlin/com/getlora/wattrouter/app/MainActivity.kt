@@ -60,6 +60,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.getlora.wattrouter.Agent
+import com.getlora.wattrouter.Barred
 import com.getlora.wattrouter.Budget
 import com.getlora.wattrouter.Budgeted
 import com.getlora.wattrouter.Confirmed
@@ -448,6 +449,35 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
+     * What the model would see, bounded, or what to do to make it say anything.
+     *
+     * #511. The panel is the moment somebody decides whether they are
+     * comfortable with an application that reads other applications, and with
+     * the service on it was guaranteed to show a refusal instead: read_screen
+     * begins with barredNow, and the screen in front at that moment is this
+     * one, which Barred refuses correctly and by design.
+     *
+     * So the refusal becomes the instruction that resolves it. The screen
+     * re-reads on resume, which it has always done for its own reasons, so
+     * following the sentence is what produces the evidence: open something,
+     * come back, and this is a reading of what was in front when you left.
+     *
+     * Not read without the gate, which was the cheap answer. The bar stops the
+     * agent acting on its own screen and reading it would be harmless, but the
+     * evidence would then be a reading of the checklist, which demonstrates
+     * nothing about the applications anybody is actually worried about.
+     */
+    private fun evidence(said: String): String =
+        if (said.startsWith(Barred.ITSELF.why)) {
+            "This is the assistant's own screen, and it does not read its own. " +
+                "Open something else and come back here: this panel reads again " +
+                "every time you return, so what it shows will be what the model " +
+                "would see of that."
+        } else {
+            said.lines().take(LOOK).joinToString("\n")
+        }
+
+    /**
      * What the settings screen offers, and one line about each.
      *
      * Built here rather than in the screen, because the counts are this
@@ -609,11 +639,16 @@ class MainActivity : ComponentActivity() {
 
         // Evidence rather than a claim, and only once there is any: before the
         // service is on there is nothing to show and nothing to promise.
-        LaunchedEffect(now.canDrive) {
+        //
+        // Keyed on `now` rather than on `now.canDrive`, which is #511's other
+        // half: the observer above replaces `now` on every resume, so coming
+        // back to this screen re-reads. That is what makes the sentence below
+        // an instruction that works rather than a promise.
+        LaunchedEffect(now) {
             seeing = if (!now.canDrive) {
                 null
             } else {
-                ReadScreenTool(AndroidPhone(applicationContext)).run("{}").lines().take(LOOK).joinToString("\n")
+                evidence(ReadScreenTool(AndroidPhone(applicationContext)).run("{}"))
             }
         }
 
