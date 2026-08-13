@@ -5,6 +5,8 @@
 //   2026-08-09  A. Sigdel  Taps as well, which is the only path that retains
 //                          framework nodes and has to give them back.
 //   2026-08-09  A. Sigdel  Checks the service asked for the summon button.
+//   2026-08-12  A. Sigdel  Waits for a screen rather than reading whatever is
+//                          there and dereferencing it, #680.
 //
 // Two settings here fail silently and neither logs anything useful: a service
 // without BIND_ACCESSIBILITY_SERVICE is never bound, and one whose config omits
@@ -33,6 +35,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.getlora.wattrouter.Done
 import com.getlora.wattrouter.Generation
 import com.getlora.wattrouter.Handle
+import com.getlora.wattrouter.Reading
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -68,11 +71,44 @@ class DrivingServiceDeviceTest {
 
     /** Wait for the system to bind it. Enabling is a settings write, not a call. */
     private fun waitForConnection(): DrivingService? {
-        repeat(40) {
+        repeat(WAITS) {
             DrivingService.connected?.let { return it }
-            Thread.sleep(250)
+            Thread.sleep(PAUSE)
         }
         return null
+    }
+
+    /**
+     * Wait for a screen with something on it. Null if none arrived.
+     *
+     * `read` answers null while no window has focus, and every test below runs
+     * against whatever the previous one left rather than a fixture of its own.
+     * Read once, that null is a `NullPointerException` at a line number, which
+     * is #680: it says neither that the window was late nor that the service is
+     * not reading, and those are the two things this class is here to tell
+     * apart.
+     *
+     * The numbers are `waitForConnection`'s, and the two screen tripwires use
+     * the same pair.
+     */
+    private fun readWhenReady(service: DrivingService): Reading? {
+        repeat(WAITS) {
+            val reading = service.read()
+            if (reading != null && reading.seen.isNotEmpty()) return reading
+            Thread.sleep(PAUSE)
+        }
+        return null
+    }
+
+    /** As [readWhenReady], and the sentence every caller that needs one shares. */
+    private fun readOrFail(service: DrivingService): Reading {
+        val reading = readWhenReady(service)
+        assertNotNull(
+            "no screen with anything on it arrived in ${WAITS * PAUSE}ms, so nothing " +
+                "here was measured",
+            reading,
+        )
+        return reading!!
     }
 
     @Before
@@ -103,8 +139,19 @@ class DrivingServiceDeviceTest {
         val service = waitForConnection()
         assertNotNull(service)
 
-        val reading = service!!.read()
-        assertNotNull("connected and read nothing", reading)
+        // Its own wait rather than readWhenReady's. That one waits for a screen
+        // with something on it, and the two states this test tells apart are
+        // "read nothing at all", which is the missing capability, and "read a
+        // screen with nothing on it", which is not. A helper that waited
+        // through the second would make it unreportable.
+        var reading: Reading? = null
+        for (attempt in 0 until WAITS) {
+            reading = service!!.read()
+            if (reading != null) break
+            Thread.sleep(PAUSE)
+        }
+
+        assertNotNull("connected and read nothing in ${WAITS * PAUSE}ms", reading)
         assertTrue("a screen with nothing on it", reading!!.seen.isNotEmpty())
         assertTrue("${reading.generation}", reading.generation.counter >= 1)
     }
@@ -115,7 +162,7 @@ class DrivingServiceDeviceTest {
         // prune, generation, resolve.
         val service = waitForConnection()
         assertNotNull(service)
-        val reading = service!!.read()!!
+        val reading = readOrFail(service!!)
 
         val handle = reading.seen.first { it.handle.isFindable }.handle
         val aim = service.aim(handle, reading.generation)
@@ -134,7 +181,7 @@ class DrivingServiceDeviceTest {
         // so nothing on the device is actually pressed by the suite.
         val service = waitForConnection()
         assertNotNull(service)
-        val reading = service!!.read()!!
+        val reading = readOrFail(service!!)
         val quiet = reading.seen.firstOrNull { !it.isClickable && !it.isEditable && it.handle.isFindable }
 
         assumeTrue("no read-only line on this screen to try", quiet != null)
@@ -149,7 +196,7 @@ class DrivingServiceDeviceTest {
     fun aTapAgainstAnOlderReadingIsRefused() {
         val service = waitForConnection()
         assertNotNull(service)
-        val reading = service!!.read()!!
+        val reading = readOrFail(service!!)
 
         val done = service.tap(
             reading.seen.first { it.handle.isFindable }.handle,
@@ -190,7 +237,7 @@ class DrivingServiceDeviceTest {
     fun aHandleFromNowhereIsRefusedRatherThanGuessedAt() {
         val service = waitForConnection()
         assertNotNull(service)
-        val reading = service!!.read()!!
+        val reading = readOrFail(service!!)
 
         val aim = service.aim(Handle(role = "button", siblingIndex = 99), reading.generation)
 
@@ -198,5 +245,11 @@ class DrivingServiceDeviceTest {
             com.getlora.wattrouter.Aim.Lost(com.getlora.wattrouter.Resolution.Unusable),
             aim,
         )
+    }
+
+    private companion object {
+        /** Ten seconds, as SecureScreenDeviceTest and SensitiveScreenDeviceTest. */
+        const val WAITS = 40
+        const val PAUSE = 250L
     }
 }
