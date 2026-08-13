@@ -132,6 +132,13 @@ jobs:
 
       # The notices are generated, so the way they go wrong is by nobody
       # regenerating them. This is the check rather than the habit.
+      #
+      # It stays hard, and stays here rather than moving into a job of its own.
+      # #569 asked whether a dependency bump arriving red was the check's fault;
+      # it was not, it was that dependabot cannot regenerate what it stales, and
+      # notices.yml is what does that now. The failure this reports is a person
+      # who changed a dependency and did not run the script, which is the case
+      # it was written for.
       - name: third-party notices are current
         run: bash scripts/notices.sh --check
 
