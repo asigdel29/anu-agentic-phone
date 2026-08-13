@@ -7,6 +7,7 @@
 //   2026-08-09  A. Sigdel  Checks the service asked for the summon button.
 //   2026-08-12  A. Sigdel  Waits for a screen rather than reading whatever is
 //                          there and dereferencing it, #680.
+//   2026-08-12  A. Sigdel  Aim against the screen the reading came from, #684.
 //
 // Two settings here fail silently and neither logs anything useful: a service
 // without BIND_ACCESSIBILITY_SERVICE is never bound, and one whose config omits
@@ -32,10 +33,12 @@ import android.app.UiAutomation
 import android.os.ParcelFileDescriptor
 import android.provider.Settings
 import androidx.test.platform.app.InstrumentationRegistry
+import com.getlora.wattrouter.Aim
 import com.getlora.wattrouter.Done
 import com.getlora.wattrouter.Generation
 import com.getlora.wattrouter.Handle
 import com.getlora.wattrouter.Reading
+import com.getlora.wattrouter.Resolution
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -171,7 +174,7 @@ class DrivingServiceDeviceTest {
         // Moved is a legitimate answer (a live screen may have changed between
         // the two reads) so the assertion is that it is not Lost, which would
         // mean the handle did not describe the node it was made from.
-        assertTrue("$aim", aim !is com.getlora.wattrouter.Aim.Lost)
+        assertTrue("$aim", aim !is Aim.Lost)
     }
 
     @Test
@@ -237,14 +240,27 @@ class DrivingServiceDeviceTest {
     fun aHandleFromNowhereIsRefusedRatherThanGuessedAt() {
         val service = waitForConnection()
         assertNotNull(service)
-        val reading = readOrFail(service!!)
 
-        val aim = service.aim(Handle(role = "button", siblingIndex = 99), reading.generation)
+        // Read and aim together, and go round again on an answer that is about
+        // the screen rather than about the handle, which is #684. `aim` opens
+        // with `screen() ?: return null`, so it answers null for the window
+        // being gone, one call after #680 waited for it to arrive; and it
+        // answers Moved when the screen changed between the read and the aim,
+        // which the test beside this one names as legitimate on a live screen.
+        // Only a matched generation makes Lost the right answer, and that is
+        // the state this test is about.
+        var aim: Aim? = null
+        for (attempt in 0 until WAITS) {
+            val reading = readOrFail(service!!)
+            aim = service.aim(Handle(role = "button", siblingIndex = 99), reading.generation)
+            if (aim != null && aim !is Aim.Moved) break
+            Thread.sleep(PAUSE)
+        }
 
-        assertEquals(
-            com.getlora.wattrouter.Aim.Lost(com.getlora.wattrouter.Resolution.Unusable),
-            aim,
-        )
+        // Lost rather than merely not-null: the whole claim is that a handle
+        // naming a sibling that is not there is refused, and Unusable is the
+        // refusal saying which.
+        assertEquals(Aim.Lost(Resolution.Unusable), aim)
     }
 
     private companion object {
