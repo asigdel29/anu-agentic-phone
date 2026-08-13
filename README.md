@@ -28,13 +28,13 @@ need removing at all.
 
 ## What it can do today
 
-Twenty-one tools, all of them registered in the app and none of them aspirational.
+Twenty-three tools, all of them registered in the app and none of them aspirational.
 
 | | |
 |---|---|
 | **The screen** | `read_screen`, `look`, `tap`, `type_text`, `scroll`, `navigate`, `open_app`, `wait_for_change`, `find_on_screen` |
 | **Your things** | `read_calendar`, `find_contact`, `where_am_i` |
-| **Code** | `read_repository`, `init_repository`, `stage_paths`, `commit`, `set_remote`, `fetch`, `run_command` |
+| **Code** | `read_repository`, `init_repository`, `stage_paths`, `commit`, `set_remote`, `fetch`, `push`, `pull`, `run_command` |
 | **Memory** | `remember`, `recall` |
 | **Anything else** | tools from an [MCP](https://modelcontextprotocol.io) server you connect |
 

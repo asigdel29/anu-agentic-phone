@@ -20,6 +20,7 @@
 //   2026-08-13  A. Sigdel  Hands the repository a key to reach a host with, #467.
 //   2026-08-13  A. Sigdel  Offers the two network tools that cannot lose
 //                          anything, #467.
+//   2026-08-13  A. Sigdel  Offers the two that can, #467.
 //
 // The core and the driver are built once and held for the process. The core
 // owns a native pointer and a decision cache, and a second one is a second
@@ -83,6 +84,8 @@ import com.getlora.wattrouter.HttpRpc
 import com.getlora.wattrouter.Permission
 import com.getlora.wattrouter.PermissionError
 import com.getlora.wattrouter.Planned
+import com.getlora.wattrouter.PullTool
+import com.getlora.wattrouter.PushTool
 import com.getlora.wattrouter.Reach
 import com.getlora.wattrouter.Reached
 import com.getlora.wattrouter.Reaching
@@ -397,6 +400,8 @@ class MainActivity : ComponentActivity() {
             GitCommitTool(repository),
             SetRemoteTool(repository),
             FetchTool(repository),
+            PushTool(repository),
+            PullTool(repository),
         )
     }
 
