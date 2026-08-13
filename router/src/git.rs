@@ -320,6 +320,81 @@ pub fn trust(pins: &Path, host: &str, key: &[u8]) -> Result<Trusted, Error> {
     Ok(Trusted::Pinned)
 }
 
+/// What a call over the network needs: a key to offer, and what to check against.
+///
+/// One argument rather than two on each of [`fetch`], [`push`] and [`pull`],
+/// because neither half is useful alone. A key with nothing to check the host
+/// against authenticates the phone to whoever answered, and a pin file with no
+/// key gets as far as being asked for one.
+///
+/// Passed as `Option`, and `None` is a call that reaches a path remote or an
+/// ssh remote wanting no key. Every test in this file passes `None`, which is
+/// the point: none of them has a forge to reach.
+pub struct Reach<'a> {
+    key: &'a str,
+    pins: &'a Path,
+}
+
+impl<'a> Reach<'a> {
+    /// # Arguments
+    /// `key` an OpenSSH private key WHERE it is the text of one rather than a
+    /// path to one. In memory on purpose: `docs/decisions/pushing-from-a-phone.md`
+    /// keeps it out of the filesystem, so the only copy at rest is the sealed
+    /// one the Keystore holds.
+    ///
+    /// `pins` the file host keys are remembered in, as [`trust`] writes it.
+    #[must_use]
+    pub fn new(key: &'a str, pins: &'a Path) -> Self {
+        Self { key, pins }
+    }
+}
+
+/// Put a [`Reach`]'s two callbacks on a set of them.
+///
+/// `changed` is where a refused host is left. A callback answers libgit2 rather
+/// than this crate, so it cannot return [`Error::HostKeyChanged`]; it records
+/// the host here and fails the transfer, and the caller reads this afterwards
+/// to say which failure it was rather than reporting a network problem.
+fn reaching<'a>(
+    callbacks: &mut git2::RemoteCallbacks<'a>,
+    reach: &'a Reach<'a>,
+    changed: &'a std::cell::RefCell<Option<String>>,
+) {
+    let key = reach.key;
+    callbacks.credentials(move |_url, username, _allowed| {
+        // `git` when the URL named nobody, which is what the ssh form of every
+        // forge remote uses and what a user@host URL overrides.
+        git2::Cred::ssh_key_from_memory(username.unwrap_or("git"), None, key, None)
+    });
+
+    let pins = reach.pins;
+    callbacks.certificate_check(move |certificate, host| {
+        let Some(key) = certificate
+            .as_hostkey()
+            .and_then(git2::cert::CertHostkey::hostkey)
+        else {
+            // Not an ssh host key, which over this transport means libgit2 has
+            // handed something there is no pin format for. Passed through to
+            // its own check rather than accepted here.
+            return Ok(git2::CertificateCheckStatus::CertificatePassthrough);
+        };
+
+        match trust(pins, host, key) {
+            // Ok rather than Passthrough, which is where this diverges from the
+            // sketch in #467. Passthrough means "no opinion, use the default",
+            // and the default is a known_hosts lookup: there is no known_hosts
+            // on a phone, so deferring to it refuses every host and the pin
+            // decides nothing. `trust` is the check, so it answers.
+            Ok(_) => Ok(git2::CertificateCheckStatus::CertificateOk),
+            Err(Error::HostKeyChanged { host }) => {
+                *changed.borrow_mut() = Some(host);
+                Err(git2::Error::from_str("the host key is not the pinned one"))
+            }
+            Err(why) => Err(git2::Error::from_str(&why.to_string())),
+        }
+    });
+}
+
 /// Make a directory into a repository, or say it already was one.
 ///
 /// The directory is created if it is not there. `git init` does that too, and a
@@ -694,21 +769,22 @@ pub fn remote_set(path: &Path, name: &str, url: &str) -> Result<Pointed, Error> 
 /// repository did not already have, which is a state rather than a failure and
 /// reads as one.
 ///
-/// No credential callback yet, so this reaches a path remote and any ssh remote
-/// that needs no key. The callback and the host-key pin are their own change.
+/// `reach` is `None` for a path remote, or an ssh remote wanting no key.
 ///
 /// # Errors
 /// [`Error::NoSuchRemote`] IF nothing by that name is configured.
-/// [`Error::NotARepository`] IF nothing at `path` opens as one, and
-/// [`Error::Refused`] IF the fetch itself is refused.
-pub fn fetch(path: &Path, name: &str) -> Result<Vec<String>, Error> {
+/// [`Error::HostKeyChanged`] IF a `reach` was given and the host answered with
+/// a key other than the pinned one. [`Error::NotARepository`] IF nothing at
+/// `path` opens as one, and [`Error::Refused`] IF the fetch itself is refused.
+pub fn fetch(path: &Path, name: &str, reach: Option<&Reach>) -> Result<Vec<String>, Error> {
     let repo = open(path)?;
     let mut remote = repo
         .find_remote(name)
         .map_err(|_| Error::NoSuchRemote(name.to_owned()))?;
 
     let mut moved = Vec::new();
-    {
+    let changed = std::cell::RefCell::new(None);
+    let taken = {
         let mut callbacks = git2::RemoteCallbacks::new();
         // update_tips rather than the transfer statistics: it fires once per
         // reference that actually changed, which is the question being asked.
@@ -716,13 +792,23 @@ pub fn fetch(path: &Path, name: &str) -> Result<Vec<String>, Error> {
             moved.push(reference.to_owned());
             true
         });
+        if let Some(reach) = reach {
+            reaching(&mut callbacks, reach, &changed);
+        }
 
         let mut options = git2::FetchOptions::new();
         options.remote_callbacks(callbacks);
         // An empty refspec list means the remote's configured ones, which is
         // what `git fetch <remote>` with no further argument does.
-        remote.fetch::<&str>(&[], Some(&mut options), None)?;
+        remote.fetch::<&str>(&[], Some(&mut options), None)
+    };
+
+    // Read before the transfer's own error, which for a refused host key is a
+    // message about the transport rather than about who answered.
+    if let Some(host) = changed.into_inner() {
+        return Err(Error::HostKeyChanged { host });
     }
+    taken?;
     Ok(moved)
 }
 
@@ -758,9 +844,11 @@ pub fn fetch(path: &Path, name: &str) -> Result<Vec<String>, Error> {
 /// [`Error::NotFastForward`] IF the remote refused the reference, which means
 /// it has work this repository does not. [`Error::NoSuchBranch`] IF there is no
 /// such branch here, [`Error::NoSuchRemote`] IF no such remote is configured,
-/// [`Error::NotARepository`] IF nothing at `path` opens as one, and
-/// [`Error::Refused`] IF the push fails for any other reason.
-pub fn push(path: &Path, remote: &str, branch: &str) -> Result<(), Error> {
+/// [`Error::HostKeyChanged`] IF a `reach` was given and the host answered with
+/// a key other than the pinned one, [`Error::NotARepository`] IF nothing at
+/// `path` opens as one, and [`Error::Refused`] IF the push fails for any other
+/// reason.
+pub fn push(path: &Path, remote: &str, branch: &str, reach: Option<&Reach>) -> Result<(), Error> {
     let repo = open(path)?;
     // Asked here so a typed branch name is answered as one, rather than as
     // whatever the refspec parser makes of it further down.
@@ -772,6 +860,7 @@ pub fn push(path: &Path, remote: &str, branch: &str) -> Result<(), Error> {
 
     let reference = format!("refs/heads/{branch}");
     let mut refused = None;
+    let changed = std::cell::RefCell::new(None);
     let sent = {
         let mut callbacks = git2::RemoteCallbacks::new();
         callbacks.push_update_reference(|reference, status| {
@@ -783,6 +872,9 @@ pub fn push(path: &Path, remote: &str, branch: &str) -> Result<(), Error> {
             }
             Ok(())
         });
+        if let Some(reach) = reach {
+            reaching(&mut callbacks, reach, &changed);
+        }
 
         let mut options = git2::PushOptions::new();
         options.remote_callbacks(callbacks);
@@ -792,6 +884,12 @@ pub fn push(path: &Path, remote: &str, branch: &str) -> Result<(), Error> {
         remote.push(&[refspec.as_str()], Some(&mut options))
     };
 
+    // Before the reference refusal and before the transport's own error: a host
+    // that is not the pinned one means nothing was sent at all, so reporting it
+    // as a rejected push would name the wrong problem.
+    if let Some(host) = changed.into_inner() {
+        return Err(Error::HostKeyChanged { host });
+    }
     if let Some(why) = refused {
         return Err(why);
     }
@@ -825,11 +923,20 @@ pub fn push(path: &Path, remote: &str, branch: &str) -> Result<(), Error> {
 ///
 /// # Errors
 /// [`Error::WouldMerge`] IF the branch and the remote have both moved on.
-/// [`Error::NoSuchRemote`] IF no such remote is configured,
+/// [`Error::HostKeyChanged`] IF a `reach` was given and the host answered with
+/// a key other than the pinned one, [`Error::NoSuchRemote`] IF no such remote is
+/// configured,
 /// [`Error::NotARepository`] IF nothing at `path` opens as one, and
 /// [`Error::Refused`] IF the fetch, the analysis or the checkout fails.
-pub fn pull(path: &Path, remote: &str, branch: &str) -> Result<Pulled, Error> {
-    fetch(path, remote)?;
+pub fn pull(
+    path: &Path,
+    remote: &str,
+    branch: &str,
+    reach: Option<&Reach>,
+) -> Result<Pulled, Error> {
+    // Forwarded rather than dropped: this is the only call here that reaches the
+    // network, so a pull with a key that did not pass it on would ask for one.
+    fetch(path, remote, reach)?;
 
     let repo = open(path)?;
     let tracking = format!("refs/remotes/{remote}/{branch}");
@@ -1482,7 +1589,7 @@ mod tests {
         let scratch = Scratch::new("fetch-missing");
         git2::Repository::init(scratch.path()).unwrap();
 
-        let Err(why) = fetch(scratch.path(), "upstream") else {
+        let Err(why) = fetch(scratch.path(), "upstream", None) else {
             panic!("fetched a remote that is not there")
         };
         assert!(matches!(why, Error::NoSuchRemote(_)), "{why}");
@@ -1504,7 +1611,7 @@ mod tests {
         )
         .unwrap();
 
-        let moved = fetch(scratch.path(), "origin").unwrap();
+        let moved = fetch(scratch.path(), "origin", None).unwrap();
 
         assert!(
             moved.contains(&format!("refs/remotes/origin/{branch}")),
@@ -1531,9 +1638,9 @@ mod tests {
             &source.path().display().to_string(),
         )
         .unwrap();
-        assert!(!fetch(scratch.path(), "origin").unwrap().is_empty());
+        assert!(!fetch(scratch.path(), "origin", None).unwrap().is_empty());
 
-        assert!(fetch(scratch.path(), "origin").unwrap().is_empty());
+        assert!(fetch(scratch.path(), "origin", None).unwrap().is_empty());
     }
 
     #[test]
@@ -1551,7 +1658,7 @@ mod tests {
             &source.path().display().to_string(),
         )
         .unwrap();
-        fetch(scratch.path(), "origin").unwrap();
+        fetch(scratch.path(), "origin", None).unwrap();
 
         assert!(
             !scratch.path().join("a.txt").exists(),
@@ -1602,12 +1709,49 @@ mod tests {
         let (repo, branch) = ready_to_push(&scratch, &bare);
         let sent = repo.head().unwrap().peel_to_commit().unwrap().id();
 
-        push(scratch.path(), "origin", &branch).unwrap();
+        push(scratch.path(), "origin", &branch, None).unwrap();
 
         let there = origin
             .find_reference(&format!("refs/heads/{branch}"))
             .unwrap();
         assert_eq!(sent, there.peel_to_commit().unwrap().id());
+    }
+
+    #[test]
+    fn a_reach_offered_to_a_transport_that_asks_for_nothing_changes_nothing() {
+        // What a harness with no forge in it can say, stated as exactly that.
+        // The callbacks are installed and a path remote asks for neither, so
+        // this proves the plumbing does not break the path that works today and
+        // says nothing whatever about ssh. What no test here can prove is that
+        // any of it reaches a real host: that needs a network, an account and a
+        // key, and there is none of the three.
+        let scratch_pins = Scratch::new("reach-pins");
+        let pins = scratch_pins.path().join("hosts");
+        let reach = Reach::new("not a key, and never read here", &pins);
+
+        let bare = Scratch::new("reach-bare");
+        let origin = somewhere_to_push_to(&bare);
+        let scratch = Scratch::new("reach-from");
+        let (repo, branch) = ready_to_push(&scratch, &bare);
+        let sent = repo.head().unwrap().peel_to_commit().unwrap().id();
+
+        push(scratch.path(), "origin", &branch, Some(&reach)).unwrap();
+        fetch(scratch.path(), "origin", Some(&reach)).unwrap();
+        let taken = pull(scratch.path(), "origin", &branch, Some(&reach)).unwrap();
+
+        assert_eq!(
+            sent,
+            origin
+                .find_reference(&format!("refs/heads/{branch}"))
+                .unwrap()
+                .peel_to_commit()
+                .unwrap()
+                .id()
+        );
+        assert_eq!(Pulled::AlreadyHere, taken);
+        // Nothing was pinned, because nothing was asked. A file here would mean
+        // the certificate callback had run against a path remote.
+        assert!(!pins.exists());
     }
 
     #[test]
@@ -1625,7 +1769,7 @@ mod tests {
         // repository goes back before it and off in another direction, which is
         // what having missed a push looks like from here.
         commit_a_file(&repo, "b.txt", "second");
-        push(scratch.path(), "origin", &branch).unwrap();
+        push(scratch.path(), "origin", &branch, None).unwrap();
         let theirs = repo.head().unwrap().peel_to_commit().unwrap().id();
 
         let before = repo.find_commit(shared).unwrap();
@@ -1633,7 +1777,7 @@ mod tests {
             .unwrap();
         commit_a_file(&repo, "c.txt", "third");
 
-        let Err(why) = push(scratch.path(), "origin", &branch) else {
+        let Err(why) = push(scratch.path(), "origin", &branch, None) else {
             panic!("a non-fast-forward push was accepted")
         };
         assert!(matches!(why, Error::NotFastForward { .. }), "{why}");
@@ -1671,7 +1815,7 @@ mod tests {
         let scratch = Scratch::new("push-nobranch");
         ready_to_push(&scratch, &bare);
 
-        let Err(why) = push(scratch.path(), "origin", "not-a-branch") else {
+        let Err(why) = push(scratch.path(), "origin", "not-a-branch", None) else {
             panic!("pushed a branch that is not here")
         };
         assert!(matches!(why, Error::NoSuchBranch(_)), "{why}");
@@ -1687,7 +1831,7 @@ mod tests {
             panic!("no branch")
         };
 
-        let Err(why) = push(scratch.path(), "upstream", &name) else {
+        let Err(why) = push(scratch.path(), "upstream", &name, None) else {
             panic!("pushed to a remote that is not there")
         };
         assert!(matches!(why, Error::NoSuchRemote(_)), "{why}");
@@ -1697,7 +1841,7 @@ mod tests {
     fn pushed_once(scratch: &Scratch, bare: &Scratch) -> (git2::Repository, String) {
         somewhere_to_push_to(bare);
         let (repo, branch) = ready_to_push(scratch, bare);
-        push(scratch.path(), "origin", &branch).unwrap();
+        push(scratch.path(), "origin", &branch, None).unwrap();
         (repo, branch)
     }
 
@@ -1709,7 +1853,7 @@ mod tests {
 
         assert_eq!(
             Pulled::AlreadyHere,
-            pull(scratch.path(), "origin", &branch).unwrap()
+            pull(scratch.path(), "origin", &branch, None).unwrap()
         );
     }
 
@@ -1719,14 +1863,14 @@ mod tests {
         let theirs = Scratch::new("pull-ff-theirs");
         let (repo, branch) = pushed_once(&theirs, &bare);
         commit_a_file(&repo, "b.txt", "second");
-        push(theirs.path(), "origin", &branch).unwrap();
+        push(theirs.path(), "origin", &branch, None).unwrap();
         let wanted = repo.head().unwrap().peel_to_commit().unwrap().id();
 
         // A second repository that has the first commit and not the second.
         let mine = Scratch::new("pull-ff-mine");
         let here = git2::Repository::init(mine.path()).unwrap();
         remote_set(mine.path(), "origin", &bare.path().display().to_string()).unwrap();
-        pull(mine.path(), "origin", &branch).unwrap();
+        pull(mine.path(), "origin", &branch, None).unwrap();
 
         assert_eq!(wanted, here.head().unwrap().peel_to_commit().unwrap().id());
         assert!(
@@ -1748,7 +1892,7 @@ mod tests {
         git2::Repository::init(mine.path()).unwrap();
         remote_set(mine.path(), "origin", &bare.path().display().to_string()).unwrap();
 
-        let pulled = pull(mine.path(), "origin", &branch).unwrap();
+        let pulled = pull(mine.path(), "origin", &branch, None).unwrap();
 
         assert!(matches!(pulled, Pulled::Started { .. }), "{pulled:?}");
         assert!(mine.path().join("a.txt").exists());
@@ -1764,14 +1908,14 @@ mod tests {
         let mine = Scratch::new("pull-diverge-mine");
         let here = git2::Repository::init(mine.path()).unwrap();
         remote_set(mine.path(), "origin", &bare.path().display().to_string()).unwrap();
-        pull(mine.path(), "origin", &branch).unwrap();
+        pull(mine.path(), "origin", &branch, None).unwrap();
         commit_a_file(&here, "mine.txt", "mine");
         let unmoved = here.head().unwrap().peel_to_commit().unwrap().id();
 
         commit_a_file(&repo, "theirs.txt", "theirs");
-        push(theirs.path(), "origin", &branch).unwrap();
+        push(theirs.path(), "origin", &branch, None).unwrap();
 
-        let Err(why) = pull(mine.path(), "origin", &branch) else {
+        let Err(why) = pull(mine.path(), "origin", &branch, None) else {
             panic!("a pull that needed a merge went ahead")
         };
         assert!(matches!(why, Error::WouldMerge { .. }), "{why}");

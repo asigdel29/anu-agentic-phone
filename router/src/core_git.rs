@@ -142,7 +142,7 @@ pub(crate) fn remote_set(path: &Path, name: &str, url: &str) -> String {
 /// nothing this repository did not already have. An empty list is a state
 /// rather than a failure and the caller has to read it as one.
 pub(crate) fn fetch(path: &Path, name: &str) -> String {
-    rendered(git::fetch(path, name))
+    rendered(git::fetch(path, name, None))
 }
 
 /// Send a branch to a remote, and refuse rather than overwrite.
@@ -155,7 +155,7 @@ pub(crate) fn fetch(path: &Path, name: &str) -> String {
 ///
 /// There is no `force` and no argument that could become one.
 pub(crate) fn push(path: &Path, remote: &str, branch: &str) -> String {
-    rendered(git::push(path, remote, branch))
+    rendered(git::push(path, remote, branch, None))
 }
 
 /// Take what a remote has, if that can be done without merging.
@@ -167,7 +167,7 @@ pub(crate) fn push(path: &Path, remote: &str, branch: &str) -> String {
 /// case rather than an edge one: a repository made by `init_repository` and
 /// then pointed at a remote has no branch at all.
 pub(crate) fn pull(path: &Path, remote: &str, branch: &str) -> String {
-    rendered(git::pull(path, remote, branch))
+    rendered(git::pull(path, remote, branch, None))
 }
 
 #[cfg(test)]
