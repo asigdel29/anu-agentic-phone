@@ -1,10 +1,13 @@
-// RepositoryOnDeviceTest.kt: the six entry points resolve and answer.
+// RepositoryOnDeviceTest.kt: the eight entry points resolve and answer.
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
 //   2026-08-11  A. Sigdel  Took in init, which the first test cannot use, #393.
 //   2026-08-11  A. Sigdel  Took in identify, and the first commit to land on a
 //                          device, #636.
+//   2026-08-12  A. Sigdel  Took in the two network calls, #668. Neither reaches
+//                          a network here and neither needs to: what is being
+//                          claimed is that the symbols link.
 //
 // On a device, because this is the only place the library loads. The parity test
 // in router/src/jni.rs holds the symbol names in step; this is the other half of
@@ -110,5 +113,44 @@ class RepositoryOnDeviceTest {
 
         assertNotNull(answered)
         assertTrue(answered!!, !answered.contains("JSON array of strings"))
+    }
+
+    @Test
+    fun aRemoteCanBePointedAtAPathAndFetchedFrom() {
+        // A path remote, which is a complete remote needing no transport, no
+        // key and no network. What this proves is that the two new symbols
+        // link and that their envelopes survive the trip back as a String;
+        // reaching a real forge is a claim no emulator can make.
+        val elsewhere = File(directory.parentFile, "elsewhere").apply { mkdirs() }
+        val origin = Repository(elsewhere.absolutePath)
+        runBlocking { GitInitTool(origin).run("{}") }
+        origin.identify("Ada", "ada@example.com")
+        File(elsewhere, "a.txt").writeText("first")
+        origin.add(listOf("a.txt"))
+        origin.commit("Add a file")
+
+        val here = Repository(directory.absolutePath)
+        runBlocking { GitInitTool(here).run("{}") }
+        val pointed = here.remoteSet("origin", elsewhere.absolutePath)
+        val fetched = here.fetch("origin")
+
+        assertNotNull(pointed)
+        assertTrue("remoteSet answered $pointed", pointed!!.contains("\"added\""))
+        assertNotNull(fetched)
+        assertTrue("fetch answered $fetched", fetched!!.contains("refs/remotes/origin/"))
+        elsewhere.deleteRecursively()
+    }
+
+    @Test
+    fun anHttpsRemoteIsRefusedOnTheDeviceToo() {
+        // The refusal is the half of remoteSet that a person meets, so it is
+        // worth knowing the words reach Kotlin rather than only Rust.
+        val here = Repository(directory.absolutePath)
+        runBlocking { GitInitTool(here).run("{}") }
+
+        val refused = here.remoteSet("origin", "https://github.com/owner/repository.git")
+
+        assertNotNull(refused)
+        assertTrue("remoteSet answered $refused", refused!!.contains("git@host:"))
     }
 }

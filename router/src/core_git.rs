@@ -11,6 +11,7 @@
 //!                          #565 removed all three and left the prose claiming
 //!                          them, which the paragraph below already denies.
 //!   2026-08-11  A. Sigdel  Took in identify with #636.
+//!   2026-08-12  A. Sigdel  Took in the first two network calls with #668.
 //!
 //! Contents
 //!   `init`      Make a directory into a repository.
@@ -19,6 +20,8 @@
 //!   `status`    The working tree, against the index and the head.
 //!   `add`       Staging paths.
 //!   `commit`    Writing what is staged.
+//!   `remote_set` Where a repository sends and receives.
+//!   `fetch`     Bringing back what a remote has, merging nothing.
 //!
 //! Separate from `core.rs` because what these answer is a different shape, not
 //! because that file was full. A decision is three fields; a status is a list of
@@ -116,6 +119,27 @@ pub(crate) fn add(path: &Path, paths_json: &str) -> String {
 /// called.
 pub(crate) fn commit(path: &Path, message: &str) -> String {
     rendered(git::commit(path, message))
+}
+
+/// Point a remote somewhere, and say what that changed.
+///
+/// # Returns
+/// `ok` with a `kind` of `added`, `moved` or `unchanged`, the middle one
+/// carrying the URL it used to point at. Three answers rather than one success
+/// because a caller told only that it worked cannot tell whether it has just
+/// changed where somebody's work goes.
+pub(crate) fn remote_set(path: &Path, name: &str, url: &str) -> String {
+    rendered(git::remote_set(path, name, url))
+}
+
+/// Bring back what a remote has, merging nothing.
+///
+/// # Returns
+/// `ok` with the reference names that moved, which is empty when the remote had
+/// nothing this repository did not already have. An empty list is a state
+/// rather than a failure and the caller has to read it as one.
+pub(crate) fn fetch(path: &Path, name: &str) -> String {
+    rendered(git::fetch(path, name))
 }
 
 #[cfg(test)]
