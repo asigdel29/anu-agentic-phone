@@ -196,19 +196,27 @@ class MainActivity : ComponentActivity() {
             var state by remember { mutableStateOf(started ?: Startup.begin(this)) }
             started = state
 
-            // Shown only when something required is off. Somebody whose phone
-            // half is already on never sees it, which is the difference
-            // between a checklist and a wizard nobody can dismiss.
-            var checking by remember { mutableStateOf(!readiness(this).canDrive) }
-            var connecting by remember { mutableStateOf(false) }
+            // One place rather than two booleans, which is #641: `connecting`
+            // was set from the checklist and nowhere else and `checking` was
+            // never set true again, so the connections screen could be reached
+            // exactly once in an installation's life and nothing said so.
+            //
+            // The checklist still opens by itself when something required is
+            // off, which is the difference between a checklist and a wizard
+            // nobody can dismiss; it is now somewhere to come back to as well.
+            var where by remember {
+                mutableStateOf(
+                    if (readiness(this).canDrive) Where.Conversation else Where.Readiness,
+                )
+            }
 
             // Null until every saved server has been asked, and the
             // conversation waits for it, because ToolBox is what the model is
             // told at the top of a turn: a set that grew afterwards is a tool
             // it was never offered. With nothing saved this costs a frame.
             var connected by remember { mutableStateOf<List<Reached>?>(null) }
-            LaunchedEffect(connecting) {
-                if (!connecting) {
+            LaunchedEffect(where) {
+                if (where != Where.Connections) {
                     connected = connect(connections.all) { HttpRpc(it.endpoint) }
                 }
             }
@@ -217,13 +225,16 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     when (val now = state) {
                         is Startup.Ready ->
-                            if (checking) {
-                                Checklist(
-                                    onCarryOn = { checking = false },
-                                    onConnections = { connecting = true },
+                            when (where) {
+                                Where.Readiness -> Checklist(
+                                    // Onward rather than closed: at launch this
+                                    // is the way in, and from the settings it is
+                                    // the way back to where the tap came from.
+                                    onCarryOn = { where = Where.Conversation },
+                                    onConnections = { where = Where.Connections },
                                 )
-                            } else if (connecting) {
-                                ConnectionsScreen(
+
+                                Where.Connections -> ConnectionsScreen(
                                     connected = connected.orEmpty(),
                                     onAdd = { label, endpoint ->
                                         connections.add(label, endpoint)
@@ -232,17 +243,25 @@ class MainActivity : ComponentActivity() {
                                     // Leaving re-asks, because a server added
                                     // or forgotten while it was open changes
                                     // what the next turn is offered.
-                                    onDone = { connecting = false },
+                                    onDone = { where = Where.Settings },
                                 )
-                            } else if (connected != null) {
-                                Conversation(
-                                    driverFor(now, credential, connected!!),
-                                    handed,
-                                    modes,
-                                    signing,
-                                    replay,
-                                    ::heard,
+
+                                Where.Settings -> SettingsScreen(
+                                    destinations = places(connected),
+                                    onGo = { where = it },
+                                    onDone = { where = Where.Conversation },
                                 )
+
+                                Where.Conversation -> if (connected != null) {
+                                    Conversation(
+                                        driverFor(now, credential, connected!!),
+                                        handed,
+                                        modes,
+                                        signing,
+                                        replay,
+                                        ::heard,
+                                    ) { where = Where.Settings }
+                                }
                             }
                         Startup.NoCredential, Startup.CoreRefused ->
                             SignInScreen(refused = now == Startup.CoreRefused) { typed ->
@@ -404,6 +423,34 @@ class MainActivity : ComponentActivity() {
             PullTool(repository),
         )
     }
+
+    /**
+     * What the settings screen offers, and one line about each.
+     *
+     * Built here rather than in the screen, because the counts are this
+     * Activity's: [Connections] is a store it holds and readiness is a thing it
+     * asks the platform. The screen draws rows.
+     */
+    private fun places(connected: List<Reached>?): List<Destination> = listOf(
+        Destination(
+            "Connections",
+            when (val servers = connected?.size) {
+                null, 0 -> "No servers. Their tools join every turn."
+                1 -> "One server, and its tools join every turn."
+                else -> "$servers servers, and their tools join every turn."
+            },
+            Where.Connections,
+        ),
+        Destination(
+            "Readiness",
+            if (readiness(this).canDrive) {
+                "Everything the phone half needs is on."
+            } else {
+                "Something the phone half needs is off."
+            },
+            Where.Readiness,
+        ),
+    )
 
     /**
      * The shell, in the same directory the repository is in.
@@ -568,6 +615,8 @@ private fun Conversation(
     replay: Replay,
     /** One press of the microphone, permission and all. */
     listen: suspend () -> Heard,
+    /** The door #641 gave this application, and the only one on this screen. */
+    onSettings: () -> Unit,
 ) {
     // Held in composition as well as in the store, because a chip has to
     // repaint when it is tapped and the store is not observable. The store
@@ -620,6 +669,7 @@ private fun Conversation(
     val asking = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     ChatScreen(
+        onSettings = onSettings,
         rows = rows,
         // Read at composition rather than collected. It changes only while a
         // turn is running, and the card is drawn only while one is not, so a
