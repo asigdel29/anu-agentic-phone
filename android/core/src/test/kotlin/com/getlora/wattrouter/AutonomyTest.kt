@@ -52,10 +52,12 @@ private class Acting : Phone {
  * `Terminal` through the same seam and had a byte-identical copy, which Kotlin
  * reads as a redeclaration rather than as two fakes.
  */
-internal class Decided(private val answer: Boolean) : Consent {
+internal class Decided(private val answer: Said) : Consent {
+    constructor(answer: Boolean) : this(if (answer) Said.YES else Said.NO)
+
     val asked = mutableListOf<Intent>()
 
-    override suspend fun mayI(intent: Intent): Boolean {
+    override suspend fun mayI(intent: Intent): Said {
         asked += intent
         return answer
     }

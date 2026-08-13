@@ -78,9 +78,37 @@ fun interface Consent {
      * somebody takes, which is unbounded: the wait is a person, and the scope
      * that started the turn is what cancels it. Never called for a read.
      *
-     * @return whether to go ahead. False is a refusal for [Confirmed] to word.
+     * @return which of the three happened, for the caller to word.
      */
-    suspend fun mayI(intent: Intent): Boolean
+    suspend fun mayI(intent: Intent): Said
+}
+
+/**
+ * What came back from asking.
+ *
+ * Three rather than a boolean, which is #678 and is [Ran]'s argument one layer
+ * up: a person who said no and a person who was never reached are different
+ * things, and a caller told only false words the first when it means the
+ * second. A model told somebody refused when nobody was asked looks for what it
+ * did wrong, and there was nothing.
+ */
+enum class Said {
+    /** Somebody was asked and said yes. */
+    YES,
+
+    /** Somebody was asked and said no. */
+    NO,
+
+    /**
+     * Nobody could be asked.
+     *
+     * The dialog is a window the accessibility service adds to the display, so
+     * with that service off there is nowhere to put a question. For the phone
+     * tools that is the same answer either way, since they need the service to
+     * do anything at all. For a shell it is not: it runs from this process and
+     * would work with the service off forever.
+     */
+    UNASKED,
 }
 
 /**
@@ -176,7 +204,11 @@ class Confirmed(
      */
     private suspend fun ifAllowed(intent: Intent, act: suspend () -> Done?): Done? = when {
         mode() != Autonomy.ASK -> act()
-        consent.mayI(intent) -> act()
+        consent.mayI(intent) == Said.YES -> act()
+        // One sentence for both refusals here, unlike at the Terminal seam.
+        // Every action this gates needs the service that raises the dialog, so
+        // a phone that cannot ask is a phone that cannot tap either, and naming
+        // the difference would name a distinction without one.
         else -> Done.Refused(
             // Named as a person rather than as a policy. A model told a rule
             // refused it looks for another way through; a model told a person

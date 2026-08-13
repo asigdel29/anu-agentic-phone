@@ -48,25 +48,41 @@ class Shown(
     private val consent: Consent,
 ) : Terminal {
 
-    override suspend fun run(command: String): Ran = when {
-        mode() == Autonomy.AUTO -> terminal.run(command)
+    override suspend fun run(command: String): Ran {
+        if (mode() == Autonomy.AUTO) return terminal.run(command)
+
         // The command whole, and never a front of it. An elision is where the
         // second half of `ls; rm -rf .` hides, and a prompt that shows a command
         // it has shortened is one somebody approves without having seen what
         // runs. A command long enough to be unreadable is a real cost and the
         // honest one: the answer to it is a shorter command, not a shorter
         // prompt.
-        consent.mayI(Intent("run", command)) -> terminal.run(command)
-        else -> Ran.Refused(
+        return when (consent.mayI(Intent("run", command))) {
+            Said.YES -> terminal.run(command)
+
             // A person rather than a policy, in Confirmed's words and for its
             // reason: a model told a rule refused it looks for another way
-            // through, and there are many ways through a shell. "did not allow"
-            // rather than "said no", because a phone with nowhere to show the
-            // question answers false without anybody having been asked.
-            "the person using the phone did not allow that command. They see " +
-                "each command before it runs in this mode, and this one was " +
-                "not approved. Do not try it another way or in pieces. Say " +
-                "what you were going to run and why.",
-        )
+            // through, and there are many ways through a shell.
+            Said.NO -> Ran.Refused(
+                "the person using the phone did not allow that command. They " +
+                    "see each command before it runs in this mode, and this " +
+                    "one was not approved. Do not try it another way or in " +
+                    "pieces. Say what you were going to run and why.",
+            )
+
+            // #678, and the reason this seam needs three answers where the
+            // phone's needs two. Nobody was asked, so saying they refused is
+            // false, and a model told that goes looking for what it did wrong
+            // in a command nobody saw. What is wrong is a setting, and the
+            // sentence says which one and who can change it.
+            Said.UNASKED -> Ran.Refused(
+                "nobody could be asked about that command, so it was not run. " +
+                    "This phone shows each command before it runs, and the " +
+                    "part of the app that draws that question is switched off. " +
+                    "Nothing you do differently will get past this. Say that " +
+                    "the screen service is off, and that switching it on or " +
+                    "choosing a different mode is what allows a command to run.",
+            )
+        }
     }
 }

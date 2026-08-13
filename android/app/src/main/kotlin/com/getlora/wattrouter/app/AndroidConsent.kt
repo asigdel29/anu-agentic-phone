@@ -20,6 +20,7 @@ package com.getlora.wattrouter.app
 
 import com.getlora.wattrouter.Consent
 import com.getlora.wattrouter.Intent
+import com.getlora.wattrouter.Said
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -31,19 +32,24 @@ internal fun wording(intent: Intent): String = "${intent.verb} ${intent.what}?"
 /** The question, over the app being driven. */
 class AndroidConsent : Consent {
 
-    override suspend fun mayI(intent: Intent): Boolean {
+    override suspend fun mayI(intent: Intent): Said {
         // Read now rather than held, as AndroidPhone reads it: the person can
         // switch the service off mid-turn, and a held reference would put a
         // window on a service the system has already torn down.
-        val service = DrivingService.connected ?: return false
+        //
+        // UNASKED rather than NO, which is #678. Both stop the action and only
+        // one of them is about a person: the caller decides whether the
+        // difference matters, and at the Terminal seam it does, because a shell
+        // needs nothing from this service and would work with it off forever.
+        val service = DrivingService.connected ?: return Said.UNASKED
 
-        val answered = CompletableDeferred<Boolean>()
+        val answered = CompletableDeferred<Said>()
         withContext(Dispatchers.Main) {
-            service.ask(wording(intent)) { answered.complete(it) }
+            service.ask(wording(intent)) { answered.complete(if (it) Said.YES else Said.NO) }
             // Nowhere to show it. A phone that refuses the overlay is one where
-            // nobody can be asked, which is the same answer as the service
-            // being off rather than a reason to act unasked.
-            if (!service.asking) answered.complete(false)
+            // nobody can be asked, which is the service being off by another
+            // route rather than a reason to act unasked.
+            if (!service.asking) answered.complete(Said.UNASKED)
         }
 
         return try {
