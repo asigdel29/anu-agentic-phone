@@ -2,6 +2,7 @@
 //
 // History
 //   2026-08-09  A. Sigdel  Created.
+//   2026-08-12  A. Sigdel  Read a screen this test put in front, #572.
 //
 // The claim the JVM cannot make. Everything from #400 onwards was written
 // against an eleven-line fake, which is the right way to check the rules and no
@@ -14,6 +15,7 @@
 
 package com.getlora.wattrouter.app
 
+import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.platform.app.InstrumentationRegistry
 import com.getlora.wattrouter.Generations
@@ -28,12 +30,32 @@ class CopiedDeviceTest {
         "toggle", "choice", "list", "scroll", "web",
     )
 
-    /** Whatever is on screen. Null for a moment while a window settles. */
+    /**
+     * A screen with something on it. Null if none arrived.
+     *
+     * Home first, and a tree rather than a root, which is #572. The first
+     * non-null root was taken before, and inside the suite that is whatever the
+     * previous test left behind: an activity on its way out answers a window of
+     * about three nodes, every rule below then measures it, and "nothing
+     * survived pruning" reports a finding about the launcher that nobody made.
+     *
+     * Home is what the objection to clearing the screen does not cover. It
+     * papers over nothing here: what is in front is incidental to this test,
+     * which asks whether the framework's tree becomes one the rules read, and
+     * the launcher is a real screen nobody wrote as much as anything else is.
+     * The two tests where what is in front *is* the finding start their own
+     * activity and assert about that.
+     */
     private fun rootNow(): AccessibilityNodeInfo? {
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
-        repeat(10) {
-            automation.rootInActiveWindow?.let { return it }
-            Thread.sleep(500)
+        automation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
+        repeat(WAITS) {
+            val root = automation.rootInActiveWindow
+            // Copied rather than counted on the framework node: a root whose
+            // children have not arrived yet copies to a tree with none, and
+            // that is the state worth waiting through rather than measuring.
+            if (root != null && snapshot(root)?.children?.isNotEmpty() == true) return root
+            Thread.sleep(PAUSE)
         }
         return null
     }
@@ -41,7 +63,11 @@ class CopiedDeviceTest {
     @Test
     fun aRealScreenCopiesIntoTheShapeTheRulesRead() {
         val root = rootNow()
-        assertNotNull("nothing was on screen to read", root)
+        assertNotNull(
+            "no screen with anything on it arrived in ${WAITS * PAUSE}ms, so " +
+                "nothing here was measured",
+            root,
+        )
 
         val tree = snapshot(root)
         assertNotNull("the root copied to nothing", tree)
@@ -83,7 +109,12 @@ class CopiedDeviceTest {
         val viewing = Viewing(Generations("device-test"))
         val reading = viewing.read(tree!!)
 
-        assertTrue("nothing survived pruning", reading.seen.isNotEmpty())
+        // A screen with children went in, so an empty reading is the rules
+        // removing everything rather than there having been nothing.
+        assertTrue(
+            "nothing survived pruning, over a screen of ${countOf(tree)} node(s)",
+            reading.seen.isNotEmpty(),
+        )
         assertTrue("${reading.generation}", reading.generation.counter >= 1)
         assertTrue(
             "pruning kept everything, which means it kept nothing out",
@@ -103,5 +134,11 @@ class CopiedDeviceTest {
             pending.addAll(pending.removeFirst().children)
         }
         return count
+    }
+
+    private companion object {
+        /** Ten seconds, as the two tests that start an activity of their own. */
+        const val WAITS = 40
+        const val PAUSE = 250L
     }
 }

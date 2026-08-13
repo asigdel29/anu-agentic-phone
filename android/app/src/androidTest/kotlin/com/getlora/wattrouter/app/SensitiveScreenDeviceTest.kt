@@ -3,6 +3,7 @@
 // History
 //   2026-08-10  A. Sigdel  Created, run before either flag, and left asserting
 //                          what the run measured rather than what was expected.
+//   2026-08-12  A. Sigdel  Stop polling once the control has appeared, #572.
 //
 // #472 settled the FLAG_SECURE question by putting a real activity in front of
 // the service and reading it, after a record had claimed the opposite for a
@@ -115,16 +116,22 @@ class SensitiveScreenDeviceTest {
         // null while no window has focus, and that is indistinguishable here
         // from a node being withheld. The loop waits for the *ordinary* button,
         // which is the control, and only then reads the sensitive one.
+        //
+        // A `for` with a `break`, as SecureScreenDeviceTest and for #572's
+        // reason: `return@repeat` left the lambda rather than the loop, so both
+        // counts were re-read after the control had been found and the window
+        // had since gone. The sensitive count is the assertion below, so
+        // stopping at the right moment is not tidiness here.
         var ordinary = 0
         var sensitive = 0
         var seen = 0
-        repeat(WAITS) {
+        for (attempt in 0 until WAITS) {
             val reading = service!!.read()
             if (reading != null) {
                 seen = reading.seen.size
                 ordinary = reading.seen.count { it.says(SensitiveActivity.ORDINARY) }
                 sensitive = reading.seen.count { it.says(SensitiveActivity.SENSITIVE) }
-                if (ordinary >= 1) return@repeat
+                if (ordinary >= 1) break
             }
             Thread.sleep(PAUSE)
         }
