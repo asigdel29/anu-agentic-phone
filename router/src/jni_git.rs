@@ -6,11 +6,6 @@
 //!   2026-08-09  A. Sigdel  Guarded the four entry points.
 //!   2026-08-10  A. Sigdel  Reads a `String` and answers one with #565. There is
 //!                          no Rust allocation crossing to free.
-//!   2026-08-11  A. Sigdel  Took in identify with #636, so a commit on a phone
-//!                          has somebody to sign it.
-//!   2026-08-12  A. Sigdel  Took in the first two network calls with #668, so
-//!                          the work has somewhere to go.
-//!   2026-08-12  A. Sigdel  Took in the two that can lose work, with #671.
 //!
 //! These go through `core_git` rather than `crate::git` directly, so the envelope
 //! a model reads is built in one place. That used to be phrased as both phones
@@ -24,15 +19,23 @@
 //! handle, no `AutoCloseable`, no close. That ceremony would invent a lifetime
 //! which does not exist, and hand somebody a `close` to forget.
 //!
-//! What is left here is ten translations and nothing else. `guarded` is
-//! `jni_answer.rs`'s, because the copy that used to be at the bottom of this file
-//! was identical to the one at the bottom of `jni_memory.rs` and neither applied
-//! the rules `jni.rs` states; see #468 and #482. `read` is `jni.rs`'s, for the
+//! What is left here is ten translations and nothing else. The panic guard is
+//! `with_env`'s since jni 0.22: it wraps the closure in a `catch_unwind` and
+//! the error policy answers with the return type's default, which is the null
+//! this used to hand back by hand. #482 added that guard as a helper here and
+//! #468 removed the second copy of it; the crate now gets both from the
+//! library. `read` is `jni.rs`'s, for the
 //! same reason: it clears a pending exception, which `owned` also did and which
 //! nothing here should be reimplementing.
 
 use crate::jni::read;
-use crate::jni_answer::{guarded, handed};
+use crate::jni_answer::handed;
+use jni::Env;
+use jni::EnvUnowned;
+use jni::errors::LogErrorAndDefault;
+use jni::objects::{JClass, JString};
+use jni::sys::jstring;
+use std::path::Path;
 
 /// The key and the pin file, when Kotlin passed both.
 ///
@@ -44,19 +47,15 @@ use crate::jni_answer::{guarded, handed};
 /// Either half absent is no reach at all, which is a repository reaching a path
 /// remote. [`read`] answers `None` for a null argument as well as for a string
 /// it cannot decode, and both mean the same thing here: nothing to reach with.
-fn optional<'a>(
-    env: &mut JNIEnv<'a>,
-    key: &JString<'a>,
-    pins: &JString<'a>,
+fn optional(
+    env: &mut Env<'_>,
+    key: &JString<'_>,
+    pins: &JString<'_>,
 ) -> Option<(String, std::path::PathBuf)> {
     let key = read(env, key)?;
     let pins = read(env, pins)?;
     Some((key, std::path::PathBuf::from(pins)))
 }
-use jni::JNIEnv;
-use jni::objects::{JClass, JString};
-use jni::sys::jstring;
-use std::path::Path;
 
 /// Make a directory into a repository, or say it already was one.
 ///
@@ -64,16 +63,18 @@ use std::path::Path;
 /// Called from Kotlin through `Repository.init`, which passes a path it owns.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeInit<'a>(
-    mut env: JNIEnv<'a>,
+    mut unowned: EnvUnowned<'a>,
     _class: JClass<'a>,
     path: JString<'a>,
 ) -> jstring {
-    guarded(std::ptr::null_mut(), || {
-        let Some(path) = read(&mut env, &path) else {
-            return std::ptr::null_mut();
-        };
-        handed(&mut env, crate::core_git::init(Path::new(&path)))
-    })
+    unowned
+        .with_env(|env| -> jni::errors::Result<jstring> {
+            let Some(path) = read(env, &path) else {
+                return Ok(std::ptr::null_mut());
+            };
+            Ok(handed(env, crate::core_git::init(Path::new(&path))))
+        })
+        .resolve::<LogErrorAndDefault>()
 }
 
 /// Where `HEAD` points.
@@ -82,16 +83,18 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeInit<'a>(
 /// Called from Kotlin through `Repository.head`, which passes a path it owns.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeHead<'a>(
-    mut env: JNIEnv<'a>,
+    mut unowned: EnvUnowned<'a>,
     _class: JClass<'a>,
     path: JString<'a>,
 ) -> jstring {
-    guarded(std::ptr::null_mut(), || {
-        let Some(path) = read(&mut env, &path) else {
-            return std::ptr::null_mut();
-        };
-        handed(&mut env, crate::core_git::head(Path::new(&path)))
-    })
+    unowned
+        .with_env(|env| -> jni::errors::Result<jstring> {
+            let Some(path) = read(env, &path) else {
+                return Ok(std::ptr::null_mut());
+            };
+            Ok(handed(env, crate::core_git::head(Path::new(&path))))
+        })
+        .resolve::<LogErrorAndDefault>()
 }
 
 /// The working tree, against the index and the head.
@@ -100,16 +103,18 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeHead<'a>(
 /// As [`Java_com_getlora_wattrouter_Repository_nativeHead`].
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeStatus<'a>(
-    mut env: JNIEnv<'a>,
+    mut unowned: EnvUnowned<'a>,
     _class: JClass<'a>,
     path: JString<'a>,
 ) -> jstring {
-    guarded(std::ptr::null_mut(), || {
-        let Some(path) = read(&mut env, &path) else {
-            return std::ptr::null_mut();
-        };
-        handed(&mut env, crate::core_git::status(Path::new(&path)))
-    })
+    unowned
+        .with_env(|env| -> jni::errors::Result<jstring> {
+            let Some(path) = read(env, &path) else {
+                return Ok(std::ptr::null_mut());
+            };
+            Ok(handed(env, crate::core_git::status(Path::new(&path))))
+        })
+        .resolve::<LogErrorAndDefault>()
 }
 
 /// Stage paths, and answer with the status that results.
@@ -118,56 +123,26 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeStatus<'a>(
 /// As [`Java_com_getlora_wattrouter_Repository_nativeHead`], for both arguments.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeAdd<'a>(
-    mut env: JNIEnv<'a>,
+    mut unowned: EnvUnowned<'a>,
     _class: JClass<'a>,
     path: JString<'a>,
     paths_json: JString<'a>,
 ) -> jstring {
-    guarded(std::ptr::null_mut(), || {
-        // JSON across this boundary too, and for the C ABI's reason: the model
-        // writes an array, the tool decodes one, and rebuilding it as a Kotlin
-        // Array<String> only to encode it again is three shapes for one value.
-        let (Some(path), Some(paths_json)) = (read(&mut env, &path), read(&mut env, &paths_json))
-        else {
-            return std::ptr::null_mut();
-        };
-        handed(
-            &mut env,
-            crate::core_git::add(Path::new(&path), &paths_json),
-        )
-    })
-}
-
-/// Say who commits from here.
-///
-/// Three arguments rather than two, and the only entry point in this file that
-/// takes what a person typed rather than what a model wrote. It is called by
-/// the app when it sets a repository up, never from a tool: whose name goes on
-/// the work is not a decision to hand a model.
-///
-/// # Safety
-/// As [`Java_com_getlora_wattrouter_Repository_nativeHead`], for all three.
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeIdentify<'a>(
-    mut env: JNIEnv<'a>,
-    _class: JClass<'a>,
-    path: JString<'a>,
-    name: JString<'a>,
-    email: JString<'a>,
-) -> jstring {
-    guarded(std::ptr::null_mut(), || {
-        let (Some(path), Some(name), Some(email)) = (
-            read(&mut env, &path),
-            read(&mut env, &name),
-            read(&mut env, &email),
-        ) else {
-            return std::ptr::null_mut();
-        };
-        handed(
-            &mut env,
-            crate::core_git::identify(Path::new(&path), &name, &email),
-        )
-    })
+    unowned
+        .with_env(|env| -> jni::errors::Result<jstring> {
+            // JSON across this boundary too, and for the C ABI's reason: the
+            // model writes an array, the tool decodes one, and rebuilding it as
+            // a Kotlin Array<String> only to encode it again is three shapes
+            // for one value.
+            let (Some(path), Some(paths_json)) = (read(env, &path), read(env, &paths_json)) else {
+                return Ok(std::ptr::null_mut());
+            };
+            Ok(handed(
+                env,
+                crate::core_git::add(Path::new(&path), &paths_json),
+            ))
+        })
+        .resolve::<LogErrorAndDefault>()
 }
 
 /// Commit what is staged.
@@ -176,53 +151,78 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeIdentify<'a>
 /// As [`Java_com_getlora_wattrouter_Repository_nativeHead`], for both arguments.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeCommit<'a>(
-    mut env: JNIEnv<'a>,
+    mut unowned: EnvUnowned<'a>,
     _class: JClass<'a>,
     path: JString<'a>,
     message: JString<'a>,
 ) -> jstring {
-    guarded(std::ptr::null_mut(), || {
-        let (Some(path), Some(message)) = (read(&mut env, &path), read(&mut env, &message)) else {
-            return std::ptr::null_mut();
-        };
-        handed(
-            &mut env,
-            crate::core_git::commit(Path::new(&path), &message),
-        )
-    })
+    unowned
+        .with_env(|env| -> jni::errors::Result<jstring> {
+            let (Some(path), Some(message)) = (read(env, &path), read(env, &message)) else {
+                return Ok(std::ptr::null_mut());
+            };
+            Ok(handed(
+                env,
+                crate::core_git::commit(Path::new(&path), &message),
+            ))
+        })
+        .resolve::<LogErrorAndDefault>()
 }
 
-/// Point a remote somewhere, and say what that changed.
+/// Say who commits from here.
 ///
 /// # Safety
-/// Called from Kotlin through `Repository.remoteSet`, which passes three
-/// strings it owns.
+/// Called from Kotlin through `Repository.identify`, which passes three strings
+/// it owns.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeIdentify<'a>(
+    mut unowned: EnvUnowned<'a>,
+    _class: JClass<'a>,
+    path: JString<'a>,
+    name: JString<'a>,
+    email: JString<'a>,
+) -> jstring {
+    unowned
+        .with_env(|env| -> jni::errors::Result<jstring> {
+            let (Some(path), Some(name), Some(email)) =
+                (read(env, &path), read(env, &name), read(env, &email))
+            else {
+                return Ok(std::ptr::null_mut());
+            };
+            Ok(handed(
+                env,
+                crate::core_git::identify(Path::new(&path), &name, &email),
+            ))
+        })
+        .resolve::<LogErrorAndDefault>()
+}
+
+/// Point a remote at a URL, and say whether that added or moved one.
+///
+/// # Safety
+/// Called from Kotlin through `Repository.remoteSet`, which passes three strings
+/// it owns.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeRemoteSet<'a>(
-    mut env: JNIEnv<'a>,
+    mut unowned: EnvUnowned<'a>,
     _class: JClass<'a>,
     path: JString<'a>,
     name: JString<'a>,
     url: JString<'a>,
 ) -> jstring {
-    guarded(std::ptr::null_mut(), || {
-        // All three before any of them is used, so a null or a string that is
-        // not UTF-8 is refused rather than half applied. `identify` reads its
-        // three the same way and for the same reason.
-        let Some(path) = read(&mut env, &path) else {
-            return std::ptr::null_mut();
-        };
-        let Some(name) = read(&mut env, &name) else {
-            return std::ptr::null_mut();
-        };
-        let Some(url) = read(&mut env, &url) else {
-            return std::ptr::null_mut();
-        };
-        handed(
-            &mut env,
-            crate::core_git::remote_set(Path::new(&path), &name, &url),
-        )
-    })
+    unowned
+        .with_env(|env| -> jni::errors::Result<jstring> {
+            let (Some(path), Some(name), Some(url)) =
+                (read(env, &path), read(env, &name), read(env, &url))
+            else {
+                return Ok(std::ptr::null_mut());
+            };
+            Ok(handed(
+                env,
+                crate::core_git::remote_set(Path::new(&path), &name, &url),
+            ))
+        })
+        .resolve::<LogErrorAndDefault>()
 }
 
 /// Bring back what a remote has, merging nothing.
@@ -232,29 +232,28 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeRemoteSet<'a
 /// owns and two it may pass as null.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeFetch<'a>(
-    mut env: JNIEnv<'a>,
+    mut unowned: EnvUnowned<'a>,
     _class: JClass<'a>,
     path: JString<'a>,
     name: JString<'a>,
     key: JString<'a>,
     pins: JString<'a>,
 ) -> jstring {
-    guarded(std::ptr::null_mut(), || {
-        let Some(path) = read(&mut env, &path) else {
-            return std::ptr::null_mut();
-        };
-        let Some(name) = read(&mut env, &name) else {
-            return std::ptr::null_mut();
-        };
-        let held = optional(&mut env, &key, &pins);
-        let reach = held
-            .as_ref()
-            .map(|(key, pins)| crate::git::Reach::new(key, pins));
-        handed(
-            &mut env,
-            crate::core_git::fetch(Path::new(&path), &name, reach.as_ref()),
-        )
-    })
+    unowned
+        .with_env(|env| -> jni::errors::Result<jstring> {
+            let (Some(path), Some(name)) = (read(env, &path), read(env, &name)) else {
+                return Ok(std::ptr::null_mut());
+            };
+            let held = optional(env, &key, &pins);
+            let reach = held
+                .as_ref()
+                .map(|(key, pins)| crate::git::Reach::new(key, pins));
+            Ok(handed(
+                env,
+                crate::core_git::fetch(Path::new(&path), &name, reach.as_ref()),
+            ))
+        })
+        .resolve::<LogErrorAndDefault>()
 }
 
 /// Send a branch to a remote, and refuse rather than overwrite.
@@ -264,7 +263,7 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativeFetch<'a>(
 /// owns and two it may pass as null.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativePush<'a>(
-    mut env: JNIEnv<'a>,
+    mut unowned: EnvUnowned<'a>,
     _class: JClass<'a>,
     path: JString<'a>,
     remote: JString<'a>,
@@ -272,25 +271,23 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativePush<'a>(
     key: JString<'a>,
     pins: JString<'a>,
 ) -> jstring {
-    guarded(std::ptr::null_mut(), || {
-        let Some(path) = read(&mut env, &path) else {
-            return std::ptr::null_mut();
-        };
-        let Some(remote) = read(&mut env, &remote) else {
-            return std::ptr::null_mut();
-        };
-        let Some(branch) = read(&mut env, &branch) else {
-            return std::ptr::null_mut();
-        };
-        let held = optional(&mut env, &key, &pins);
-        let reach = held
-            .as_ref()
-            .map(|(key, pins)| crate::git::Reach::new(key, pins));
-        handed(
-            &mut env,
-            crate::core_git::push(Path::new(&path), &remote, &branch, reach.as_ref()),
-        )
-    })
+    unowned
+        .with_env(|env| -> jni::errors::Result<jstring> {
+            let (Some(path), Some(remote), Some(branch)) =
+                (read(env, &path), read(env, &remote), read(env, &branch))
+            else {
+                return Ok(std::ptr::null_mut());
+            };
+            let held = optional(env, &key, &pins);
+            let reach = held
+                .as_ref()
+                .map(|(key, pins)| crate::git::Reach::new(key, pins));
+            Ok(handed(
+                env,
+                crate::core_git::push(Path::new(&path), &remote, &branch, reach.as_ref()),
+            ))
+        })
+        .resolve::<LogErrorAndDefault>()
 }
 
 /// Take what a remote has, if that can be done without merging.
@@ -300,7 +297,7 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativePush<'a>(
 /// owns and two it may pass as null.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativePull<'a>(
-    mut env: JNIEnv<'a>,
+    mut unowned: EnvUnowned<'a>,
     _class: JClass<'a>,
     path: JString<'a>,
     remote: JString<'a>,
@@ -308,23 +305,21 @@ pub extern "system" fn Java_com_getlora_wattrouter_Repository_nativePull<'a>(
     key: JString<'a>,
     pins: JString<'a>,
 ) -> jstring {
-    guarded(std::ptr::null_mut(), || {
-        let Some(path) = read(&mut env, &path) else {
-            return std::ptr::null_mut();
-        };
-        let Some(remote) = read(&mut env, &remote) else {
-            return std::ptr::null_mut();
-        };
-        let Some(branch) = read(&mut env, &branch) else {
-            return std::ptr::null_mut();
-        };
-        let held = optional(&mut env, &key, &pins);
-        let reach = held
-            .as_ref()
-            .map(|(key, pins)| crate::git::Reach::new(key, pins));
-        handed(
-            &mut env,
-            crate::core_git::pull(Path::new(&path), &remote, &branch, reach.as_ref()),
-        )
-    })
+    unowned
+        .with_env(|env| -> jni::errors::Result<jstring> {
+            let (Some(path), Some(remote), Some(branch)) =
+                (read(env, &path), read(env, &remote), read(env, &branch))
+            else {
+                return Ok(std::ptr::null_mut());
+            };
+            let held = optional(env, &key, &pins);
+            let reach = held
+                .as_ref()
+                .map(|(key, pins)| crate::git::Reach::new(key, pins));
+            Ok(handed(
+                env,
+                crate::core_git::pull(Path::new(&path), &remote, &branch, reach.as_ref()),
+            ))
+        })
+        .resolve::<LogErrorAndDefault>()
 }

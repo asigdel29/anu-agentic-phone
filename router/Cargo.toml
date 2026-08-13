@@ -84,7 +84,7 @@ git2 = { version = "0.21.0", optional = true, default-features = false, features
 rusqlite = { version = "0.32", optional = true, features = ["bundled"] }
 # The JVM's side of the boundary. Header-only in effect: it binds against
 # whatever JNI the runtime provides, so nothing here needs a JDK to build.
-jni = { version = "0.21", optional = true }
+jni = { version = "0.22", optional = true }
 # Pinned by revision rather than by tag: the crate is new and single-author, and
 # an unpinned dependency means the memory layer can change under a rebuild with
 # no signal. The same revision deploy/install-zeromem.sh puts on the board.
