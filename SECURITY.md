@@ -152,6 +152,13 @@ nothing here listens on its own. Server-side transcription would change this par
 the reason it is not being added quietly: it is deferred with the server work rather than
 treated as an implementation detail of a button that already exists.
 
+**Reading an answer back adds nothing either, and it is off until you turn it on.** `TextToSpeech`
+synthesises on the phone, so the text of an answer does not leave it to be spoken; the answer had
+already reached the model's side of the wire by being answered, and speaking it sends nothing
+further. What is read out is the answer alone. Tool results are not spoken, which is a decision
+rather than a limit: what a tool printed can be a file, a screen or a repository, and a phone
+reading that aloud in a room is a disclosure the person did not ask for.
+
 ### Credentials
 
 One: `NEURALWATT_API_KEY`.

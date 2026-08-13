@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -105,6 +106,19 @@ fun ChatScreen(
      * refuses a second press while one is in flight: two calls must not overlap.
      */
     onListen: suspend () -> Heard,
+    /**
+     * Whether an answer is read out when a turn ends.
+     *
+     * Here rather than behind the settings door for [ModeRow]'s reason, which
+     * applies to this more strongly than to anything else on this screen: it
+     * changes what happens to the answer being waited for, so it belongs beside
+     * the thing that is waiting.
+     */
+    aloud: Boolean,
+    onAloud: (Boolean) -> Unit,
+    /** Why the last answer was not read out, or null. Shown beside the one the
+     *  microphone leaves, because they are the same kind of sentence. */
+    unspoken: String?,
 ) {
     var typed by remember { mutableStateOf("") }
 
@@ -164,7 +178,7 @@ fun ChatScreen(
         // Why the last press produced nothing, until the next one. Heard.Silence
         // carries a whole sentence for the person who spoke, and a microphone
         // that did nothing and said nothing is what it was written against.
-        unheard?.let {
+        (unheard ?: unspoken)?.let {
             Text(
                 it,
                 style = MaterialTheme.typography.labelSmall,
@@ -217,6 +231,15 @@ fun ChatScreen(
             ) {
                 Text(if (listening) "Listening" else "Speak")
             }
+
+            // Beside the microphone and not under the modes: the pair is one
+            // idea, which is talking rather than typing, and the two halves of
+            // it should not be at opposite ends of the screen.
+            FilterChip(
+                selected = aloud,
+                onClick = { onAloud(!aloud) },
+                label = { Text(if (aloud) "Reads out" else "Silent") },
+            )
 
             // One button, two jobs. A separate stop button would be dead most
             // of the time, and the two states are never both available.
