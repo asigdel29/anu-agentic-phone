@@ -2,6 +2,7 @@
 //
 // History
 //   2026-08-12  A. Sigdel  Created with #669.
+//   2026-08-12  A. Sigdel  A stream closed under the reader, #682.
 //
 // On the JVM, and nothing here starts a process: the half under test is the
 // bounding, which needs no device to be wrong. Whether a command runs at all is
@@ -46,6 +47,20 @@ class TerminalTest {
 
         assertEquals(OUTPUT_LIMIT, bounded.shown.length)
         assertEquals(50_000 - OUTPUT_LIMIT, bounded.dropped)
+    }
+
+    @Test
+    fun aStreamClosedUnderTheReaderEndsItWithWhatItHad() {
+        // #682. The killed command's case: the caller closes the pipe to stop a
+        // command that has run out of patience, and what it printed before that
+        // is the answer. A throw here is a turn that reports nothing about a
+        // command that was talking right up to the moment it was stopped.
+        val reader = StringReader("halfway through")
+        val buffer = CharArray(4)
+        reader.read(buffer)
+        reader.close()
+
+        assertEquals(Bounded("", 0), drain(reader))
     }
 
     @Test

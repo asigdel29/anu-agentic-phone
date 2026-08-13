@@ -2,6 +2,7 @@
 //
 // History
 //   2026-08-12  A. Sigdel  Created with #669.
+//   2026-08-12  A. Sigdel  Collect the output before killing anything, #682.
 //
 // Contents
 //   Ran          What one command came back with.
@@ -95,6 +96,12 @@ internal data class Bounded(val shown: String, val dropped: Int)
  * To the end rather than abandoned once full: a pipe nobody drains fills, a
  * process writing into a full one stops, and a command that succeeded would then
  * be reported as one that hung. What follows the limit is read and thrown away.
+ *
+ * A stream closed under this reader ends it, and is not an error. The one caller
+ * closes one deliberately, on the command that has run out of patience and been
+ * killed, and what it printed before that is the answer rather than something to
+ * throw away. Every other close is the process reaching its own end, which
+ * arrives here as a negative read instead.
  */
 internal fun drain(from: Reader, limit: Int = OUTPUT_LIMIT): Bounded {
     val kept = StringBuilder()
@@ -103,7 +110,11 @@ internal fun drain(from: Reader, limit: Int = OUTPUT_LIMIT): Bounded {
     val buffer = CharArray(4096)
 
     while (true) {
-        val read = from.read(buffer)
+        val read = try {
+            from.read(buffer)
+        } catch (closed: IOException) {
+            break
+        }
         if (read < 0) break
         val keep = minOf(maxOf(0, limit - kept.length), read)
         kept.appendRange(buffer, 0, keep)
@@ -169,13 +180,21 @@ class SystemShell(private val path: String) : Terminal {
             val output = async { drain(process.inputStream.bufferedReader()) }
             val finished = try {
                 runInterruptible { process.waitFor(PATIENCE, TimeUnit.SECONDS) }
-            } finally {
-                // However this ended, cancellation included, and before the
-                // output is collected: closing the process's end of the pipe is
-                // what lets the read above reach the end of the stream, and on
-                // one already exited it does nothing.
+            } catch (interrupted: Throwable) {
+                // Cancellation reaches here, and a cancelled turn that left a
+                // process running is one nobody will ever wait for.
                 process.destroyForcibly()
+                throw interrupted
             }
+
+            // Only what is still running, which is #682. destroyForcibly closes
+            // the pipes this Process holds whether or not the child is alive, so
+            // doing it on the finished path closes the reader under the drain:
+            // it throws where the header promises it does not, and it loses
+            // whatever the command had written and nobody had read yet. A
+            // process that exited closes its own end, so the drain reaches the
+            // end of the stream without help.
+            if (!finished) process.destroyForcibly()
 
             val bounded = output.await()
             if (finished) {
