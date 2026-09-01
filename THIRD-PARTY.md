@@ -38,15 +38,15 @@ Nothing. The application links this repository's own core and Apple's frameworks
 
 ---
 
-## Rust dependencies (305 packages, all features)
+## Rust dependencies (304 packages, all features)
 
 | Licence | Packages |
 |---|---|
-| MIT OR Apache-2.0 | 158 |
-| MIT | 54 |
+| MIT OR Apache-2.0 | 157 |
+| MIT | 53 |
 | Unicode-3.0 | 18 |
 | MIT/Apache-2.0 | 16 |
-| Apache-2.0 OR MIT | 14 |
+| Apache-2.0 OR MIT | 15 |
 | Apache-2.0 | 8 |
 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | 5 |
 | Unlicense OR MIT | 4 |
@@ -80,7 +80,6 @@ Nothing. The application links this repository's own core and Apple's frameworks
 | ahash | 0.8.12 | MIT OR Apache-2.0 |
 | aho-corasick | 1.1.5 | Unlicense OR MIT |
 | allocator-api2 | 0.2.21 | MIT OR Apache-2.0 |
-| anyhow | 1.0.104 | MIT OR Apache-2.0 |
 | async-stream | 0.3.6 | MIT |
 | async-stream-impl | 0.3.6 | MIT |
 | atomic-waker | 1.1.2 | Apache-2.0 OR MIT |
@@ -90,7 +89,7 @@ Nothing. The application links this repository's own core and Apple's frameworks
 | base64 | 0.13.1 | MIT/Apache-2.0 |
 | base64 | 0.22.1 | MIT OR Apache-2.0 |
 | bitflags | 2.13.1 | MIT OR Apache-2.0 |
-| block-buffer | 0.10.4 | MIT OR Apache-2.0 |
+| block-buffer | 0.12.1 | MIT OR Apache-2.0 |
 | bumpalo | 3.20.3 | MIT OR Apache-2.0 |
 | byteorder | 1.5.0 | Unlicense OR MIT |
 | bytes | 1.12.1 | MIT |
@@ -102,15 +101,15 @@ Nothing. The application links this repository's own core and Apple's frameworks
 | combine | 4.6.7 | MIT |
 | compact_str | 0.9.1 | MIT |
 | console | 0.16.4 | MIT |
+| const-oid | 0.10.2 | Apache-2.0 OR MIT |
 | cookie | 0.18.1 | MIT OR Apache-2.0 |
 | cookie_store | 0.22.1 | MIT OR Apache-2.0 |
-| cpufeatures | 0.2.17 | MIT OR Apache-2.0 |
 | cpufeatures | 0.3.0 | MIT OR Apache-2.0 |
 | crc32fast | 1.5.0 | MIT OR Apache-2.0 |
 | crossbeam-deque | 0.8.7 | MIT OR Apache-2.0 |
 | crossbeam-epoch | 0.9.20 | MIT OR Apache-2.0 |
 | crossbeam-utils | 0.8.22 | MIT OR Apache-2.0 |
-| crypto-common | 0.1.7 | MIT OR Apache-2.0 |
+| crypto-common | 0.2.2 | MIT OR Apache-2.0 |
 | darling | 0.20.11 | MIT |
 | darling_core | 0.20.11 | MIT |
 | darling_macro | 0.20.11 | MIT |
@@ -119,7 +118,7 @@ Nothing. The application links this repository's own core and Apple's frameworks
 | derive_builder | 0.20.2 | MIT OR Apache-2.0 |
 | derive_builder_core | 0.20.2 | MIT OR Apache-2.0 |
 | derive_builder_macro | 0.20.2 | MIT OR Apache-2.0 |
-| digest | 0.10.7 | MIT OR Apache-2.0 |
+| digest | 0.11.3 | MIT OR Apache-2.0 |
 | dirs | 6.0.0 | MIT OR Apache-2.0 |
 | dirs-sys | 0.5.0 | MIT OR Apache-2.0 |
 | displaydoc | 0.2.7 | MIT OR Apache-2.0 |
@@ -131,7 +130,7 @@ Nothing. The application links this repository's own core and Apple's frameworks
 | esaxx-rs | 0.1.10 | Apache-2.0 |
 | fallible-iterator | 0.3.0 | MIT/Apache-2.0 |
 | fallible-streaming-iterator | 0.1.9 | MIT/Apache-2.0 |
-| fastembed | 5.17.4 | Apache-2.0 |
+| fastembed | 6.0.2 | Apache-2.0 |
 | fastrand | 2.5.0 | Apache-2.0 OR MIT |
 | find-msvc-tools | 0.1.9 | MIT OR Apache-2.0 |
 | flate2 | 1.1.9 | MIT OR Apache-2.0 |
@@ -139,13 +138,12 @@ Nothing. The application links this repository's own core and Apple's frameworks
 | foldhash | 0.2.0 | Zlib |
 | form_urlencoded | 1.2.2 | MIT OR Apache-2.0 |
 | futures-channel | 0.3.33 | MIT OR Apache-2.0 |
-| futures-core | 0.3.33 | MIT OR Apache-2.0 |
-| futures-io | 0.3.33 | MIT OR Apache-2.0 |
-| futures-macro | 0.3.33 | MIT OR Apache-2.0 |
-| futures-sink | 0.3.33 | MIT OR Apache-2.0 |
-| futures-task | 0.3.33 | MIT OR Apache-2.0 |
-| futures-util | 0.3.33 | MIT OR Apache-2.0 |
-| generic-array | 0.14.7 | MIT |
+| futures-core | 0.3.34 | MIT OR Apache-2.0 |
+| futures-io | 0.3.34 | MIT OR Apache-2.0 |
+| futures-macro | 0.3.34 | MIT OR Apache-2.0 |
+| futures-sink | 0.3.34 | MIT OR Apache-2.0 |
+| futures-task | 0.3.34 | MIT OR Apache-2.0 |
+| futures-util | 0.3.34 | MIT OR Apache-2.0 |
 | getrandom | 0.2.17 | MIT OR Apache-2.0 |
 | getrandom | 0.3.4 | MIT OR Apache-2.0 |
 | getrandom | 0.4.3 | MIT OR Apache-2.0 |
@@ -159,9 +157,10 @@ Nothing. The application links this repository's own core and Apple's frameworks
 | hmac-sha256 | 1.1.14 | ISC |
 | http | 1.5.0 | MIT OR Apache-2.0 |
 | http-body | 1.1.0 | MIT |
-| http-body-util | 0.1.4 | MIT |
+| http-body-util | 0.1.5 | MIT |
 | httparse | 1.10.1 | MIT OR Apache-2.0 |
 | httpdate | 1.0.3 | MIT OR Apache-2.0 |
+| hybrid-array | 0.4.14 | MIT OR Apache-2.0 |
 | hyper | 1.11.0 | MIT |
 | hyper-rustls | 0.27.9 | Apache-2.0 OR ISC OR MIT |
 | hyper-util | 0.1.20 | MIT |
@@ -277,7 +276,7 @@ Nothing. The application links this repository's own core and Apple's frameworks
 | serde_json | 1.0.151 | MIT OR Apache-2.0 |
 | serde_path_to_error | 0.1.20 | MIT OR Apache-2.0 |
 | serde_urlencoded | 0.7.1 | MIT/Apache-2.0 |
-| sha2 | 0.10.9 | MIT OR Apache-2.0 |
+| sha2 | 0.11.0 | MIT OR Apache-2.0 |
 | sharded-slab | 0.1.7 | MIT |
 | shlex | 2.0.1 | MIT OR Apache-2.0 |
 | signal-hook-registry | 1.4.8 | MIT OR Apache-2.0 |
@@ -298,8 +297,8 @@ Nothing. The application links this repository's own core and Apple's frameworks
 | sync_wrapper | 1.0.2 | Apache-2.0 |
 | synstructure | 0.13.2 | MIT |
 | tempfile | 3.27.0 | MIT OR Apache-2.0 |
-| thiserror | 2.0.19 | MIT OR Apache-2.0 |
-| thiserror-impl | 2.0.19 | MIT OR Apache-2.0 |
+| thiserror | 2.0.20 | MIT OR Apache-2.0 |
+| thiserror-impl | 2.0.20 | MIT OR Apache-2.0 |
 | thread_local | 1.1.10 | MIT OR Apache-2.0 |
 | time | 0.3.55 | MIT OR Apache-2.0 |
 | time-core | 0.1.9 | MIT OR Apache-2.0 |
