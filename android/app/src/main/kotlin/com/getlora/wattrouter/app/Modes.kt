@@ -91,6 +91,12 @@ internal fun meaningOf(mode: Autonomy): Int = when (mode) {
  */
 internal val shown = listOf(Autonomy.AUTO, Autonomy.PLAN, Autonomy.ASK)
 
+// The rule this file argues, that a setting belongs where it acts, held for
+// this row until #712 and was then outweighed rather than shown wrong. Three of
+// the conversation's eight things were settings; TurnScreen has the argument.
+// The rule still stands everywhere else, and the microphone and the read-aloud
+// switch are both still on the conversation because of it.
+
 /**
  * The modes, and a sentence for whichever is chosen.
  *
