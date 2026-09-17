@@ -62,67 +62,37 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.getlora.wattrouter.Agent
 import com.getlora.wattrouter.Barred
 import com.getlora.wattrouter.Budget
-import com.getlora.wattrouter.Budgeted
-import com.getlora.wattrouter.Confirmed
 import com.getlora.wattrouter.CalendarTool
 import com.getlora.wattrouter.Capability
 import com.getlora.wattrouter.ChainWalk
 import com.getlora.wattrouter.ContactsTool
 import com.getlora.wattrouter.Credential
-import com.getlora.wattrouter.FetchTool
-import com.getlora.wattrouter.FindOnScreenTool
-import com.getlora.wattrouter.GitAddTool
-import com.getlora.wattrouter.GitCommitTool
-import com.getlora.wattrouter.GitInitTool
-import com.getlora.wattrouter.GitStatusTool
 import com.getlora.wattrouter.Heard
 import com.getlora.wattrouter.LocationTool
-import com.getlora.wattrouter.LookTool
-import com.getlora.wattrouter.Memory
 import com.getlora.wattrouter.Needed
-import com.getlora.wattrouter.NavigateTool
-import com.getlora.wattrouter.OpenAppTool
 import com.getlora.wattrouter.Connections
 import com.getlora.wattrouter.HttpRpc
 import com.getlora.wattrouter.Permission
 import com.getlora.wattrouter.PermissionError
 import com.getlora.wattrouter.Planned
-import com.getlora.wattrouter.PullTool
-import com.getlora.wattrouter.PushTool
-import com.getlora.wattrouter.Reach
 import com.getlora.wattrouter.Reached
 import com.getlora.wattrouter.Reaching
 import com.getlora.wattrouter.connect
 import com.getlora.wattrouter.tools
 import com.getlora.wattrouter.Tool
-import com.getlora.wattrouter.ReadScreenTool
-import com.getlora.wattrouter.Recorded
 import com.getlora.wattrouter.Replay
-import com.getlora.wattrouter.RecallTool
-import com.getlora.wattrouter.RememberTool
-import com.getlora.wattrouter.Repository
-import com.getlora.wattrouter.Shown
-import com.getlora.wattrouter.Signed
 import com.getlora.wattrouter.Speaking
 import com.getlora.wattrouter.Spoken
 import com.getlora.wattrouter.NeuralWattInference
 import com.getlora.wattrouter.Row
-import com.getlora.wattrouter.RunCommandTool
-import com.getlora.wattrouter.ScrollTool
-import com.getlora.wattrouter.SetRemoteTool
 import com.getlora.wattrouter.Startup
-import com.getlora.wattrouter.SystemShell
-import com.getlora.wattrouter.TapTool
 import com.getlora.wattrouter.ToolBox
-import com.getlora.wattrouter.TypeTextTool
-import com.getlora.wattrouter.WaitForChangeTool
 import com.getlora.wattrouter.worthSaying
 import com.getlora.wattrouter.TurnDriver
 import com.getlora.wattrouter.routing
 
 class MainActivity : ComponentActivity() {
     private var started: Startup? = null
-    private var memory: Memory? = null
     private lateinit var permission: Permission
 
     /**
@@ -137,7 +107,7 @@ class MainActivity : ComponentActivity() {
     private val replay = Replay()
 
     /**
-     * How involved this person wants to be, read per action by [Confirmed].
+     * How involved this person wants to be, read per action by `Confirmed`.
      *
      * Built here rather than per composition: a store rebuilt on every
      * recomposition is a file opened on every recomposition, and the mode is
@@ -167,15 +137,15 @@ class MainActivity : ComponentActivity() {
     private val aloud by lazy { Aloud(applicationContext) }
 
     /**
-     * Where the tools work, made if it is not there.
-     *
-     * Here rather than inside the one function that reads it today, because it
-     * is about to have more than one reader: #602 requires a terminal to run in
-     * the workspace the tools already have rather than invent a second. Two
-     * places computing one path is two places that have to agree, and nothing
-     * would check that they did.
+     * The turn's tools, assembled without this Activity, #714: the four
+     * builders below delegate into it, and a scheduled turn can call it where
+     * this Activity stands. Nullable so [onDestroy] closes without building.
      */
-    private val workspace by lazy { java.io.File(filesDir, "work").apply { mkdirs() } }
+    private var assembly: TurnAssembly? = null
+
+    private fun turnAssembly(): TurnAssembly = assembly ?: TurnAssembly(
+        applicationContext, filesDir, modes, signing, reaching, replay, budget,
+    ).also { assembly = it }
 
     /**
      * The key this phone pushes with, and the hosts it has met.
@@ -186,7 +156,6 @@ class MainActivity : ComponentActivity() {
      * asks to see it, and `git::trust` writes the pins on the first connection.
      */
     private val reaching by lazy { Reaching(applicationContext) }
-    private val pins by lazy { java.io.File(filesDir, "known-hosts") }
 
     /**
      * What another app shared, until a turn takes it.
@@ -384,13 +353,7 @@ class MainActivity : ComponentActivity() {
      * is the system's to delete when space is short, and this is the one file
      * here nobody can reconstruct.
      */
-    private fun remembering(): List<Tool> {
-        val where = java.io.File(filesDir, "memory").apply { mkdirs() }
-        val store = Memory.open(java.io.File(where, "memory.db").absolutePath)
-            ?: return emptyList()
-        memory = store
-        return listOf(RememberTool(store, session = "phone"), RecallTool(store))
-    }
+    private fun remembering(): List<Tool> = turnAssembly().remembering()
 
     /**
      * The tools that read the phone rather than the app's own store.
@@ -434,38 +397,14 @@ class MainActivity : ComponentActivity() {
     /**
      * The repository the agent works in.
      *
-     * The [workspace]. A directory is still not a repository, so on a fresh
-     * install the other three answer that it is not one until [GitInitTool] has
-     * been called. That is the model's call to make rather than this function's:
-     * the two answers `init` distinguishes are "made you one" and "there already
-     * was one", and a repository created here at startup would spend that
-     * distinction before anybody could read it.
+     * The workspace in [TurnAssembly]. A directory is still not a repository,
+     * so on a fresh install the other three answer that it is not one until
+     * `GitInitTool` has been called. That is the model's call to make rather
+     * than this function's: the two answers `init` distinguishes are "made you
+     * one" and "there already was one", and a repository created here at
+     * startup would spend that distinction before anybody could read it.
      */
-    private fun working(): List<Tool> {
-        // Signed outermost, and reading the setting rather than holding one:
-        // this function runs once, where driverFor remembers the driver, so an
-        // identity captured here would be whichever was set at launch.
-        val repository = Signed(
-            // Asked per call rather than held, as the identity below it and for
-            // a sharper reason: a key can stop existing between two calls, since
-            // the keystore drops its entries when the screen lock is removed.
-            // Null until somebody has made one, which is a repository that can
-            // reach a path remote and nothing else.
-            Repository(workspace.absolutePath) {
-                reaching.secret()?.let { Reach(it, pins.absolutePath) }
-            },
-        ) { signing.who }
-        return listOf(
-            GitStatusTool(repository),
-            GitInitTool(repository),
-            GitAddTool(repository),
-            GitCommitTool(repository),
-            SetRemoteTool(repository),
-            FetchTool(repository),
-            PushTool(repository),
-            PullTool(repository),
-        )
-    }
+    private fun working(): List<Tool> = turnAssembly().working()
 
     /**
      * What the model would see, bounded, or what to do to make it say anything.
@@ -551,27 +490,24 @@ class MainActivity : ComponentActivity() {
      * a second place to keep in step with it, for a screen that only displays.
      */
     private fun met(): List<String> =
-        runCatching { pins.readLines().filter { it.isNotBlank() } }.getOrDefault(emptyList())
+        runCatching { turnAssembly().pins.readLines().filter { it.isNotBlank() } }
+            .getOrDefault(emptyList())
 
     /**
      * The shell, in the same directory the repository is in.
      *
-     * The [workspace] again rather than a second one, which is what #647 hoisted
+     * The workspace again rather than a second one, which is what #647 hoisted
      * it for: a formatter the agent runs and a file it staged have to be the
      * same file.
      *
-     * [Shown] outermost, and reading the mode rather than holding one, for the
+     * `Shown` outermost, and reading the mode rather than holding one, for the
      * reason [working] gives about identity. It is also the reason this is not
-     * a [Confirmed]: that seam is a [Phone], and it treats Plan as Auto because
+     * a `Confirmed`: that seam is a [Phone], and it treats Plan as Auto because
      * a round's tool names were approved once at the top of the turn. The name
      * approved here is `run_command`, which is the same name for `git status`
      * and for `rm -rf .`, so Plan asks.
      */
-    private fun terminal(): List<Tool> = listOf(
-        RunCommandTool(
-            Shown(SystemShell(workspace.absolutePath), { modes.now }, AndroidConsent()),
-        ),
-    )
+    private fun terminal(): List<Tool> = turnAssembly().terminal()
 
     /**
      * A share arriving while the app is already open.
@@ -611,34 +547,7 @@ class MainActivity : ComponentActivity() {
      * read_screen's own answer names the switch and the restricted-settings
      * trap behind it, which is the only place somebody learns about either.
      */
-    private fun driving(): List<Tool> {
-        // Confirmed outside Budgeted, which #553 argues: the other way round
-        // spends a budgeted action on a prompt somebody then declines, so a
-        // turn refused twenty times has nothing left for the one they would
-        // have allowed.
-        // Recorded innermost, so a step the budget refused or a person
-        // declined is not in the replay: those did not happen, and a card
-        // showing one would show a picture of a screen nothing changed.
-        val screen = Confirmed(
-            Budgeted(Recorded(AndroidPhone(applicationContext), replay), budget),
-            { modes.now },
-            AndroidConsent(),
-        )
-        return listOf(
-            ReadScreenTool(screen),
-            // Beside read_screen rather than instead of it. A picture has no
-            // handles in it, so every action still goes through a reading;
-            // look is for the layout a tree describes badly.
-            LookTool(screen),
-            TapTool(screen),
-            TypeTextTool(screen),
-            NavigateTool(screen),
-            ScrollTool(screen),
-            OpenAppTool(screen),
-            WaitForChangeTool(screen),
-            FindOnScreenTool(screen),
-        )
-    }
+    private fun driving(): List<Tool> = turnAssembly().driving()
 
     /**
      * The checklist, re-read every time this screen comes back.
@@ -705,8 +614,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         (started as? Startup.Ready)?.core?.close()
-        memory?.close()
-        memory = null
+        assembly?.close()
         started = null
         super.onDestroy()
     }
