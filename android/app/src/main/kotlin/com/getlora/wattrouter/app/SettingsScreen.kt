@@ -13,12 +13,13 @@
 // destinations, and a library is a version to keep in step with AGP for what a
 // `when` over an enum already does. Nothing here is a graph.
 //
-// It holds what does not belong on the conversation rather than everything.
-// Modes.kt argues for putting a setting where it acts, and the modes row and
-// the identity row still follow that: they are one line each and they are read
-// while somebody is deciding what to send. What lands here is what cannot be a
-// line, which so far is a list of servers and a checklist somebody passed
-// through, and next is the public half of a key and a terminal's scrollback.
+// It holds what does not belong on the conversation rather than everything, and
+// #712 moved that line. This file used to say the modes row and the identity row
+// stayed put, on Modes.kt's rule that a setting belongs where it acts. They did
+// not stay: three of the conversation's eight things were settings, and a screen
+// where the conversation is the minority is the accumulation #602 predicted. The
+// rule was outweighed rather than shown wrong, and TurnScreen carries that
+// argument where somebody changing it back will read it.
 
 package com.getlora.wattrouter.app
 
@@ -69,6 +70,9 @@ enum class Where {
 
     /** The provider key, and the only way back to the sign-in screen. */
     Credential,
+
+    /** What a send does, and who a commit says made it. */
+    Turn,
 }
 
 /**
