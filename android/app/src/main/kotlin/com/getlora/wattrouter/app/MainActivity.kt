@@ -82,6 +82,7 @@ import com.getlora.wattrouter.tools
 import com.getlora.wattrouter.Tool
 import com.getlora.wattrouter.ReadScreenTool
 import com.getlora.wattrouter.Replay
+import com.getlora.wattrouter.Scrollback
 import com.getlora.wattrouter.Speaking
 import com.getlora.wattrouter.Spoken
 import com.getlora.wattrouter.NeuralWattInference
@@ -106,6 +107,9 @@ class MainActivity : ComponentActivity() {
 
     /** What the last turn did, for the card the transcript will show. */
     private val replay = Replay()
+
+    /** What the terminal has run, for the card the transcript will show. */
+    private val scrollback = Scrollback()
 
     /**
      * How involved this person wants to be, read per action by `Confirmed`.
@@ -145,7 +149,7 @@ class MainActivity : ComponentActivity() {
     private var assembly: TurnAssembly? = null
 
     private fun turnAssembly(): TurnAssembly = assembly ?: TurnAssembly(
-        applicationContext, filesDir, modes, signing, reaching, replay, budget,
+        applicationContext, filesDir, modes, signing, reaching, replay, budget, scrollback,
     ).also { assembly = it }
 
     /**

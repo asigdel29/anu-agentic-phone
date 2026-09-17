@@ -15,6 +15,7 @@ import com.getlora.wattrouter.GitAddTool
 import com.getlora.wattrouter.GitCommitTool
 import com.getlora.wattrouter.GitInitTool
 import com.getlora.wattrouter.GitStatusTool
+import com.getlora.wattrouter.Kept
 import com.getlora.wattrouter.LookTool
 import com.getlora.wattrouter.Memory
 import com.getlora.wattrouter.NavigateTool
@@ -30,6 +31,7 @@ import com.getlora.wattrouter.RememberTool
 import com.getlora.wattrouter.Replay
 import com.getlora.wattrouter.Repository
 import com.getlora.wattrouter.RunCommandTool
+import com.getlora.wattrouter.Scrollback
 import com.getlora.wattrouter.ScrollTool
 import com.getlora.wattrouter.SetRemoteTool
 import com.getlora.wattrouter.Shown
@@ -55,6 +57,7 @@ class TurnAssembly(
     private val reaching: Reaching,
     private val replay: Replay,
     private val budget: Budget,
+    private val scrollback: Scrollback,
 ) {
     private val workspace by lazy { java.io.File(filesDir, "work").apply { mkdirs() } }
 
@@ -102,7 +105,15 @@ class TurnAssembly(
     /** The shell, in the same directory the repository is in. */
     fun terminal(): List<Tool> = listOf(
         RunCommandTool(
-            Shown(SystemShell(workspace.absolutePath), { modes.now }, AndroidConsent()),
+            // Kept inside Shown, Recorded's ordering rule carried to this
+            // seam: a command the consent gate refused never reaches the
+            // terminal, and a scrollback showing one would show a command
+            // that did not run.
+            Shown(
+                Kept(SystemShell(workspace.absolutePath), scrollback),
+                { modes.now },
+                AndroidConsent(),
+            ),
         ),
     )
 
