@@ -23,6 +23,8 @@
 //   2026-08-13  A. Sigdel  Offers the two that can, #467.
 //   2026-08-13  A. Sigdel  Shows the key and the hosts it has met, #467.
 //   2026-08-13  A. Sigdel  Gives a wrong provider key a way back, #512.
+//   2026-09-17  A. Sigdel  Shows what the terminal ran, behind the
+//                          settings, #713.
 //
 // The core and the driver are built once and held for the process. The core
 // owns a native pointer and a decision cache, and a second one is a second
@@ -263,6 +265,18 @@ class MainActivity : ComponentActivity() {
                                     onDone = { where = Where.Settings },
                                 )
 
+                                Where.Scrollback -> ScrollbackScreen(
+                                    // Read at composition rather than collected,
+                                    // the replay card's reason: the list changes
+                                    // only while a turn runs, and a screen whose
+                                    // body moves under the eye of somebody
+                                    // reading it is a screen nobody reads. This
+                                    // is built per visit, so it is what there
+                                    // was on the way in.
+                                    commands = scrollback.commands,
+                                    onDone = { where = Where.Settings },
+                                )
+
                                 Where.Settings -> SettingsScreen(
                                     destinations = places(connected),
                                     onGo = { where = it },
@@ -484,6 +498,16 @@ class MainActivity : ComponentActivity() {
                 "Something the phone half needs is off."
             },
             Where.Readiness,
+        ),
+        Destination(
+            "What ran",
+            // One read: a turn could be running, and two would be two
+            // snapshots that can disagree with each other.
+            scrollback.commands.size.let { ran ->
+                if (ran == 0) "Nothing yet. What the terminal runs lands here."
+                else "The last $ran commands, and what each came back."
+            },
+            Where.Scrollback,
         ),
     )
 
