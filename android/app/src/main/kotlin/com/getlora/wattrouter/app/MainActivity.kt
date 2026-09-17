@@ -80,6 +80,7 @@ import com.getlora.wattrouter.Reaching
 import com.getlora.wattrouter.connect
 import com.getlora.wattrouter.tools
 import com.getlora.wattrouter.Tool
+import com.getlora.wattrouter.ReadScreenTool
 import com.getlora.wattrouter.Replay
 import com.getlora.wattrouter.Speaking
 import com.getlora.wattrouter.Spoken
