@@ -2,6 +2,7 @@
 //
 // History
 //   2026-08-13  A. Sigdel  Created with #641.
+//   2026-09-17  A. Sigdel  The scrollback's member, #713.
 //
 // The connections screen could be reached exactly once: `connecting` was set
 // from the checklist and nowhere else, and the checklist stops appearing once
@@ -73,6 +74,9 @@ enum class Where {
 
     /** What a send does, and who a commit says made it. */
     Turn,
+
+    /** What the terminal ran, most recent last, across turns. */
+    Scrollback,
 }
 
 /**

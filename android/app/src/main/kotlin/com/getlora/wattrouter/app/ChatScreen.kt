@@ -4,6 +4,7 @@
 //   2026-08-09  A. Sigdel  Created.
 //   2026-08-11  A. Sigdel  Press to talk, into the field rather than into the
 //                          send it would otherwise be, #659.
+//   2026-09-17  A. Sigdel  A result past six lines says what was cut, #713.
 //
 // A `when` over five row types and nothing else. The fold in Transcript.kt
 // exists so this stays that simple: every question about whether a fragment
@@ -268,8 +269,7 @@ private fun Line(row: Row) {
                 fontFamily = FontFamily.Monospace,
             )
             row.result?.let {
-                Text(it.lineSequence().take(RESULT_LINES).joinToString("\n"),
-                    style = MaterialTheme.typography.bodySmall)
+                Text(clipped(it), style = MaterialTheme.typography.bodySmall)
             }
         }
 
@@ -309,5 +309,20 @@ private fun RoutingPanel(decision: Decision) {
 internal fun spokenInto(typed: String, said: String): String =
     listOf(typed.trim(), said.trim()).filter { it.isNotEmpty() }.joinToString(" ")
 
-/** Lines of a tool's result shown before it is cut off. */
+/**
+ * A tool's result as the row shows it, with a tail line when it was cut.
+ *
+ * Six lines shown and nothing saying more arrived was the display layer's
+ * silent truncation, #713's defect. Everything else that truncates in this
+ * repository says how much it cut, [com.getlora.wattrouter.ReadScreenTool]
+ * describe's "and N more not shown" being the idiom, and the row says it too.
+ */
+internal fun clipped(result: String): String {
+    val lines = result.lineSequence().toList()
+    val rest = lines.size - RESULT_LINES
+    val more = if (rest > 0) "\nand $rest more not shown" else ""
+    return lines.take(RESULT_LINES).joinToString("\n") + more
+}
+
+/** Lines of a tool's result shown before the tail line counts the rest. */
 private const val RESULT_LINES = 6

@@ -2,6 +2,7 @@
 //
 // History
 //   2026-08-12  A. Sigdel  Created with #677.
+//   2026-09-17  A. Sigdel  say is the scrollback screen's wording too, #713.
 //
 // Contents
 //   RunCommandTool  Run one command where the git tools work.
@@ -58,8 +59,13 @@ class RunCommandTool(private val terminal: Terminal) : Tool {
          * The status leads, and is present even when it is zero: a compiler that
          * failed and one that succeeded quietly both print almost nothing, and
          * the number is the only thing that tells them apart.
+         *
+         * Public for the scrollback screen, which words what it shows with
+         * this: what the transcript said when the command ran is what its
+         * record says afterwards, and a second wording is a second place to
+         * keep in step with Ran.
          */
-        internal fun say(ran: Ran): String = when (ran) {
+        fun say(ran: Ran): String = when (ran) {
             is Ran.Finished -> "exit ${ran.status}\n" + printed(ran.output, ran.dropped)
             is Ran.TimedOut ->
                 "still running after $PATIENCE seconds, so it was stopped. It may " +
